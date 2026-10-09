@@ -144,7 +144,10 @@ public final class SteinEntityDeferred {
      */
     public static void particlesBegin() {
         timeStart(0);
-        sessionBegin(false);
+        // -Dsteinbridge.gfx.particles=false: the particles drawn call by call, outside a session.
+        if (SteinGfxOptions.PARTICLES) {
+            sessionBegin(false);
+        }
     }
 
     /**
@@ -300,9 +303,8 @@ public final class SteinEntityDeferred {
         if (GLMatrix.compiling()) {
             return; // inside a display list: everything would go into the list, not to the screen
         }
-        SteinTileRetain
-                .taint(); // block being recorded for retention with something immediate: it is not
-        // kept
+        // Block being recorded for retention with something immediate: it is not kept.
+        SteinTileRetain.taint();
         if (session) {
             sessionImmediate++;
             kindImmediate[sessionKind]++;
@@ -349,8 +351,7 @@ public final class SteinEntityDeferred {
      * the End portal ({@link SteinTexGen}); whatever of it still falls to immediate drawing goes
      * out after what was already recorded.
      */
-    public static void renderTile(Object dispatcher, Object tile, float partial, int stage)
-            throws Throwable {
+    public static void renderTile(Object dispatcher, Object tile, float partial, int stage) {
         if (!TILES || !dynamicReady || !capturing) {
             ((TileEntityRendererDispatcher) dispatcher)
                     .renderTileEntity((TileEntity) tile, partial, stage);
@@ -366,8 +367,7 @@ public final class SteinEntityDeferred {
     }
 
     /** The game's renderer for the tile, recording (the usual path for tile entities). */
-    static void renderTileNow(Object dispatcher, Object tile, float partial, int stage)
-            throws Throwable {
+    static void renderTileNow(Object dispatcher, Object tile, float partial, int stage) {
         // The crack (stage >= 0) records too: texture destroy_stage_N through the texture matrix,
         // blend DST_COLOR, SRC_COLOR and polygon offset (-3, -3), all from the state that
         // RenderGlobal.preRenderDamagedBlocks leaves.
@@ -568,8 +568,7 @@ public final class SteinEntityDeferred {
     }
 
     /** Render.renderName inside doRender (patcher rule): during the pass, stores it for the end. */
-    public static void renderName(Object render, Object entity, double x, double y, double z)
-            throws Throwable {
+    public static void renderName(Object render, Object entity, double x, double y, double z) {
         SteinDeferredNames.renderName(render, entity, x, y, z);
     }
 

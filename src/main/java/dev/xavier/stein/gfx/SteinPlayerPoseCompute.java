@@ -72,7 +72,7 @@ final class SteinPlayerPoseCompute {
     static final SteinPoseWorkers.Task WRITE = SteinPlayerPoseCompute::write;
 
     /** Computes player {@code j}'s pose and writes its instances into the reserved memory. */
-    static void write(int j, int worker) throws Throwable {
+    static void write(int j, int worker) {
         int len = jPlanLen[j];
         if (len == 0) {
             return;
@@ -184,7 +184,7 @@ final class SteinPlayerPoseCompute {
     }
 
     /** The matrix of each part of the models that player {@code j} uses, in {@code w.mats}. */
-    static void pose(int j, Scratch w) throws Throwable {
+    static void pose(int j, Scratch w) {
         Object e = jEntity[j];
         float pt = jPt[j];
         // RendererLivingEntity.doRender

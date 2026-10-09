@@ -59,8 +59,8 @@ final class SteinTerrainLayers {
     //     over a contiguous array: it does not touch the objects), and no upload or release has
     //     happened since the assembly (epoch): nothing to read from the chunk;
     //  2. otherwise, each chunk's ranges (SteinTerrainSlice) are read as before; if they are the
-    // same as the
-    //     assembly's (references: the SteinTerrainSlice is immutable), the assembly holds.
+    //     same as the assembly's (references: the SteinTerrainSlice is immutable), the assembly
+    //     holds.
     // Reassembling is what used to be done every frame: the order (by region on the layers
     // without blending, the game's on the translucent one and with the single buffer), and from
     // it the commands and the origins in CPU memory. Per frame, two consecutive copies remain for

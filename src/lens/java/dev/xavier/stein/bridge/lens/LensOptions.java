@@ -38,4 +38,11 @@ final class LensOptions {
      * setting without saving (default: unset, the file decides).
      */
     static final String CONNECTED_TEXTURES = Opt.text("steinlens.connectedTextures", null);
+
+    /**
+     * {@code -Dsteinlens.debug=true}: zoom state (every 2 s and on every change) and custom items
+     * lookups, recomputed choices and enchantment version steps (every 2 s) in the log (default:
+     * off).
+     */
+    static final boolean DEBUG = Opt.flag("steinlens.debug");
 }

@@ -62,9 +62,8 @@ final class SteinDeferredModel {
      * immediately).
      */
     public static boolean beginModel() {
-        SteinGlTrack.forgetNormal(); // the parts carry per-vertex normals: the current one becomes
-        // undefined in
-        // OpenGL
+        // The parts carry per-vertex normals: the current one becomes undefined in OpenGL.
+        SteinGlTrack.forgetNormal();
         if (!SteinGameState.colorMaskAll() || SteinGameState.logicOp()) {
             return reject();
         }

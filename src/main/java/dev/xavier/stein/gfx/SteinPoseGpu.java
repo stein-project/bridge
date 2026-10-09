@@ -109,8 +109,7 @@ final class SteinPoseGpu {
     private static SteinBuffer table;
     private static float[] tableLoaded;
 
-    // CPU scratch (native memory, grows): players, states and entries until the next
-    // flush.
+    // CPU scratch (native memory, grows): players, states and entries until the next flush.
     private static long players;
     private static int playerCap;
     private static int playerN;

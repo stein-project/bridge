@@ -16,11 +16,11 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Coverage audit of the renderer ({@code -Dsteinbridge.gfx.audit=true}, together with {@code
- * -Dsteinbridge.gfx=true}): every draw that reaches the driver other than through the Stein backend
- * (glDrawArrays from the game and from the engine, glCallList, glBegin) is counted by its origin
- * (the first frames of the caller's stack) and by the current station — the label that the check
- * scene sets ({@link #station}). The goal is zero at every station.
+ * Coverage audit of the renderer ({@code -Dsteinbridge.gfx.audit=true}, with Stein GFX on, the
+ * default): every draw that reaches the driver other than through the Stein backend (glDrawArrays
+ * from the game and from the engine, glCallList, glBegin) is counted by its origin (the first
+ * frames of the caller's stack) and by the current station — the label that the check scene sets
+ * ({@link #station}). The goal is zero at every station.
  *
  * <p>The Stein backend calls OpenGL directly and does not go through here; the game goes through
  * the patcher's rules ({@link SteinCoreGl}), and the engine calls {@link #draw} before each draw of

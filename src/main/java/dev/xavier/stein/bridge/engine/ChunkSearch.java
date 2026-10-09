@@ -8,8 +8,6 @@
 
 package dev.xavier.stein.bridge.engine;
 
-import static dev.xavier.stein.bridge.engine.ChunkGraph.*;
-
 import dev.xavier.stein.bridge.core.Log;
 
 import net.minecraft.client.renderer.RenderGlobal;
@@ -53,7 +51,7 @@ final class ChunkSearch {
     private static RenderChunk[] qChunk = new RenderChunk[0];
     private static byte[] qFacing = new byte[0];
     private static byte[] qMask = new byte[0];
-    private static final boolean VANILLA_BFS = VANILLA || EngineOptions.VANILLA_BFS;
+    private static final boolean VANILLA_BFS = ChunkGraph.VANILLA || EngineOptions.VANILLA_BFS;
     private static final boolean CHECK_BFS = !VANILLA_BFS && EngineOptions.CHECK_BFS;
 
     private static int checkCompiled;
@@ -119,7 +117,7 @@ final class ChunkSearch {
             // The game does the search; at the end it is redone here and the two lists are
             // compared.
             checkStart = new ArrayList<>(q);
-            checkCompiled = compiledVersion;
+            checkCompiled = ChunkGraph.compiledVersion;
             return q.isEmpty();
         }
         List<Object> start = new ArrayList<>(q);
@@ -130,8 +128,8 @@ final class ChunkSearch {
 
     @SuppressWarnings("unchecked")
     private static void bfs(List<Object> start, List<Object> out, int frame) {
-        if (dx == null) {
-            offsets();
+        if (ChunkGraph.dx == null) {
+            ChunkGraph.offsets();
         }
         RenderGlobal rg = bfsRg;
         Entity e = bfsEntity;
@@ -158,13 +156,13 @@ final class ChunkSearch {
         }
         int tail = 0;
         for (Object info : start) {
-            EnumFacing f = (EnumFacing) INFO_FACING.get(info);
+            EnumFacing f = (EnumFacing) ChunkGraph.INFO_FACING.get(info);
             int mask = 0;
-            for (Object s : (Set<Object>) INFO_SET.get(info)) {
+            for (Object s : (Set<Object>) ChunkGraph.INFO_SET.get(info)) {
                 mask |= 1 << ((Enum<?>) s).ordinal();
             }
             qInfo[tail] = info;
-            qChunk[tail] = (RenderChunk) INFO_CHUNK.get(info);
+            qChunk[tail] = (RenderChunk) ChunkGraph.INFO_CHUNK.get(info);
             qFacing[tail] = (byte) (f == null ? -1 : f.ordinal());
             qMask[tail] = (byte) mask;
             tail++;
@@ -187,9 +185,9 @@ final class ChunkSearch {
             for (int f = 0; f < 6; f++) {
                 // getRenderChunkOffset: the neighbouring position, the distance and height tests
                 // and the ViewFrustum's circular index.
-                int ox = rx + dx[f] * 16;
-                int oy = ry + dy[f] * 16;
-                int oz = rz + dz[f] * 16;
+                int ox = rx + ChunkGraph.dx[f] * 16;
+                int oy = ry + ChunkGraph.dy[f] * 16;
+                int oz = rz + ChunkGraph.dz[f] * 16;
                 RenderChunk n = null;
                 if (Math.abs(px - ox) <= limit
                         && oy >= 0
@@ -209,14 +207,16 @@ final class ChunkSearch {
                     }
                 }
                 // The game's tests, in the same order.
-                if (many && (mask & (1 << opposite[f])) != 0) {
+                if (many && (mask & (1 << ChunkGraph.opposite[f])) != 0) {
                     continue;
                 }
                 if (many && facing >= 0) {
                     if (compiled == null) {
                         compiled = rc.getCompiledChunk();
                     }
-                    if (!compiled.isVisible(facings[opposite[facing]], facings[f])) {
+                    if (!compiled.isVisible(
+                            ChunkGraph.facings[ChunkGraph.opposite[facing]],
+                            ChunkGraph.facings[f])) {
                         continue;
                     }
                 }
@@ -225,10 +225,10 @@ final class ChunkSearch {
                         || !camera.isBoundingBoxInFrustum(n.boundingBox)) {
                     continue;
                 }
-                Object ni = RC_INFO.get(n);
+                Object ni = ChunkGraph.RC_INFO.get(n);
                 if (ni == null) {
-                    ni = newInfo(rg, n, facings[f]);
-                    RC_INFO.set(n, ni);
+                    ni = newInfo(rg, n, ChunkGraph.facings[f]);
+                    ChunkGraph.RC_INFO.set(n, ni);
                 }
                 qInfo[tail] = ni;
                 qChunk[tail] = n;
@@ -242,7 +242,9 @@ final class ChunkSearch {
     /** A ContainerLocalRenderInformation (a class that cannot be named here), counter 0. */
     private static Object newInfo(RenderGlobal rg, RenderChunk chunk, EnumFacing facing) {
         try {
-            return (Object) INFO_NEW.invokeExact((Object) rg, (Object) chunk, (Object) facing, 0);
+            return (Object)
+                    ChunkGraph.INFO_NEW.invokeExact(
+                            (Object) rg, (Object) chunk, (Object) facing, 0);
         } catch (Throwable t) {
             throw new IllegalStateException(t);
         }
@@ -256,16 +258,18 @@ final class ChunkSearch {
         }
         int fake = bfsFrame ^ 0x40000000;
         for (Object info : start) {
-            boolean ignored = ((RenderChunk) INFO_CHUNK.get(info)).setFrameIndex(fake);
+            boolean ignored = ((RenderChunk) ChunkGraph.INFO_CHUNK.get(info)).setFrameIndex(fake);
         }
         List<Object> ours = new ArrayList<>();
         bfs(start, ours, fake);
         List<Object> vanilla = (List<Object>) (List<?>) bfsRg.renderInfos;
         boolean same = ours.size() == vanilla.size();
         for (int i = 0; same && i < ours.size(); i++) {
-            same = INFO_CHUNK.get(ours.get(i)) == INFO_CHUNK.get(vanilla.get(i));
+            same =
+                    ChunkGraph.INFO_CHUNK.get(ours.get(i))
+                            == ChunkGraph.INFO_CHUNK.get(vanilla.get(i));
         }
-        if (compiledVersion != checkCompiled) {
+        if (ChunkGraph.compiledVersion != checkCompiled) {
             // A chunk changed compilation between the two searches: the comparison is worthless.
             bfsInconclusive++;
         } else {

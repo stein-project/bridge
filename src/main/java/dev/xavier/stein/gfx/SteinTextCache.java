@@ -53,7 +53,7 @@ import java.util.Arrays;
  * commands pointing there ({@link SteinTextGpu}; {@code -Dsteinbridge.gfx.gpuText=false} brings
  * back the earlier copy, which remains the fallback for 4.1 and for every refused case).
  *
- * <p>Only acts inside the deferred pass ({@code -Dsteinbridge.gfx=true}); {@code
+ * <p>Only acts inside the deferred pass (Stein GFX, the default); {@code
  * -Dsteinbridge.gfx.textCache=false} turns off just this.
  *
  * <p>Pipeline: Stein GFX only.
@@ -348,8 +348,7 @@ public final class SteinTextCache {
     }
 
     /** In place of the renderStringAtPos(text, shadow) called by renderString. */
-    public static void renderStringAtPos(Object font, Object text, boolean shadow)
-            throws Throwable {
+    public static void renderStringAtPos(Object font, Object text, boolean shadow) {
         String s = (String) text;
         FontRenderer fr = (FontRenderer) font;
         if (!REQUESTED || FontBatch.textRecording || !SteinEntityDeferred.capturingDynamic()) {
@@ -584,7 +583,7 @@ public final class SteinTextCache {
 
     // ---- FontRenderer.getStringWidth (patcher rule, in the name and the sign) ----
 
-    public static int stringWidth(Object font, Object text) throws Throwable {
+    public static int stringWidth(Object font, Object text) {
         String s = (String) text;
         if (!REQUESTED
                 || s == null

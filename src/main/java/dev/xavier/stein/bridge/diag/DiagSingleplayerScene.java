@@ -108,8 +108,7 @@ final class DiagSingleplayerScene {
         if (DiagOptions.SP_STALL_AT >= 0
                 && !spStalled
                 && elapsed >= DiagOptions.SP_STALL_AT * 1_000_000_000L) {
-            // Singleplayer watchdog check (engine/ServerWatch): the server thread stops on
-            // purpose.
+            // Singleplayer watchdog check (engine/ServerWatch): the server thread stops on purpose.
             spStalled = true;
             server.addScheduledTask(
                     (Runnable)

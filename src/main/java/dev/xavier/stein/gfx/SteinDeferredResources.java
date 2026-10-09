@@ -193,8 +193,8 @@ final class SteinDeferredResources {
 
     /** Closes the current region of all rings (the frame ended, or a region filled up). */
     static void rotate() {
-        regionSerial++; // the text record of the region being closed is no longer reused
-        // (commitText)
+        // The text record of the region being closed is no longer reused (commitText)
+        regionSerial++;
         if (sorted != null) {
             sorted.nextRegion();
         }

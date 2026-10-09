@@ -72,8 +72,8 @@ final class SteinDeferredText {
      * record stays equal to the text's). False = did not fit (the caller follows the copy path).
      */
     static boolean commitText(int first, int verts, boolean background) {
-        SteinTileRetain.taint(); // retention does not keep a resident run (SteinTextGpu avoids it
-        // by recording)
+        // Retention does not keep a resident run (SteinTextGpu avoids it by recording)
+        SteinTileRetain.taint();
         int flags = dynFlags;
         if (background) {
             dynFlags = flags & ~FLAG_NOTEX;

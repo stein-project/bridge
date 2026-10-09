@@ -223,7 +223,7 @@ public final class Watchdog {
                         + ticksNow
                         + " ticks, memory "
                         + ((rt.totalMemory() - rt.freeMemory()) >> 20)
-                        + " de "
+                        + " of "
                         + (rt.maxMemory() >> 20)
                         + " MB, garbage collection "
                         + sinceGc
@@ -291,7 +291,7 @@ public final class Watchdog {
             if (lock != null) {
                 b.append(" waiting on ").append(lock);
                 if (t.getLockOwnerName() != null) {
-                    b.append(" (de \"").append(t.getLockOwnerName()).append("\")");
+                    b.append(" (held by \"").append(t.getLockOwnerName()).append("\")");
                 }
             }
             SteinLog.note("watchdog", b.toString());

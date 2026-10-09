@@ -203,8 +203,7 @@ public final class Input {
         Win.KeyEvent e = Win.KeyEvent.of(lwjglKey, down, down ? legacyChar(k, mods) : ' ');
         e.repeat = action == GLFW_REPEAT;
         push(Win.keyEvents, e);
-        // Only pressed keys produce a character; the control one has already
-        // come.
+        // Only pressed keys produce a character; the control one has already come.
         pendingChar = down && e.character == ' ' ? e : null;
     }
 

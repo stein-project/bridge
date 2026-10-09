@@ -33,7 +33,8 @@ import java.util.stream.Stream;
  * covered by the patcher's coverage check, which verifies each diversion against the jar without
  * needing any context.
  *
- * <p>Usage: java -cp "&lt;the game classpath&gt;" test/Preflight.java build/classes
+ * <p>Usage: {@code ./gradlew preflight} (part of {@code ./gradlew build}; the argument is the
+ * folder of Bridge classes, build/bridge/classes).
  */
 public final class Preflight {
 

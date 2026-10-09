@@ -40,7 +40,7 @@ public final class SteinEntityInstancer {
     private SteinEntityInstancer() {}
 
     /** ModelRenderer.render(scale), throughout the game (patcher rule). */
-    public static void render(Object part, float scale) throws Throwable {
+    public static void render(Object part, float scale) {
         boolean direct = SteinModelInstancer.active();
         // On 4.1 there is no direct per-instance draw, only the geometry on the GPU and the
         // deferred renderer.

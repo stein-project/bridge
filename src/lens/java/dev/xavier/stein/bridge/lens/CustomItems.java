@@ -8,6 +8,7 @@
 
 package dev.xavier.stein.bridge.lens;
 
+import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.bridge.engine.EnchCache;
 import dev.xavier.stein.bridge.hooks.GameHooks;
 
@@ -480,10 +481,45 @@ final class CustomItems {
         return "texture." + material + "_layer_" + layer + (overlay != null ? "_" + overlay : "");
     }
 
+    /**
+     * {@code -Dsteinlens.debug=true}: lookups, recomputed choices and enchantment version steps,
+     * every 2 s.
+     */
+    private static final boolean DEBUG = LensOptions.DEBUG;
+
+    private long debugCalls;
+    private long debugRecomputes;
+    private int debugVersion;
+    private long debugLast;
+
+    private void debugReport() {
+        long now = System.nanoTime();
+        if (now - debugLast > 2_000_000_000L) {
+            int v = EnchCache.version();
+            Log.info(
+                    "lens",
+                    "custom items: "
+                            + debugCalls / 2
+                            + " lookups/s, "
+                            + debugRecomputes / 2
+                            + " recomputed choices/s, enchantment version +"
+                            + (v - debugVersion)
+                            + " in 2 s");
+            debugLast = now;
+            debugVersion = v;
+            debugCalls = 0;
+            debugRecomputes = 0;
+        }
+    }
+
     private Resolved resolve(ItemStack stack) {
         Rule[] rules = byItem.get(stack.func_77973_b());
         if (rules == null) {
             return null;
+        }
+        if (DEBUG) {
+            debugCalls++;
+            debugReport();
         }
         Object tag = stack.func_77978_p();
         int version = EnchCache.version();
@@ -501,6 +537,9 @@ final class CustomItems {
         if (r == null) {
             r = new Resolved();
             GameHooks.setItemData(stack, r);
+        }
+        if (DEBUG) {
+            debugRecomputes++;
         }
         r.tag = tag;
         r.version = version;

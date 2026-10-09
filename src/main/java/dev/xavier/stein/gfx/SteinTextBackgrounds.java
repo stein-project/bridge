@@ -100,8 +100,9 @@ final class SteinTextBackgrounds {
             i = i + 1 & mask;
         }
         if (count >= MAX_BACKGROUNDS) {
-            clear(); // too many widths (names changing): starts over, the live ones
-            // come back on the next use
+            // Too many widths (names changing): starts over, the live ones come back on the next
+            // use.
+            clear();
             return null;
         }
         keys[i] = probe.clone();

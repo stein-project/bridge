@@ -33,7 +33,7 @@ final class SteinLabelCheck {
      * compares command by command (key, first vertex, vertices) and each one's candidate record,
      * byte by byte. Draws through the game.
      */
-    static void check(int n, SteinLabelTemplates.Template t) throws Throwable {
+    static void check(int n, SteinLabelTemplates.Template t) {
         boolean sneak = SteinLabelContext.sneak;
         String name = SteinLabelContext.name;
         boolean compare = n > 0 && t.valid;

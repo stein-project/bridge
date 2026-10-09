@@ -65,6 +65,9 @@ public final class AsyncSkins {
 
     private static final boolean VANILLA = EngineOptions.VANILLA_SKIN_LOAD;
 
+    /** One texture per skin, as before sharing the default one; for the A/B measurement. */
+    private static final boolean NO_SHARED = EngineOptions.NO_SHARED_SKIN;
+
     /**
      * Validity of the decoded default skin. A burst lasts under a second; the short deadline limits
      * the window in which a resource pack change would still show the old default — and only until
@@ -197,6 +200,11 @@ public final class AsyncSkins {
             }
             DEFAULTS.put(location, d);
         }
+        if (NO_SHARED) {
+            self.deleteGlTexture();
+            TextureUtil.uploadTextureImageAllocate(self.getGlTextureId(), d.image, false, false);
+            return;
+        }
         if (d.shared == 0) {
             d.shared =
                     TextureUtil.uploadTextureImageAllocate(
@@ -215,7 +223,7 @@ public final class AsyncSkins {
      * the real one (ThreadDownloadImageData's getGlTextureId does the pending upload).
      */
     public static int textureId(Object texture) {
-        if (!VANILLA && texture instanceof ThreadDownloadImageData) {
+        if (!VANILLA && !NO_SHARED && texture instanceof ThreadDownloadImageData) {
             int shared = (int) SHARED.get(texture);
             if (shared != 0 && ((ThreadDownloadImageData) texture).bufferedImage == null) {
                 return shared;

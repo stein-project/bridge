@@ -103,8 +103,7 @@ final class DiagOptions {
      * {@code -Dsteinbridge.diag.clickInject=false}: the click test only watches, it does not click
      * (default: clicks; any value but {@code false} clicks).
      */
-    static final boolean CLICK_INJECT =
-            !"false".equals(Opt.text("steinbridge.diag.clickInject", null));
+    static final boolean CLICK_INJECT = Opt.unlessFalse("steinbridge.diag.clickInject");
 
     /**
      * {@code -Dsteinbridge.diag.pickTestAtSec=N}: runs the pick-block test N seconds after startup
@@ -209,8 +208,7 @@ final class DiagOptions {
      * {@code -Dsteinbridge.diag.serverListClick=false}: only measures the server ping, no click
      * (default: clicks; any value but {@code false} clicks).
      */
-    static final boolean SERVER_LIST_CLICK =
-            !"false".equals(Opt.text("steinbridge.diag.serverListClick", null));
+    static final boolean SERVER_LIST_CLICK = Opt.unlessFalse("steinbridge.diag.serverListClick");
 
     /**
      * {@code -Dsteinbridge.diag.videoAtSec=N}: opens the video settings N seconds after startup

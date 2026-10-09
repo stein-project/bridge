@@ -39,7 +39,7 @@ final class SteinLabelSlots {
         final Object[] entry = new Object[3];
 
         /** Font, flag or generation changed: width asked again, assemblies forgotten. */
-        void reset(Object font, boolean unicode, int gen, String s) throws Throwable {
+        void reset(Object font, boolean unicode, int gen, String s) {
             this.font = font;
             this.unicode = unicode;
             this.gen = gen;
@@ -124,7 +124,7 @@ final class SteinLabelSlots {
      * The text {@code s} at entry {@code t}: the same object, or an equal one, keeps the width and
      * assemblies.
      */
-    static Text text(Text t, String s, Object font, boolean unicode) throws Throwable {
+    static Text text(Text t, String s, Object font, boolean unicode) {
         int gen = SteinTextCache.generation();
         if (t.s != s) {
             if (t.s == null

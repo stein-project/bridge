@@ -223,8 +223,7 @@ final class SteinDeferredFrame {
             drawGroup(c, g, from, count);
         } else {
             // the game's texture with its parameters (without a sampler of ours), in the filter
-            // from
-            // when it was recorded
+            // from when it was recorded
             vb0(
                     c,
                     g.fromText

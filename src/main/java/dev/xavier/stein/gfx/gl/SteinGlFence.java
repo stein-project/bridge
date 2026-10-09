@@ -52,9 +52,9 @@ final class SteinGlFence extends SteinFence {
         if (SteinGlFrame.deferFences()) {
             SteinGlFrame.deferFence(this);
         } else if (SteinGlFrame.pending()) {
-            SteinGlFrame.fence(
-                    this); // deferFences=false with a recorded frame: at the list's point, as
-            // before
+            // -Dsteinbridge.gfx.deferFences=false with a recorded frame: at the list's point, as
+            // before.
+            SteinGlFrame.fence(this);
         } else {
             insertNow();
         }

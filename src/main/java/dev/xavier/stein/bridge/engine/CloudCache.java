@@ -268,6 +268,14 @@ public final class CloudCache {
         cache.put(0, captureBuf, 0, half);
         cache.limit(half);
         vertices = half / STRIDE;
+        // The VBO is always filled: it is the fixed-function draw, and Stein GFX's fallback when
+        // its copy cannot be drawn (see drawCopy).
+        if (vbo == 0) {
+            vbo = GL15.glGenBuffers();
+        }
+        GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
+        GL15.glBufferData(GL15.GL_ARRAY_BUFFER, cache, GL15.GL_STATIC_DRAW);
+        GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
         if (SteinGfxOptions.ENABLED) {
             // The same copy in Stein GFX's fixed geometry, drawn by the API.
             SteinTessCapture.slot(
@@ -276,13 +284,6 @@ public final class CloudCache {
                     FORMAT,
                     GL11.GL_QUADS,
                     vertices);
-        } else {
-            if (vbo == 0) {
-                vbo = GL15.glGenBuffers();
-            }
-            GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
-            GL15.glBufferData(GL15.GL_ARRAY_BUFFER, cache, GL15.GL_STATIC_DRAW);
-            GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
         }
         capturedCellX = cellX;
         capturedCellZ = cellZ;
@@ -400,11 +401,17 @@ public final class CloudCache {
 
     /**
      * The cached copy of the pass, recorded by Stein GFX with the current state and matrix. The GL
-     * color ends as the last vertex's, like the game's draw.
+     * color ends as the last vertex's, like the game's draw. When Stein GFX cannot draw the copy
+     * (outside the recorded pass, no copy yet, or the recording refused it), the pass is drawn from
+     * the VBO instead.
      */
     private static void drawCopy() {
-        SteinTessCapture.drawSlot(SLOT);
-        GlStateManager.resetColor();
+        if (SteinTessCapture.drawSlot(SLOT)) {
+            GlStateManager.resetColor();
+            return;
+        }
+        GLMatrix.flush();
+        drawVbo();
     }
 
     /** The pointers and states of WorldVertexBufferUploader.draw, reading from the VBO. */

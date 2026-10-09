@@ -236,9 +236,8 @@ final class GameHooksNet {
     }
 
     // Window click in progress in the listener: a click requested from inside it (a mod that
-    // answers a click
-    // with another) goes straight to the game, without going back to the listeners — otherwise it
-    // would be endless recursion.
+    // answers a click with another) goes straight to the game, without going back to the listeners
+    // — otherwise it would be endless recursion.
     private static boolean inWindowClick;
 
     /**
@@ -268,9 +267,11 @@ final class GameHooksNet {
     /**
      * Swaps the game's session (Minecraft.session, private and final: ave.ae). Only the Loader
      * calls it (api.Account): the mod asks for "offline nick" or "the launcher's", and the token
-     * never passes through it.
+     * never passes through it. The write is bound by core.GameAccess (the field is final in the
+     * game); if the game jar does not have the field, the first call fails with a LinkageError
+     * (BootstrapMethodError).
      */
-    static void setSession(Object session) throws ReflectiveOperationException {
+    static void setSession(Object session) {
         Minecraft.getMinecraft().session = (Session) session;
     }
 

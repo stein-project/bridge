@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#
+# Copyright (c) 2026 Breno Xavier
+#
 # Extracts the LWJGL 2 API surface actually used by Minecraft.
 # Usage: tools/scan-api.sh [path/to/1.8.9.jar]
 # Default jar: $MCDIR/versions/1.8.9/1.8.9.jar, or the OS default .minecraft folder.

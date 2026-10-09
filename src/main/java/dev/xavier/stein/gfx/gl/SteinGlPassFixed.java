@@ -23,38 +23,9 @@ final class SteinGlPassFixed {
 
     private SteinGlPassFixed() {}
 
-    private static final boolean TRACKED_CORE = SteinGlCommands.TRACKED_CORE;
-
-    static void pushAttribs() {
-        SteinCoreGl.glPushAttrib(
-                GL11.GL_CURRENT_BIT
-                        | GL11.GL_ENABLE_BIT
-                        | GL11.GL_COLOR_BUFFER_BIT
-                        | GL11.GL_DEPTH_BUFFER_BIT
-                        | GL11.GL_POLYGON_BIT
-                        | GL11.GL_VIEWPORT_BIT
-                        | GL11.GL_SCISSOR_BIT
-                        | GL11.GL_STENCIL_BUFFER_BIT);
-    }
-
     /**
-     * State that no Stein pipeline uses: off for the whole pass (glPopAttrib, or core, restores
-     * it).
-     */
-    static void disableUnused() {
-        SteinCoreGl.glDisable(GL11.GL_ALPHA_TEST);
-        GL11.glDisable(GL11.GL_STENCIL_TEST);
-        GL11.glDisable(GL11.GL_SCISSOR_TEST);
-        GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
-        GL11.glDisable(GL11.GL_COLOR_LOGIC_OP);
-        GL11.glPolygonMode(GL11.GL_FRONT_AND_BACK, GL11.GL_FILL);
-        GL11.glFrontFace(GL11.GL_CCW);
-        GL14.glBlendEquation(GL14.GL_FUNC_ADD);
-    }
-
-    /**
-     * In core: the game's fixed state read from the cache and set as the "already emitted" (the
-     * first pipeline only changes what differs).
+     * The game's fixed state read from the cache and set as the "already emitted" (the first
+     * pipeline only changes what differs).
      */
     static void capture(SteinGlCommands cmd) {
         SteinGlBindings.viewport(cmd.prevViewport);
@@ -92,33 +63,25 @@ final class SteinGlPassFixed {
     }
 
     /**
-     * Whatever the game had enabled and the pass does not use goes off for the pass: in core the
-     * scissor, polygon offset and logic op (queried or cached); otherwise glPushAttrib and the
-     * unused state off.
+     * Whatever the game had enabled and the pass does not use goes off for the pass: the scissor
+     * (queried), polygon offset and logic op (cached). The core context has no glPushAttrib: the
+     * state the pass changes is given back by {@link #restore}.
      */
     static void disableForPass(SteinGlCommands cmd) {
-        if (TRACKED_CORE) {
-            cmd.scissorWas = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
-            if (cmd.scissorWas) {
-                GL11.glDisable(GL11.GL_SCISSOR_TEST);
-            }
-            if (cmd.gOffsetFill) {
-                GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
-                cmd.offsetFill = false;
-            }
-            if (cmd.gLogicOp) {
-                GL11.glDisable(GL11.GL_COLOR_LOGIC_OP);
-            }
-        } else {
-            pushAttribs();
-            disableUnused();
+        cmd.scissorWas = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
+        if (cmd.scissorWas) {
+            GL11.glDisable(GL11.GL_SCISSOR_TEST);
+        }
+        if (cmd.gOffsetFill) {
+            GL11.glDisable(GL11.GL_POLYGON_OFFSET_FILL);
+            cmd.offsetFill = false;
+        }
+        if (cmd.gLogicOp) {
+            GL11.glDisable(GL11.GL_COLOR_LOGIC_OP);
         }
     }
 
-    /**
-     * Only what differs from the last emitted state (tracked in core: from the game, the first
-     * time).
-     */
+    /** Only what differs from the last emitted state (from the game, the first time). */
     static void apply(SteinGlCommands cmd, SteinGlPipeline p) {
         boolean all = !cmd.fixedKnown;
         cmd.fixedKnown = true;

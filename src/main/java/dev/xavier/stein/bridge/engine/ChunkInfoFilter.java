@@ -8,8 +8,6 @@
 
 package dev.xavier.stein.bridge.engine;
 
-import static dev.xavier.stein.bridge.engine.ChunkGraph.*;
-
 import dev.xavier.stein.bridge.core.Log;
 
 import net.minecraft.client.renderer.RenderGlobal;
@@ -47,7 +45,8 @@ final class ChunkInfoFilter {
     // -Dsteinbridge.opt.checkInfoFilter=true: rebuilds the copy on every use and compares it with
     // the stored one.
 
-    private static final boolean VANILLA_FILTER = VANILLA || EngineOptions.VANILLA_INFO_FILTER;
+    private static final boolean VANILLA_FILTER =
+            ChunkGraph.VANILLA || EngineOptions.VANILLA_INFO_FILTER;
     private static final boolean CHECK_FILTER = !VANILLA_FILTER && EngineOptions.CHECK_INFO_FILTER;
 
     /** The RenderGlobal of the last search: the current renderInfos is its own. */
@@ -96,7 +95,7 @@ final class ChunkInfoFilter {
 
     private static List<Object> layers(Object list) {
         List<?> src = (List<?>) list;
-        int compiled = compiledVersion;
+        int compiled = ChunkGraph.compiledVersion;
         if (list != layerSrc || src.size() != layerSize || compiled != layerCompiled) {
             layerInfos = fillLayers(src);
             layerSrc = list;
@@ -104,7 +103,7 @@ final class ChunkInfoFilter {
             layerCompiled = compiled;
         } else if (CHECK_FILTER) {
             ArrayList<Object> fresh = fillLayers(src);
-            checkFilter(fresh.equals(layerInfos), compiledVersion != compiled, "layers");
+            checkFilter(fresh.equals(layerInfos), ChunkGraph.compiledVersion != compiled, "layers");
         }
         return layerInfos;
     }
@@ -114,7 +113,7 @@ final class ChunkInfoFilter {
         ArrayList<Object> out = new ArrayList<>();
         for (int i = 0, n = src.size(); i < n; i++) {
             Object info = src.get(i);
-            if (!((RenderChunk) INFO_CHUNK.get(info)).getCompiledChunk().isEmpty()) {
+            if (!((RenderChunk) ChunkGraph.INFO_CHUNK.get(info)).getCompiledChunk().isEmpty()) {
                 out.add(info);
             }
         }
@@ -133,9 +132,9 @@ final class ChunkInfoFilter {
     private static List<Object> entityList(Object rg, Object list) {
         List<?> src = (List<?>) list;
         World world = ((RenderGlobal) rg).theWorld;
-        int compiled = compiledVersion;
-        int chunks = chunkEpoch;
-        int ents = entityVersion;
+        int compiled = ChunkGraph.compiledVersion;
+        int chunks = ChunkGraph.chunkEpoch;
+        int ents = ChunkGraph.entityVersion;
         if (list != entitySrc
                 || src.size() != entitySize
                 || compiled != entityCompiled
@@ -151,7 +150,8 @@ final class ChunkInfoFilter {
             entityWorld = world;
         } else if (CHECK_FILTER) {
             ArrayList<Object> fresh = fillEntities(world, src);
-            checkFilter(fresh.equals(entityInfos), compiledVersion != compiled, "entities");
+            checkFilter(
+                    fresh.equals(entityInfos), ChunkGraph.compiledVersion != compiled, "entities");
         }
         return entityInfos;
     }
@@ -164,9 +164,10 @@ final class ChunkInfoFilter {
         ArrayList<Object> out = new ArrayList<>();
         for (int i = 0, n = src.size(); i < n; i++) {
             Object info = src.get(i);
-            RenderChunk rc = (RenderChunk) INFO_CHUNK.get(info);
+            RenderChunk rc = (RenderChunk) ChunkGraph.INFO_CHUNK.get(info);
             BlockPos p = rc.position;
-            ClassInheritanceMultiMap<?>[] sections = ((Chunk) chunkAt(world, p)).getEntityLists();
+            ClassInheritanceMultiMap<?>[] sections =
+                    ((Chunk) ChunkGraph.chunkAt(world, p)).getEntityLists();
             boolean has = !sections[p.y / 16].isEmpty();
             if (!has) {
                 has = !rc.getCompiledChunk().getTileEntities().isEmpty();

@@ -55,7 +55,7 @@ final class SteinTileKey {
      * the renderer makes, in the same order (metadata cache, chest neighbours): repeating them
      * afterwards changes nothing.
      */
-    static boolean key(int kind, Object te, float partial, int light) throws Throwable {
+    static boolean key(int kind, Object te, float partial, int light) {
         keyN = 0;
         refN = 0;
         putKey(kind);
@@ -69,8 +69,8 @@ final class SteinTileKey {
                 Block block = tile.getBlockType();
                 int meta = tile.getBlockMetadata();
                 if (meta == 0 && SteinTileGame.BLOCK_CHEST.isInstance(block)) {
-                    return false; // the renderer fixes the orientation in the world
-                    // (checkForSurroundingChests)
+                    // The renderer fixes the orientation in the world (checkForSurroundingChests)
+                    return false;
                 }
                 TileEntityChest chest = (TileEntityChest) tile;
                 chest.checkForAdjacentChests();
@@ -126,8 +126,9 @@ final class SteinTileKey {
                 int type = skull.getSkullType();
                 GameProfile profile = skull.getPlayerProfile();
                 if (type == 3 && profile != null) {
-                    return false; // player head with an owner: the skin arrives later, without
-                    // changing the block
+                    // Player head with an owner: the skin arrives later, without changing the
+                    // block.
+                    return false;
                 }
                 putKey(skull.getBlockMetadata());
                 putKey(type);
@@ -145,7 +146,7 @@ final class SteinTileKey {
      * Does the sign of the current key have scrambled text? (the components are in {@link #refBuf},
      * after the block)
      */
-    static boolean signObfuscated() throws Throwable {
+    static boolean signObfuscated() {
         for (int i = 1; i < refN; i++) {
             Object c = refBuf[i];
             if (c != null && obfuscated((String) SignText.formatted(c))) {
@@ -177,7 +178,7 @@ final class SteinTileKey {
      * The block's retained type (0 = not retained): the game's exact class and the game's exact
      * renderer registered for it.
      */
-    static int kindOf(Object dispatcher, Object te) throws Throwable {
+    static int kindOf(Object dispatcher, Object te) {
         Class<?> c = te.getClass();
         int kind;
         Class<?> want;

@@ -6,8 +6,8 @@
  * Copyright (c) 2026 Breno Xavier
  */
 
-// How to run (standalone, outside the game; not part of the Bridge jar). After tools/build.sh:
-//   java -cp "build/classes;build/test;libs/*" dev.xavier.stein.gfx.gl.SteinGlFenceBench
+// How to run (standalone, outside the game; not part of the Bridge jar):
+//   ./gradlew gpuFenceBench -Pstein.args="fence3"
 
 package dev.xavier.stein.gfx.gl;
 
@@ -47,10 +47,7 @@ import java.util.List;
  * 7600 ("switch B" is the interval): param/sampler/none 0 us; fence 19 us; fence3 127 us; fence
  * with 100 us of CPU afterwards, 75 us.
  *
- * <pre>
- * java --enable-native-access=ALL-UNNAMED -cp "&lt;classes&gt;;libs/*"
- * dev.xavier.stein.gfx.gl.SteinGlFenceBench fence3
- * </pre>
+ * <p>{@code ./gradlew gpuFenceBench -Pstein.args="fence3 1024 mut 0"}
  */
 public final class SteinGlFenceBench {
 

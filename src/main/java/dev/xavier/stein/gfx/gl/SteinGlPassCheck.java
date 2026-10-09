@@ -160,17 +160,15 @@ final class SteinGlPassCheck {
         String w = "open";
         compareBindings(c, w);
         compareBufferBindings(c, w);
-        if (SteinGlCommands.TRACKED_CORE) {
-            compareViewport(c, w);
-            fixed(c, w);
-            eq(c, w, "stencil", false, GL11.glIsEnabled(GL11.GL_STENCIL_TEST));
-            int[] mode = new int[2];
-            GL11.glGetIntegerv(GL11.GL_POLYGON_MODE, mode);
-            eq(c, w, "polygon mode", GL11.GL_FILL, mode[0]);
-            eq(c, w, "front face", GL11.GL_CCW, get(GL11.GL_FRONT_FACE));
-            eq(c, w, "blend equation (color)", GL14.GL_FUNC_ADD, get(GL20.GL_BLEND_EQUATION_RGB));
-            eq(c, w, "blend equation (alpha)", GL14.GL_FUNC_ADD, get(GL20.GL_BLEND_EQUATION_ALPHA));
-        }
+        compareViewport(c, w);
+        fixed(c, w);
+        eq(c, w, "stencil", false, GL11.glIsEnabled(GL11.GL_STENCIL_TEST));
+        int[] mode = new int[2];
+        GL11.glGetIntegerv(GL11.GL_POLYGON_MODE, mode);
+        eq(c, w, "polygon mode", GL11.GL_FILL, mode[0]);
+        eq(c, w, "front face", GL11.GL_CCW, get(GL11.GL_FRONT_FACE));
+        eq(c, w, "blend equation (color)", GL14.GL_FUNC_ADD, get(GL20.GL_BLEND_EQUATION_RGB));
+        eq(c, w, "blend equation (alpha)", GL14.GL_FUNC_ADD, get(GL20.GL_BLEND_EQUATION_ALPHA));
         report();
     }
 
@@ -227,11 +225,9 @@ final class SteinGlPassCheck {
             eq(c, w, "ARRAY_BUFFER", c.prevArrayBuffer, get(GL15.GL_ARRAY_BUFFER_BINDING));
         }
         compareBufferBindings(c, w);
-        if (SteinGlCommands.TRACKED_CORE) {
-            compareViewport(c, w);
-            fixed(c, w);
-            eq(c, w, "scissor", c.scissorWas, GL11.glIsEnabled(GL11.GL_SCISSOR_TEST));
-        }
+        compareViewport(c, w);
+        fixed(c, w);
+        eq(c, w, "scissor", c.scissorWas, GL11.glIsEnabled(GL11.GL_SCISSOR_TEST));
     }
 
     private static void report() {

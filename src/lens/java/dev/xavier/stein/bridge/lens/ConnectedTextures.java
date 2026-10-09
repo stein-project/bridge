@@ -436,8 +436,9 @@ final class ConnectedTextures {
     void resolve() {
         Minecraft mc = Minecraft.func_71410_x();
         if (mc.func_175602_ab() == null) {
-            return; // first load, inside startGame: the BlockRendererDispatcher does not exist
-            // yet (afterStartGame redoes it)
+            // First load, inside startGame: the BlockRendererDispatcher does not exist yet
+            // (afterStartGame redoes it)
+            return;
         }
         for (Block b : state.watched) {
             GameHooks.watchBlockModel(b, false);

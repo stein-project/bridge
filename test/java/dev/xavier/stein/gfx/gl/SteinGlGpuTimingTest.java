@@ -6,9 +6,8 @@
  * Copyright (c) 2026 Breno Xavier
  */
 
-// How to run (standalone, outside the game; not part of the Bridge jar). After tools/build.sh:
-//   java -cp "build/classes;build/test;libs/*" dev.xavier.stein.gfx.gl.SteinGlGpuTimingTest
-//   Needs -Dsteinbridge.gfx.gpuPassTiming=true.
+// How to run (standalone, outside the game; not part of the Bridge jar): ./gradlew gpuTimingTest
+//   (it passes -Dsteinbridge.gfx.gpuPassTiming=true).
 
 package dev.xavier.stein.gfx.gl;
 
@@ -23,14 +22,15 @@ import org.lwjgl.opengl.GL11;
  * with {@code -Dsteinbridge.gfx.gpuPassTiming.slots=16} it fills up and discards. Expected:
  * plausible microseconds, no "invalid".
  *
- * <p>{@code java --enable-native-access=ALL-UNNAMED -Dsteinbridge.gfx.gpuPassTiming=true -cp
- * "<classes>;libs/*" dev.xavier.stein.gfx.gl.SteinGlGpuTimingTest [seconds]}
+ * <p>{@code ./gradlew gpuTimingTest [-Pstein.args=seconds]}
  */
 public final class SteinGlGpuTimingTest {
 
     private SteinGlGpuTimingTest() {}
 
     public static void main(String[] args) {
+        // As Display does in the game, before SteinGfxOptions loads: the context below is core.
+        dev.xavier.stein.bridge.core.Win.coreContext = true;
         if (!SteinGlGpuTiming.ON) {
             System.out.println("run with -Dsteinbridge.gfx.gpuPassTiming=true");
             return;

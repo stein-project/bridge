@@ -56,8 +56,8 @@ final class SteinTextRecorder {
         segments = 0;
         try {
             font.renderStringAtPos(s, shadow);
-            FontBatch.flush(); // the last batch too (the flush after renderStringAtPos
-            // would be left out)
+            // The last batch too (the flush after renderStringAtPos would be left out)
+            FontBatch.flush();
         } finally {
             if (dry) {
                 FontBatch.textDry = false;

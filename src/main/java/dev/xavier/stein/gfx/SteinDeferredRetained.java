@@ -186,9 +186,8 @@ final class SteinDeferredRetained {
                 order.add(g);
             }
             if (strictOrder && g != last) {
-                openSegment(
-                        g); // (just in case: retention belongs to the entity pass, outside strict
-                // order)
+                // Just in case: retention belongs to the entity pass, outside strict order.
+                openSegment(g);
             }
             last = g;
             int first;

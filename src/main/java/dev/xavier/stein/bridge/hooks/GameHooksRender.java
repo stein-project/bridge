@@ -137,8 +137,8 @@ final class GameHooksRender {
      */
     static void modelsReloaded() {
         try {
-            indexSprites(); // before the mods: Game.spriteAt already holds in their
-            // onModelsReloaded
+            // Before the mods: Game.spriteAt already holds in their onModelsReloaded.
+            indexSprites();
         } catch (Throwable e) {
             GameHooks.fail("indexSprites", e);
         }

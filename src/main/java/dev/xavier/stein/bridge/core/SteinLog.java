@@ -155,7 +155,7 @@ public final class SteinLog {
      * error.
      */
     public static void note(String tag, String msg) {
-        System.out.println("[" + tag + "] " + msg);
+        Log.info(tag, msg);
         if (on) {
             put(tag, msg);
         }
@@ -236,15 +236,16 @@ public final class SteinLog {
                     OutputStream out = new GZIPOutputStream(new FileOutputStream(gz))) {
                 in.transferTo(out);
             } catch (IOException e) {
-                System.out.println("[log] could not archive the previous log: " + e);
+                Log.warn("log", "could not archive the previous log: " + e);
                 return;
             }
             if (!latest.delete()) {
                 // It happens with the file still open by another game in the same folder; the copy
                 // is already in the .gz and the new file starts from scratch (the writer opens
                 // without append), so two sessions do not end up together.
-                System.out.println(
-                        "[log] the previous log is already in "
+                Log.warn(
+                        "log",
+                        "the previous log is already in "
                                 + gz.getName()
                                 + ", but it could not be deleted");
             }
@@ -275,7 +276,7 @@ public final class SteinLog {
             Thread.currentThread().interrupt();
         } catch (IOException e) {
             on = false;
-            System.out.println("[log] stopped writing: " + e);
+            Log.warn("log", "stopped writing: " + e);
         }
     }
 

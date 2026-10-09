@@ -599,11 +599,10 @@ public final class GLMatrix {
     private static void warnList() {
         if (SHADOW && !warnedList) {
             warnedList = true;
-            Log.info(
+            Log.trace(
                     "matrix",
                     "matrix operation recorded in a display list (goes to the driver);"
                             + " first origin:");
-            new Throwable("[matrix] origin").printStackTrace(System.out);
         }
     }
 
@@ -643,7 +642,7 @@ public final class GLMatrix {
         if (REPORT.compared(!(err > TOLERANCE))) {
             float[] driver = new float[16];
             BUF.get(0, driver);
-            Log.warn(
+            Log.trace(
                     "matrix",
                     "DIVERGENCE ("
                             + what
@@ -653,7 +652,6 @@ public final class GLMatrix {
                             + Arrays.toString(driver)
                             + "\n  java   "
                             + Arrays.toString(mine));
-            new Throwable("[matrix] in the draw").printStackTrace(System.out);
         }
     }
 }

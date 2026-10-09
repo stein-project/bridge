@@ -58,7 +58,7 @@ call in the fallback.
 | `SteinParticles` | Base drawing of a particle |
 | `SteinEntityDeferred`, `SteinDeferredFrame`, `SteinDeferredGroups`, `SteinDeferredKeys`, `SteinDeferredLights`, `SteinDeferredResources`, `SteinDeferredSessions`, `SteinDeferredStats`, `SteinInstanceWriter` | Deferred entities: the entity pass, HUD and screens recorded as data and drawn per state group |
 | `SteinDeferredModel`, `SteinDeferredDynamic`, `SteinDeferredNames`, `SteinDeferredPose`, `SteinDeferredRetained`, `SteinDeferredText` | Recording of model parts, dynamic geometry, name tags, poses, retained tiles and resident text |
-| `SteinStaticGeometry`, `SteinCaptureFormat`, `SteinVertexConverter`, `SteinTessGame`, `SteinTexGen`, `SteinTextureArrays`, `SteinTextureFilters` | Tessellator capture support: fixed geometry on the GPU, vertex conversion, texgen on the CPU, texture arrays, filter bookkeeping |
+| `SteinStaticGeometry`, `SteinCaptureFormat`, `SteinVertexConverter`, `SteinTexGen`, `SteinTextureArrays`, `SteinTextureFilters` | Tessellator capture support: fixed geometry on the GPU, vertex conversion, texgen on the CPU, texture arrays, filter bookkeeping |
 | `SteinPlayerPose`, `SteinPlayerPoseCollect`, `SteinPlayerPoseCompute`, `SteinPlayerPoseModels`, `SteinPlayerPoseGame`, `SteinPlayerPoseJobs`, `SteinPlayerPoseEndState`, `SteinPoseWorkers`, `SteinPoseGpu`, `SteinHeldItem` | Players' pose computed by us (CPU threads or GPU) and held items |
 | `SteinTileRetain`, `SteinTileEntry`, `SteinTileKey`, `SteinTileState`, `SteinTileGame`, `SteinCameraCorrection` | Retained tile entities re-emitted without running their renderers |
 | `SteinNameLabels`, `SteinLabelContext`, `SteinLabelEmit`, `SteinLabelKinds`, `SteinLabelSlots`, `SteinLabelTail`, `SteinLabelTemplates`, `SteinLabelStats`, `SteinLabelCheck` | Name tags built directly, without the game's surrounding code |
@@ -76,10 +76,11 @@ self-tests, per-pass timing and the `-Dsteinbridge.gfx.*Check` verification mode
 
 ### Vulkan (experimental)
 
-`vk.SteinVkDevice`, `vk.SteinVkBuffer`, `vk.SteinVkCommands`, `vk.SteinVkFence`, `vk.SteinVkFormats`,
-`vk.SteinVkOptions`, `vk.SteinVkPipeline`, `vk.SteinVkRenderTarget`, `vk.SteinVkSampler`,
-`vk.SteinVkTexture`: a second backend of the same device API. It runs the Stein GFX self-tests, but
-the game does not run on it and nothing outside the package selects it.
+`vk.SteinVkDevice`, `vk.SteinVkProbe`, `vk.SteinVkBarriers`, `vk.SteinVkStaging`, `vk.SteinVkDescriptors`,
+`vk.SteinVkBuffer`, `vk.SteinVkCommands`, `vk.SteinVkFence`, `vk.SteinVkFormats`, `vk.SteinVkOptions`,
+`vk.SteinVkPipeline`, `vk.SteinVkRenderTarget`, `vk.SteinVkSampler`, `vk.SteinVkTexture`: a second backend
+of the same device API. It runs the Stein GFX self-tests, but the game does not run on it and nothing outside
+the package selects it.
 
 ## Fixed-function pipeline only
 

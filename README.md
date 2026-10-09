@@ -46,10 +46,12 @@ machine, and must not be redistributed. The build downloads what it needs to com
 
 ## Building
 
-You need a **JDK 17 or newer** to start Gradle (`JAVA_HOME`; Gradle finds or downloads the **JDK 25** the Bridge is
-compiled with), a graphics card with **OpenGL 4.1** or newer (for Stein GFX; older ones run the fixed-function
-fallback), and Minecraft 1.8.9 installed (or run `./gradlew fetchMinecraft`, which downloads it to `build/mc`; pass
-`-Pstein.mcDir=build/mc` afterwards). It builds on Windows, Linux and macOS.
+You need a **JDK 17 or newer** to start Gradle (`JAVA_HOME`). The Gradle daemon and the compiler run on **JDK 25**:
+Gradle uses an installed one or downloads it (`gradle/gradle-daemon-jvm.properties`, written by
+`./gradlew updateDaemonJvm --jvm-version=25`, and the foojay toolchain resolver). You also need a graphics card
+with **OpenGL 4.1** or newer (for Stein GFX; older ones run the fixed-function fallback) and Minecraft 1.8.9
+installed (or run `./gradlew fetchMinecraft`, which downloads it to `build/mc`; pass `-Pstein.mcDir=build/mc`
+afterwards). It builds on Windows, Linux and macOS.
 
 ```sh
 ./gradlew build            # compiles the Bridge, the shaders, the patcher and the visual options, patches your game
@@ -79,7 +81,7 @@ its `./gradlew runClient`.
 | `src/lens` | Visual options, built against the game jar |
 | `patcher/` | The bytecode patcher and its rules (`redirects-*.tsv`) |
 | `scan/` | The LWJGL 2 surface the game uses and its LWJGL 3 mapping |
-| `tools/` | Java build tools (patcher steps, coverage check) and the bash scan scripts (need `./gradlew devLibs`) |
+| `tools/` | Java build tools (patcher steps, coverage check, shader build, options list) and the bash scan scripts (need `./gradlew devLibs`) |
 | `test/` | Sanity and preflight checks |
 
 ## Contributing

@@ -413,7 +413,11 @@ public final class GameHooks {
         return GameHooksNet.windowClick(controller, windowId, slot, button, mode, player);
     }
 
-    /** See {@link GameHooksNet#setSession}. */
+    /**
+     * See {@link GameHooksNet#setSession}. It never throws ReflectiveOperationException: the clause
+     * stays only so callers written when the swap was reflective (the Loader's Accounts catches it)
+     * keep compiling. A link failure surfaces as a LinkageError (BootstrapMethodError).
+     */
     public static void setSession(Object session) throws ReflectiveOperationException {
         GameHooksNet.setSession(session);
     }

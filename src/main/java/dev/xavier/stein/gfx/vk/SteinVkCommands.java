@@ -134,8 +134,7 @@ final class SteinVkCommands extends SteinCommands {
                         || pass.depthLoad == SteinRenderPass.Load.CLEAR)
                 && t.width() > 0
                 && t.height() > 0) {
-            // clears now, like OpenGL: a copy or read before the first draw sees the cleared
-            // target
+            // clears now, like OpenGL: a copy or read before the first draw sees the cleared target
             ensureRendering(current());
         }
     }
@@ -621,7 +620,7 @@ final class SteinVkCommands extends SteinCommands {
         }
         device.outside(); // compute outside the render
         VkCommandBuffer c = current();
-        SteinVkDevice.memoryBarrier(c);
+        SteinVkBarriers.memoryBarrier(c);
         if (p.computeHandle() != boundCompute) {
             vkCmdBindPipeline(c, VK_PIPELINE_BIND_POINT_COMPUTE, p.computeHandle());
             boundCompute = p.computeHandle();
@@ -630,7 +629,7 @@ final class SteinVkCommands extends SteinCommands {
         vkCmdDispatch(c, x, y, z);
         // the contract: the results are visible to the following draws (vertex, index, indirect,
         // shader)
-        SteinVkDevice.memoryBarrier(c);
+        SteinVkBarriers.memoryBarrier(c);
     }
 
     // ---- end ----

@@ -225,7 +225,7 @@ final class SteinTileState {
     /**
      * Takes the current state to the recorded exit state, only in the fields the renderer changed.
      */
-    static void applyExit(int[] x, int[] diff) throws Throwable {
+    static void applyExit(int[] x, int[] diff) {
         boolean color = false;
         boolean alphaFunc = false;
         boolean lightmap = false;

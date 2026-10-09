@@ -86,7 +86,7 @@ public final class SteinTessCapture {
     }
 
     /** In the core context the Tessellator only finishes and clears; otherwise the game draws. */
-    private static void drawOrDiscard(Object tess) throws Throwable {
+    private static void drawOrDiscard(Object tess) {
         if (SteinCoreGl.CORE) {
             discard(tess);
         } else {
@@ -95,7 +95,7 @@ public final class SteinTessCapture {
     }
 
     /** In place of Tessellator.draw. */
-    public static void draw(Object tess) throws Throwable {
+    public static void draw(Object tess) {
         if (SteinStaticGeometry.recordList == 0 && !SteinEntityDeferred.capturingDynamic()) {
             if (GLMatrix.compiling()) {
                 // into a display list (does not go to the screen): in the core it only finishes and
@@ -179,7 +179,7 @@ public final class SteinTessCapture {
     private static String refused;
 
     /** Records the draw; false = nothing changed (the caller draws immediately). */
-    private static boolean capture(Object tess) throws Throwable {
+    private static boolean capture(Object tess) {
         WorldRenderer wr = ((Tessellator) tess).getWorldRenderer();
         int count = wr.getVertexCount();
         if (count == 0) {
@@ -291,9 +291,10 @@ public final class SteinTessCapture {
      */
     private static final boolean CAPTURE_CHECK = SteinGfxOptions.CAPTURE_CHECK;
 
-    static boolean texGen() throws Throwable {
-        for (Object o : SteinTessGame.TEXGEN) {
-            if ((boolean) SteinTessGame.BOOL.invokeExact(o)) {
+    /** Is texture coordinate generation on for any coordinate (s, t, r, q)? */
+    static boolean texGen() {
+        for (int c = 0; c < 4; c++) {
+            if (SteinGameState.texGen(c)) {
                 return true;
             }
         }
@@ -458,8 +459,7 @@ public final class SteinTessCapture {
      * The owner's geometry converted into its own range of the fixed geometry; false = not
      * suitable.
      */
-    public static boolean slot(Object owner, long src, Object format, int mode, int count)
-            throws Throwable {
+    public static boolean slot(Object owner, long src, Object format, int mode, int count) {
         return SteinStaticGeometry.slot(owner, src, format, mode, count);
     }
 

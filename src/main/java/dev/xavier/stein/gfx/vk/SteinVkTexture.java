@@ -131,7 +131,7 @@ final class SteinVkTexture extends SteinTexture {
         }
         // starts out ready to sample (undefined contents, like glTexStorage)
         VkCommandBuffer c = device.outside();
-        SteinVkDevice.layout(
+        SteinVkBarriers.layout(
                 c, image, aspect, 0, desc.mips, desc.layers, VK_IMAGE_LAYOUT_UNDEFINED, REST);
         layout = REST;
     }
@@ -181,7 +181,7 @@ final class SteinVkTexture extends SteinTexture {
     /** Takes the whole image from its current layout to {@code to}. */
     void toLayout(VkCommandBuffer c, int to) {
         if (layout != to) {
-            SteinVkDevice.layout(c, image, aspect, 0, desc.mips, desc.layers, layout, to);
+            SteinVkBarriers.layout(c, image, aspect, 0, desc.mips, desc.layers, layout, to);
             layout = to;
         }
     }
@@ -195,7 +195,7 @@ final class SteinVkTexture extends SteinTexture {
         // only discards when the drawing view is the whole image: the other levels and layers
         // keep what they had
         if (discard && desc.mips == 1 && desc.layers == 1) {
-            SteinVkDevice.layout(
+            SteinVkBarriers.layout(
                     c, image, aspect, 0, desc.mips, desc.layers, VK_IMAGE_LAYOUT_UNDEFINED, to);
             layout = to;
         } else {
@@ -269,7 +269,7 @@ final class SteinVkTexture extends SteinTexture {
             int h = desc.height;
             for (int level = 1; level < desc.mips; level++) {
                 // the upper level becomes the source; the lower one remains the destination
-                SteinVkDevice.layout(
+                SteinVkBarriers.layout(
                         c,
                         image,
                         aspect,
@@ -314,7 +314,7 @@ final class SteinVkTexture extends SteinTexture {
             }
         }
         // levels 0..n-2 are the source, the last one the destination: all back to rest
-        SteinVkDevice.layout(
+        SteinVkBarriers.layout(
                 c,
                 image,
                 aspect,
@@ -323,7 +323,7 @@ final class SteinVkTexture extends SteinTexture {
                 desc.layers,
                 VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
                 REST);
-        SteinVkDevice.layout(
+        SteinVkBarriers.layout(
                 c,
                 image,
                 aspect,

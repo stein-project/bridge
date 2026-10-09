@@ -411,7 +411,7 @@ pz	sbM28	J	-	-	field
 pz	sbM29	J	-	-	field
 pz	sbM30	J	-	-	field
 pz	sbM31	J	-	-	field
-# New renderer: cached text (dev.xavier.stein.gfx.SteinTextCache; only in the deferred pass, with -Dsteinbridge.gfx=true).
+# New renderer: cached text (dev.xavier.stein.gfx.SteinTextCache; only in the deferred pass, with Stein GFX).
 # The renderStringAtPos called by renderString builds each text once and then repeats the stored batches; the width
 # requested by the name (renderLivingLabel) and by the sign (TileEntitySignRenderer) comes from a cache alongside. A resource
 # reload clears both.
@@ -424,7 +424,7 @@ bnj	a	(Lbni;)V	clear	dev/xavier/stein/gfx/SteinTextCache	after
 org/lwjgl/opengl/GL11	glTexGen	(IILjava/nio/FloatBuffer;)V	glTexGenfv	dev/xavier/stein/gfx/SteinGlTrack		bfl.a(Lbfl$o;ILjava/nio/FloatBuffer;)V
 
 # New renderer, step 7: the game's fixed-function pipeline goes through gfx/SteinCoreGl (in the usual context it goes to the driver
-# as before; with -Dsteinbridge.gfx.core=true, a core context, it does not reach the driver or is tracked in Java).
+# as before; with Stein GFX, in a core context, it does not reach the driver or is tracked in Java).
 org/lwjgl/opengl/ARBMultitexture	glClientActiveTextureARB	(I)V	glClientActiveTextureARB	dev/xavier/stein/gfx/gl/SteinCoreGl
 org/lwjgl/opengl/ARBMultitexture	glMultiTexCoord2fARB	(IFF)V	glMultiTexCoord2fARB	dev/xavier/stein/gfx/gl/SteinCoreGl
 org/lwjgl/opengl/GL11	glCallList	(I)V	glCallList	dev/xavier/stein/gfx/gl/SteinCoreGl

@@ -90,16 +90,19 @@ final class SteinPlayerPoseGame {
             Class<?> f = float.class;
             Class<?> d = double.class;
             Class<?> o = Object.class;
+            // RendererLivingEntity.doRender called as super of RenderPlayer's: typed Java cannot
+            // make a non-virtual call from outside the subclass, so it stays a handle ("a" is
+            // doRender in the game's own names, which the lookup sees).
             SUPER_DO_RENDER =
                     MethodHandles.privateLookupIn(RenderPlayer.class, l)
-                            // "a" is doRender in the game's names (the lookup works on the real
-                            // ones)
                             .findSpecial(
                                     RendererLivingEntity.class,
                                     "a",
                                     methodType(v, EntityLivingBase.class, d, d, d, f, f),
                                     RenderPlayer.class)
                             .asType(methodType(v, o, o, d, d, d, f, f));
+            // LayerArmorBase$1 is the compiler's synthetic switch map: it has no readable name to
+            // compile against, so its table is read by handle.
             Class<?> sw = Obf.cls("bkn$1"); // LayerArmorBase$1
             MATERIAL_CASE =
                     ((int[])

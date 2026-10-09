@@ -15,6 +15,7 @@ import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.lang.reflect.Modifier;
 import java.util.Arrays;
 
 /**
@@ -73,14 +74,14 @@ public final class GameAccess {
         Class<?> c = Class.forName(owner.replace('/', '.'), false, cl);
         MethodHandle h;
         if (kind <= PUT_STATIC) {
-            // By name AND type: the obfuscated game has fields that share a name (Vec3i.a is both x
-            // and
-            // a static constant).
+            // By name, type AND kind: the obfuscated game has fields that share a name and type
+            // along one hierarchy (BlockPos.c is a static constant, Vec3i.c the inherited y).
             Field f =
                     field(
                             c,
                             name,
-                            MethodType.fromMethodDescriptorString("()" + desc, cl).returnType());
+                            MethodType.fromMethodDescriptorString("()" + desc, cl).returnType(),
+                            kind >= GET_STATIC);
             f.setAccessible(true);
             // unreflectSetter accepts an instance final field after setAccessible.
             h =
@@ -93,14 +94,25 @@ public final class GameAccess {
         return new ConstantCallSite(h.asType(type));
     }
 
-    private static Field field(Class<?> c, String name, Class<?> type) throws NoSuchFieldException {
-        for (Field f : c.getDeclaredFields()) {
-            if (f.getName().equals(name) && f.getType() == type) {
-                f.setAccessible(true);
-                return f;
+    /**
+     * The field declared in {@code c} or, failing that, in its superclasses (the build passes the
+     * declaring class, so the walk is only a safety net): the name, the type and static or not must
+     * all match, so a static of the same name never stands in for an instance field.
+     */
+    private static Field field(Class<?> c, String name, Class<?> type, boolean statik)
+            throws NoSuchFieldException {
+        for (Class<?> k = c; k != null; k = k.getSuperclass()) {
+            for (Field f : k.getDeclaredFields()) {
+                if (f.getName().equals(name)
+                        && f.getType() == type
+                        && Modifier.isStatic(f.getModifiers()) == statik) {
+                    f.setAccessible(true);
+                    return f;
+                }
             }
         }
-        throw new NoSuchFieldException(c.getName() + "." + name + " " + type.getName());
+        throw new NoSuchFieldException(
+                c.getName() + "." + name + " " + type.getName() + (statik ? " (static)" : ""));
     }
 
     private static Method method(Class<?> c, String name, MethodType want)

@@ -49,7 +49,7 @@ final class SteinLabelEmit {
      * background and the passes. With {@code dry} (check), nothing is recorded: each command goes
      * to {@code dry} (key, first, vertices; the record in {@link SteinLabelCheck#dryRecord}).
      */
-    static void emit(Label l, Template t, long[] dry) throws Throwable {
+    static void emit(Label l, Template t, long[] dry) {
         matrix(l, (RenderManager) SteinLabelContext.manager);
         int inst;
         try {

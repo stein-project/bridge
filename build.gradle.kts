@@ -1,3 +1,9 @@
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+//
+// Copyright (c) 2026 Breno Xavier
+//
 // The Stein Bridge build.
 //
 //   ./gradlew build           compiles the Bridge (build/libs/steinbridge.jar), patches the player's game jar
@@ -249,6 +255,8 @@ dependencies {
     "lensCompileOnly"(files(lwjgl))
     "lensCompileOnly"(files(provider { gameLibraries(patched = false) }))
     testImplementation(files(lwjgl))
+    // The GPU tests open a window: LWJGL needs its natives at run time.
+    testRuntimeOnly(files(lwjglNatives))
 }
 
 val toSrg = tasks.register<JavaExec>("toSrg") {
@@ -380,6 +388,9 @@ val bridgeJar = tasks.register<Jar>("bridgeJar") {
     description = "Builds build/libs/steinbridge.jar."
     destinationDirectory = layout.buildDirectory.dir("libs")
     from(bridgeClasses)
+    // The licence and the third-party notices travel with the jar (LWJGL 2 code and LWJGL 3 are in it or with it).
+    from(files("LICENSE", "NOTICE")) { into("META-INF") }
+    from(fileTree("licenses")) { into("META-INF/licenses") }
     archiveFileName = "steinbridge.jar"
     // Same bytes for the same sources: no timestamps, fixed order.
     isPreserveFileTimestamps = false
@@ -468,13 +479,54 @@ val sanityTest = tasks.register<JavaExec>("sanityTest") {
 
 dependencies { testCompileOnly(files(bridgeJar)) }
 
-val optionsCheck = tasks.register<Exec>("optionsCheck") {
-    group = "verification"
-    description = "Checks that docs/OPTIONS.md lists every -D option (tools/options.sh)."
-    inputs.files(fileTree("src") { include("**/*Options.java") }, "docs/OPTIONS.md", "tools/options.sh")
-    outputs.upToDateWhen { true }
-    commandLine("bash", "tools/options.sh", "--check")
+// docs/OPTIONS.md: every -D option, from the Javadoc of the *Options classes (tools/OptionsDoc.java).
+tasks.register<JavaExec>("options") {
+    group = "documentation"
+    description = "Writes docs/OPTIONS.md from the *Options classes."
+    classpath = toolsSet.runtimeClasspath
+    mainClass = "OptionsDoc"
+    args(projectDir.path)
 }
+val optionsCheck = tasks.register<JavaExec>("optionsCheck") {
+    group = "verification"
+    description = "Checks that docs/OPTIONS.md lists every -D option (run ./gradlew options to update it)."
+    inputs.files(fileTree("src") { include("**/*Options.java") }, "docs/OPTIONS.md")
+    outputs.upToDateWhen { true }
+    classpath = toolsSet.runtimeClasspath
+    mainClass = "OptionsDoc"
+    args(projectDir.path, "--check")
+}
+
+
+// ---- GPU tests and benches (need a graphics card and a window: not part of ./gradlew build) ----
+
+/**
+ * A standalone program of the test source set run against the Bridge jar and LWJGL 3 with its natives. Options (-P):
+ *   stein.args       arguments of the program, e.g. "fence3"
+ *   stein.jvmArgs    extra JVM flags, e.g. "-Dsteinbridge.gfx.recordFrame=false"
+ */
+fun gpuProgram(name: String, main: String, what: String, vararg props: Pair<String, String>) =
+    tasks.register<JavaExec>(name) {
+        group = "gpu"
+        description = what
+        javaLauncher = javaToolchains.launcherFor { languageVersion = JavaLanguageVersion.of(25) }
+        classpath = sourceSets.test.get().output + files(bridgeJar) + lwjgl + lwjglNatives
+        mainClass = main
+        jvmArgs("--enable-native-access=ALL-UNNAMED")
+        for ((k, v) in props) systemProperty(k, v)
+        providers.gradleProperty("stein.jvmArgs").orNull?.let { jvmArgs(it.split(" ").filter(String::isNotBlank)) }
+        providers.gradleProperty("stein.args").orNull?.let { args(it.split(" ").filter(String::isNotBlank)) }
+    }
+
+gpuProgram("gpuFrameTest", "dev.xavier.stein.gfx.gl.SteinGlFrameTest",
+    "Stein GFX API tests and the recorded frame, in a hidden OpenGL 4.6 core window.")
+gpuProgram("gpuTimingTest", "dev.xavier.stein.gfx.gl.SteinGlGpuTimingTest",
+    "GPU pass timing (OpenGL timestamps) with fake passes, in a hidden OpenGL 4.6 core window.",
+    "steinbridge.gfx.gpuPassTiming" to "true")
+gpuProgram("gpuFenceBench", "dev.xavier.stein.gfx.gl.SteinGlFenceBench",
+    "Benchmark of the gap a fence leaves before a pass (-Pstein.args=\"fence3\", see the class).")
+gpuProgram("vkSelfTest", "dev.xavier.stein.gfx.vk.SteinVkSelfTest",
+    "The Stein GFX API tests on the experimental Vulkan backend, offscreen.")
 
 tasks.assemble { dependsOn(bridgeJar, patchGame, patchSound, gameRuntime) }
 tasks.check { dependsOn(coverage, preflight, sanityTest, optionsCheck) }

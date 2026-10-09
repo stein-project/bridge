@@ -478,7 +478,7 @@ public final class ModRemap {
 
         private void type(Info from, String t) {
             if (!known(t)) {
-                bad.add("missing class " + t + " (em " + from.name + ")");
+                bad.add("missing class " + t + " (in " + from.name + ")");
             }
         }
 
@@ -490,7 +490,7 @@ public final class ModRemap {
                 return;
             }
             if (!known(owner)) {
-                bad.add("missing class " + owner + " (em " + from.name + ")");
+                bad.add("missing class " + owner + " (in " + from.name + ")");
                 return;
             }
             if (!game.containsKey(owner) && !mod.containsKey(owner)) {
@@ -505,7 +505,7 @@ public final class ModRemap {
                                 + name
                                 + " "
                                 + desc
-                                + " (em "
+                                + " (in "
                                 + from.name
                                 + ")");
             }

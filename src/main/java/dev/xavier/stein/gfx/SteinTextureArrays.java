@@ -263,7 +263,7 @@ public final class SteinTextureArrays {
     }
 
     /** GlStateManager.deleteTexture, throughout the game (patcher rule). */
-    public static void deleteTexture(int tex) throws Throwable {
+    public static void deleteTexture(int tex) {
         forget(tex);
         SteinTessCapture.forgetFilter(tex);
         deletes++;

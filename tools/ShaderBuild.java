@@ -74,18 +74,18 @@ import java.util.regex.Pattern;
 
 /**
  * Shaders of the Stein graphics API: a single source (Vulkan-style GLSL, in src/main/shaders) ->
- * SPIR-V (shaderc) -> OpenGL GLSL (SPIRV-Cross). Runs in the build (tools/build.sh), with the
- * compiler in build/tools/shaderc (tools/fetch-shader-libs.sh); the game only reads the result:
- * {@code <output>.glsl} (OpenGL) and {@code <output>.spv} (the Vulkan backend, later), in {@code
- * stein/shaders/} inside the jar.
+ * SPIR-V (shaderc) -> OpenGL GLSL (SPIRV-Cross). Runs in the build (./gradlew shaders, part of
+ * ./gradlew build), with shaderc and SPIRV-Cross from LWJGL (Gradle downloads them); the game only
+ * reads the result: {@code <output>.glsl} (OpenGL) and {@code <output>.spv} (the Vulkan backend,
+ * later), in {@code stein/shaders/} inside the jar.
  *
  * <p>The generated GLSL is 410 core, without {@code layout(binding)}: the OpenGL backend binds
  * textures and uniform blocks by name at every level (SteinGlPipeline.bindSlots), and the same text
  * serves both the 4.6 path and the Mac one (4.1).
  *
- * <p>Usage: {@code java -cp ... tools/ShaderBuild.java <src/main/shaders> <output>}. Reads {@code
- * shaders.list} (output, stage, source, definitions); {@code #include "x"} is resolved as text,
- * relative to the sources folder.
+ * <p>Usage (the shaders task passes them): {@code ShaderBuild <src/main/shaders> <output>}. Reads
+ * {@code shaders.list} (output, stage, source, definitions); {@code #include "x"} is resolved as
+ * text, relative to the sources folder.
  */
 public final class ShaderBuild {
 

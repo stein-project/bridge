@@ -51,9 +51,9 @@ final class Presets {
     /** Highest slider position, as an index. */
     static final int MAX_POSITION = POSITIONS.length - 1;
 
-    /** The position at a slider index (0 = Fast). */
+    /** The position at a slider index (0 = Fast), clamped to the slider's range. */
     static Position at(int index) {
-        return POSITIONS[index];
+        return POSITIONS[Math.clamp(index, 0, MAX_POSITION)];
     }
 
     /** Maximum distance, in chunks, that "Fast" allows. */

@@ -8,8 +8,6 @@
 
 package dev.xavier.stein.bridge.engine;
 
-import static dev.xavier.stein.bridge.engine.ChunkGraph.*;
-
 import net.minecraft.client.renderer.RenderGlobal;
 import net.minecraft.client.renderer.ViewFrustum;
 import net.minecraft.client.renderer.chunk.RenderChunk;
@@ -44,17 +42,17 @@ final class ChunkCull {
         BlockPos player = (BlockPos) playerObj;
         RenderChunk renderChunk = (RenderChunk) renderChunkObj;
         EnumFacing facing = (EnumFacing) facingObj;
-        if (VANILLA) {
+        if (ChunkGraph.VANILLA) {
             return rg.getRenderChunkOffset(player, renderChunk, facing);
         }
-        if (dx == null) {
-            offsets();
+        if (ChunkGraph.dx == null) {
+            ChunkGraph.offsets();
         }
         BlockPos p = renderChunk.position;
         int f = facing.ordinal();
-        int ox = p.x + dx[f] * 16;
-        int oy = p.y + dy[f] * 16;
-        int oz = p.z + dz[f] * 16;
+        int ox = p.x + ChunkGraph.dx[f] * 16;
+        int oy = p.y + ChunkGraph.dy[f] * 16;
+        int oz = p.z + ChunkGraph.dz[f] * 16;
         int limit = rg.renderDistanceChunks * 16;
         RenderChunk r = null;
         if (Math.abs(player.x - ox) <= limit
@@ -79,9 +77,9 @@ final class ChunkCull {
                 r = vf.renderChunks[(k * cy + j) * cx + i];
             }
         }
-        if (CHECK) {
+        if (ChunkGraph.CHECK) {
             RenderChunk v = rg.getRenderChunkOffset(player, renderChunk, facing);
-            check(v == r, "neighbour");
+            ChunkGraph.check(v == r, "neighbour");
         }
         return r;
     }
@@ -93,15 +91,15 @@ final class ChunkCull {
     static Object visibleFacings(Object rgObj, Object posObj) {
         RenderGlobal rg = (RenderGlobal) rgObj;
         BlockPos pos = (BlockPos) posObj;
-        if (VANILLA) {
+        if (ChunkGraph.VANILLA) {
             return rg.getVisibleFacings(pos);
         }
         long key = pack(pos);
-        int epoch = blockEpoch;
+        int epoch = ChunkGraph.blockEpoch;
         if (cachedFacings != null && rg == cachedRg && key == cachedPos && epoch == cachedEpoch) {
             Set<?> r = copy(cachedFacings);
-            if (CHECK) {
-                check(r.equals(rg.getVisibleFacings(pos)), "faces");
+            if (ChunkGraph.CHECK) {
+                ChunkGraph.check(r.equals(rg.getVisibleFacings(pos)), "faces");
             }
             return r;
         }

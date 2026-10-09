@@ -164,6 +164,8 @@ public final class Lens implements HookSink {
             File self =
                     new File(
                             Lens.class.getProtectionDomain().getCodeSource().getLocation().toURI());
+            // The visual options compile like a mod, against the SRG jar where private members stay
+            // closed: a private field is reached by reflection (ModRemap maps the SRG name).
             Field f = Minecraft.class.getDeclaredField("field_110449_ao");
             f.setAccessible(true);
             List<IResourcePack> packs = (List<IResourcePack>) f.get(Minecraft.func_71410_x());
@@ -206,6 +208,7 @@ public final class Lens implements HookSink {
     private static void retryMissing(Minecraft mc) {
         try {
             TextureManager tm = mc.func_110434_K();
+            // Private in the SRG jar the visual options compile against (see addResourcePack).
             Field f = TextureManager.class.getDeclaredField("field_110585_a");
             f.setAccessible(true);
             Map<ResourceLocation, ITextureObject> loaded =
@@ -281,14 +284,25 @@ public final class Lens implements HookSink {
             return;
         }
         String[] p = DIAG_PRESET.split(":");
+        if (p.length < 2) {
+            diagPresetDone = true;
+            Log.warn("lens", "diag: steinlens.diag.presetAtSec needs S:P, got " + DIAG_PRESET);
+            return;
+        }
         if (System.nanoTime() - DIAG_START < (long) (Double.parseDouble(p[0]) * 1e9)) {
             return;
         }
         diagPresetDone = true;
         // Like the slider on release: the preset is applied (slider position: 0 Fast, 1 Fancy).
-        Presets.apply(this, Presets.at(Integer.parseInt(p[1])));
+        Presets.apply(this, Presets.at(Integer.parseInt(p[1].trim())));
         Log.info("lens", "diag: preset " + p[1]);
     }
+
+    /** {@code -Dsteinlens.debug=true}: zoom state in the log (every 2 s and on every change). */
+    private static final boolean DEBUG = LensOptions.DEBUG;
+
+    private long debugCalls;
+    private long debugLast;
 
     /** Turns the zoom on or off when the key changes — checked on every requested field of view. */
     private void updateZoom() {
@@ -298,8 +312,14 @@ public final class Lens implements HookSink {
                         && zoomKey != null
                         && mc.field_71462_r == null
                         && zoomKey.func_151470_d();
+        if (DEBUG) {
+            debugZoom(mc);
+        }
         if (held == zooming) {
             return;
+        }
+        if (DEBUG) {
+            Log.info("lens", "zoom " + (held ? "on" : "off"));
         }
         zooming = held;
         GameSettings settings = mc.field_71474_y;
@@ -316,6 +336,26 @@ public final class Lens implements HookSink {
         }
         if (mc.field_71438_f != null) {
             mc.field_71438_f.func_174979_m();
+        }
+    }
+
+    private void debugZoom(Minecraft mc) {
+        debugCalls++;
+        long now = System.nanoTime();
+        if (now - debugLast > 2_000_000_000L) {
+            debugLast = now;
+            Log.info(
+                    "lens",
+                    "fov x"
+                            + debugCalls
+                            + " | key "
+                            + (zoomKey == null
+                                    ? "-"
+                                    : zoomKey.func_151463_i() + " down=" + zoomKey.func_151470_d())
+                            + " | screen "
+                            + mc.field_71462_r
+                            + " | zoom "
+                            + zooming);
         }
     }
 

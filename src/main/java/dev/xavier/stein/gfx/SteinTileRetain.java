@@ -338,8 +338,7 @@ public final class SteinTileRetain {
      * In place of bhc.a(akw, F, I) (through {@link SteinEntityDeferred#renderTile}), recording the
      * entity pass.
      */
-    static void render(Object dispatcherObject, Object te, float partial, int stage)
-            throws Throwable {
+    static void render(Object dispatcherObject, Object te, float partial, int stage) {
         TileEntityRendererDispatcher dispatcher = (TileEntityRendererDispatcher) dispatcherObject;
         int kind = stage < 0 ? SteinTileKey.kindOf(dispatcher, te) : 0;
         if (kind == 0) {
@@ -401,8 +400,7 @@ public final class SteinTileRetain {
     }
 
     /** The block is not retained: the game's renderer runs, counted as outside the key. */
-    private static void leftToGame(Object dispatcher, Object te, float partial, int stage)
-            throws Throwable {
+    private static void leftToGame(Object dispatcher, Object te, float partial, int stage) {
         uncacheable++;
         SteinEntityDeferred.renderTileNow(dispatcher, te, partial, stage);
     }
@@ -451,7 +449,7 @@ public final class SteinTileRetain {
     }
 
     /** Re-emits the retained block; false = it did not fit or has no usable correction. */
-    private static boolean tryReplay(SteinTileEntry e) throws Throwable {
+    private static boolean tryReplay(SteinTileEntry e) {
         double[] fix = SteinCameraCorrection.correction(e, pass);
         if (fix != SteinCameraCorrection.NO_INVERSE && replay(e, fix)) {
             hits++;
@@ -476,8 +474,7 @@ public final class SteinTileRetain {
             SteinTileEntry e,
             boolean same,
             boolean check,
-            float[] v)
-            throws Throwable {
+            float[] v) {
         // Records (the game's renderer, as today) and stores.
         System.arraycopy(v, 0, viewNow, 0, 16);
         double sx = TileEntityRendererDispatcher.staticPlayerX;
@@ -601,7 +598,7 @@ public final class SteinTileRetain {
     /**
      * Re-emits the instances and reapplies the exit state; false = it did not fit (records again).
      */
-    private static boolean replay(SteinTileEntry e, double[] fix) throws Throwable {
+    private static boolean replay(SteinTileEntry e, double[] fix) {
         if (e.lightmap) {
             SteinEntityDeferred.retainedLightmap();
         }

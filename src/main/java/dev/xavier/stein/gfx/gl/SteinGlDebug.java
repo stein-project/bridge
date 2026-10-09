@@ -57,8 +57,9 @@ public final class SteinGlDebug {
                         (source, type, id, severity, length, message, user) -> {
                             if (type != GL43.GL_DEBUG_TYPE_ERROR
                                     && severity != GL43.GL_DEBUG_SEVERITY_HIGH) {
-                                return; // only errors are what the driver calls severe (the rest
-                                // is informational or performance-related)
+                                // Only errors are what the driver calls severe (the rest is
+                                // informational or performance-related)
+                                return;
                             }
                             total++;
                             String msg = GLDebugMessageCallback.getMessage(length, message);

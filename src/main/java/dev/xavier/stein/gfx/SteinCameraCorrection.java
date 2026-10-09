@@ -38,7 +38,7 @@ final class SteinCameraCorrection {
      * The 3x4 correction (by rows) of the matrices recorded with the entry's camera to the current
      * camera: V1 * T(S0 - S1) * inverse(V0). Null = same camera (exact copy).
      */
-    static double[] correction(SteinTileEntry e, long pass) throws Throwable {
+    static double[] correction(SteinTileEntry e, long pass) {
         float[] now = GLMatrix.current();
         double nx = TileEntityRendererDispatcher.staticPlayerX;
         double ny = TileEntityRendererDispatcher.staticPlayerY;

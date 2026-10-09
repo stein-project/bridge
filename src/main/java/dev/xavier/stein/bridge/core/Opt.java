@@ -11,8 +11,8 @@ package dev.xavier.stein.bridge.core;
 /**
  * Reads the Bridge's {@code -D} options. Options are declared as {@code static final} fields of one
  * {@code *Options} class per area (for example {@code EngineOptions}), each with a Javadoc that
- * says what it does, so every option is in one place and {@code tools/options.sh} can list them
- * all.
+ * says what it does, so every option is in one place and {@code tools/OptionsDoc.java} ({@code
+ * ./gradlew options}) can list them all in docs/OPTIONS.md.
  *
  * <p>The parsing matches the JDK methods the code used before: a flag is on only when the property
  * is {@code true} (any case), like {@link Boolean#getBoolean}; numbers that do not parse fall back
@@ -33,6 +33,14 @@ public final class Opt {
     public static boolean flag(String name, boolean defaultValue) {
         String value = System.getProperty(name);
         return value == null ? defaultValue : Boolean.parseBoolean(value);
+    }
+
+    /**
+     * A flag that is on unless the property is exactly {@code false}: unset or any other value
+     * keeps it on.
+     */
+    public static boolean unlessFalse(String name) {
+        return !"false".equals(System.getProperty(name));
     }
 
     public static int integer(String name, int defaultValue) {

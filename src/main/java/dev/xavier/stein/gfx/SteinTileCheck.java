@@ -31,8 +31,7 @@ final class SteinTileCheck {
      * The retained one ({@code old}, taken to the current camera) against what the game's renderer
      * generates now ({@code now}).
      */
-    static void compare(int kind, SteinTileEntry old, SteinTileEntry now, long pass)
-            throws Throwable {
+    static void compare(int kind, SteinTileEntry old, SteinTileEntry now, long pass) {
         checked++;
         String why = null;
         double[] fix = SteinCameraCorrection.correction(old, pass);

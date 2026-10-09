@@ -107,7 +107,7 @@ final class ChunkWatch {
                     }
                 }
             }
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | LinkageError e) {
             center = "error " + e;
         }
         Log.info(

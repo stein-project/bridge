@@ -145,8 +145,8 @@ final class SteinDeferredGroups {
         if (segs > 0) {
             segTo[segs - 1] = segGroup[segs - 1].n;
             if (segTo[segs - 1] == segFrom[segs - 1]) {
-                segs--; // empty segment (the group sought has no command afterwards): reuses the
-                // slot
+                // Empty segment (the group sought has no command afterwards): reuses the slot.
+                segs--;
             }
         }
         if (segs == segGroup.length) {
@@ -163,8 +163,8 @@ final class SteinDeferredGroups {
 
     static Group createGroup(long key) {
         if (groups.size() >= 4096) {
-            dropIdleGroups(); // game textures that come and go (skins, maps): do not
-            // accumulate forever
+            // Game textures that come and go (skins, maps): do not accumulate forever.
+            dropIdleGroups();
         }
         Group g = new Group(key);
         g.pipeline = pipeline(key);

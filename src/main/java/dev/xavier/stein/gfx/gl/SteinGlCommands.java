@@ -42,14 +42,12 @@ import java.util.Arrays;
  *
  * <p>The pass saves the game state without asking the driver: the bindings come from {@link
  * SteinGlBindings} (followed at the game's and Stein's call sites), the 2D texture per unit and the
- * active unit from the GlStateManager cache, and in the core profile the fixed state too comes from
- * the cache ({@code SteinGameState}, with the deferred state already synchronized by the flush
- * above). What the pass emits is compared with what was there: the first pipeline only emits what
- * differs from the game, and {@link #end()} only gives back what changed. In core there is no
- * glPushAttrib; in the compatibility context the fixed state stays on glPushAttrib (there the
- * fixed-function pipeline and the mods touch things outside the cache), only the bindings are
- * tracked. The only query left is the enabled scissor (the Loader's interface scissors outside the
- * game), one per pass in core.
+ * active unit from the GlStateManager cache, and the fixed state too comes from the cache ({@code
+ * SteinGameState}, with the deferred state already synchronized by the flush above). What the pass
+ * emits is compared with what was there: the first pipeline only emits what differs from the game,
+ * and {@link #end()} only gives back what changed; the core context has no glPushAttrib. The only
+ * query left is the enabled scissor (the Loader's interface scissors outside the game), one per
+ * pass.
  *
  * <p>{@code -Dsteinbridge.gfx.passStateCheck=true} checks the tracked state against the driver
  * ({@link SteinGlPassCheck}).
@@ -93,9 +91,6 @@ public final class SteinGlCommands extends SteinCommands {
 
     /** Not read yet (the game's value is only asked when the pass is about to change it). */
     static final int UNKNOWN = Integer.MIN_VALUE;
-
-    /** Tracked in core: the fixed state too, without glPushAttrib. */
-    static final boolean TRACKED_CORE = SteinCoreGl.CORE;
 
     static final boolean BIND_CACHE = SteinGfxOptions.BIND_CACHE;
     private static final boolean CHECK = SteinGfxOptions.PASS_STATE_CHECK;
@@ -219,18 +214,16 @@ public final class SteinGlCommands extends SteinCommands {
     }
 
     /**
-     * Tracked: the bindings from {@link SteinGlBindings} and the game cache; in core, the game's
-     * fixed state read from the cache and set as the "already emitted" (the first pipeline only
-     * changes what differs). Scissor, stencil, polygon mode, front face and blend equation: the
-     * game never touches the last three nor the stencil (they stay at the OpenGL default, checked
-     * in passStateCheck) and no Stein pipeline uses them; the scissor is the only one queried.
+     * Tracked: the bindings from {@link SteinGlBindings} and the game cache, and the game's fixed
+     * state read from the cache and set as the "already emitted" (the first pipeline only changes
+     * what differs). Scissor, stencil, polygon mode, front face and blend equation: the game never
+     * touches the last three nor the stencil (they stay at the OpenGL default, checked in
+     * passStateCheck) and no Stein pipeline uses them; the scissor is the only one queried.
      */
     private void openTracked(SteinRenderPass pass) {
         long t0 = TIMING ? System.nanoTime() : 0L;
         SteinGlPassBindings.capture(this);
-        if (TRACKED_CORE) {
-            SteinGlPassFixed.capture(this);
-        }
+        SteinGlPassFixed.capture(this);
         if (CHECK) {
             SteinGlPassCheck.atOpen(this);
         }
@@ -242,7 +235,7 @@ public final class SteinGlCommands extends SteinCommands {
         if (drawFbo != prevDrawFbo) {
             GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, drawFbo);
         }
-        setPassViewport(pass, target, !TRACKED_CORE);
+        setPassViewport(pass, target);
         clear(pass, target);
         if (TIMING) {
             SteinGlPassTiming.opened(t0, t1, t2, System.nanoTime());
@@ -250,24 +243,19 @@ public final class SteinGlCommands extends SteinCommands {
     }
 
     /**
-     * The pass's viewport (its own or the whole target); {@code always} = without comparing
-     * (glPopAttrib restores).
+     * The pass's viewport (its own or the whole target), sent only when it differs from the last
+     * one.
      */
-    private void setPassViewport(SteinRenderPass pass, SteinRenderTarget target, boolean always) {
+    private void setPassViewport(SteinRenderPass pass, SteinRenderTarget target) {
         if (pass.viewport != null) {
-            viewport(
-                    pass.viewport[0], pass.viewport[1], pass.viewport[2], pass.viewport[3], always);
+            viewport(pass.viewport[0], pass.viewport[1], pass.viewport[2], pass.viewport[3]);
         } else {
-            viewport(0, 0, target.width(), target.height(), always);
+            viewport(0, 0, target.width(), target.height());
         }
     }
 
-    private void viewport(int x, int y, int w, int h, boolean always) {
-        if (always
-                || viewport[0] != x
-                || viewport[1] != y
-                || viewport[2] != w
-                || viewport[3] != h) {
+    private void viewport(int x, int y, int w, int h) {
+        if (viewport[0] != x || viewport[1] != y || viewport[2] != w || viewport[3] != h) {
             GL11.glViewport(x, y, w, h);
             viewport[0] = x;
             viewport[1] = y;
@@ -334,8 +322,7 @@ public final class SteinGlCommands extends SteinCommands {
         }
         if (newVao || !gp.vertexBinding) {
             // the pass's buffers on this pipeline's VAO (on 4.1 the pointer depends on the layout,
-            // so
-            // always)
+            // so always)
             if (indexHandle != 0) {
                 applyIndex(gp);
             }
@@ -399,8 +386,7 @@ public final class SteinGlCommands extends SteinCommands {
         if (arrayBuffer != handle) {
             if (prevArrayBuffer == UNKNOWN) {
                 // tracked: the game's ARRAY_BUFFER is only read when the pass is about to change it
-                // (the
-                // 4.1 path)
+                // (the 4.1 path)
                 prevArrayBuffer = GL11.glGetInteger(GL15.GL_ARRAY_BUFFER_BINDING);
             }
             GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, handle);
@@ -477,10 +463,8 @@ public final class SteinGlCommands extends SteinCommands {
         if ((savedUnits & bit) == 0) {
             savedUnits |= bit;
             // the 2D: what the game believes (the GlStateManager cache; -1 = erased, it is not
-            // known
-            // which one remained); array and sampler: only Stein binds them, tracked. Reading from
-            // the
-            // driver (the first time, or outside the cache) requires the unit.
+            // known which one remained); array and sampler: only Stein binds them, tracked. Reading
+            // from the driver (the first time, or outside the cache) requires the unit.
             int known = slot < SteinGlGame.textureUnits() ? SteinGlGame.textureName(slot) : -1;
             if (known < 0 || !SteinGlBindings.unitKnown(slot)) {
                 activeUnit(slot);
@@ -495,8 +479,7 @@ public final class SteinGlCommands extends SteinCommands {
                 SteinGlPassCheck.unit(this, slot);
             }
             // the cache may be out of sync with the driver (see openTracked): the first bind of the
-            // unit
-            // always goes
+            // unit always goes
             cur2D[slot] = UNKNOWN;
         }
         if (array) {
@@ -574,21 +557,12 @@ public final class SteinGlCommands extends SteinCommands {
     @Override
     public void setViewport(int x, int y, int w, int h) {
         check();
-        viewport(x, y, w, h, !TRACKED_CORE);
+        viewport(x, y, w, h);
     }
 
     @Override
     public void setScissor(int[] rect) {
         check();
-        if (!TRACKED_CORE) {
-            if (rect == null) {
-                GL11.glDisable(GL11.GL_SCISSOR_TEST);
-            } else {
-                GL11.glEnable(GL11.GL_SCISSOR_TEST);
-                GL11.glScissor(rect[0], rect[1], rect[2], rect[3]);
-            }
-            return;
-        }
         if (rect == null) {
             if (scissorOn) {
                 GL11.glDisable(GL11.GL_SCISSOR_TEST);
@@ -803,11 +777,7 @@ public final class SteinGlCommands extends SteinCommands {
             GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, prevDrawFbo);
         }
         long e2 = TIMING ? System.nanoTime() : 0L;
-        if (TRACKED_CORE) {
-            SteinGlPassFixed.restore(this);
-        } else {
-            SteinCoreGl.glPopAttrib();
-        }
+        SteinGlPassFixed.restore(this);
         long e3 = TIMING ? System.nanoTime() : 0L;
         SteinGlPassBindings.restoreRest(this);
         if (CHECK) {

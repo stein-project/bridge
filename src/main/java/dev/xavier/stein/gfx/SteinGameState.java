@@ -209,7 +209,7 @@ public final class SteinGameState {
      * OpenGlHelper.setLightmapTextureCoords, everywhere in the game (patcher rule): records and
      * moves on.
      */
-    public static void lightmapCoords(int unit, float u, float v) throws Throwable {
+    public static void lightmapCoords(int unit, float u, float v) {
         if (unit == LIGHTMAP_UNIT) {
             lightmapU = u;
             lightmapV = v;
@@ -223,7 +223,7 @@ public final class SteinGameState {
     }
 
     /** Restores the lightmap coordinates (the deferred draw of a name). */
-    public static void setLightmap(float u, float v) throws Throwable {
+    public static void setLightmap(float u, float v) {
         lightmapCoords(LIGHTMAP_UNIT, u, v);
     }
 
@@ -257,7 +257,7 @@ public final class SteinGameState {
 
     /** RendererLivingEntity.setBrightness inside renderLayers (patcher rule). */
     public static boolean setBrightness(
-            Object renderer, Object entity, float partialTicks, boolean combine) throws Throwable {
+            Object renderer, Object entity, float partialTicks, boolean combine) {
         boolean on =
                 ((RendererLivingEntity) renderer)
                         .setBrightness((EntityLivingBase) entity, partialTicks, combine);
@@ -266,7 +266,7 @@ public final class SteinGameState {
     }
 
     /** RendererLivingEntity.unsetBrightness (patcher rule). */
-    public static void unsetBrightness(Object renderer) throws Throwable {
+    public static void unsetBrightness(Object renderer) {
         overlay = false;
         ((RendererLivingEntity) renderer).unsetBrightness();
     }

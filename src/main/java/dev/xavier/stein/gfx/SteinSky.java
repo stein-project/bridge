@@ -45,21 +45,21 @@ public final class SteinSky {
     private SteinSky() {}
 
     /** In place of starVBO.bufferData(...) in RenderGlobal.generateStars. */
-    public static void stars(Object vb, Object data) throws Throwable {
+    public static void stars(Object vb, Object data) {
         register(STARS, vb, data);
     }
 
     /** In place of skyVBO.bufferData(...) in RenderGlobal.generateSky. */
-    public static void sky(Object vb, Object data) throws Throwable {
+    public static void sky(Object vb, Object data) {
         register(SKY, vb, data);
     }
 
     /** In place of sky2VBO.bufferData(...) in RenderGlobal.generateSky2. */
-    public static void sky2(Object vb, Object data) throws Throwable {
+    public static void sky2(Object vb, Object data) {
         register(SKY2, vb, data);
     }
 
-    private static void register(Object role, Object vb, Object buffer) throws Throwable {
+    private static void register(Object role, Object vb, Object buffer) {
         ByteBuffer data = (ByteBuffer) buffer;
         ((VertexBuffer) vb).bufferData(data);
         // Forgets the old VBO of this role (the game rebuilds the sky on reload).
@@ -80,7 +80,7 @@ public final class SteinSky {
     }
 
     /** In place of vbo.drawArrays(mode) in RenderGlobal.renderSky. */
-    public static void draw(Object vb, int mode) throws Throwable {
+    public static void draw(Object vb, int mode) {
         Object role = ROLE.get(vb);
         if (role != null && mode == GL11.GL_QUADS) {
             SteinEntityDeferred.skyNoUv = true;
@@ -102,7 +102,7 @@ public final class SteinSky {
      * sky. With Stein's renderer and the sky in VBOs (the VBOs registered here), it is skipped; the
      * other renderSky lists only run outside VBO mode and stay as in the game.
      */
-    public static void callList(int list) throws Throwable {
+    public static void callList(int list) {
         if (SteinEntityDeferred.REQUESTED && !ROLE.isEmpty()) {
             return;
         }

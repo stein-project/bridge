@@ -283,8 +283,7 @@ final class SteinDeferredDynamic {
             dynFirst = (int) (at / SteinTessCapture.VERTEX_BYTES);
             if (SteinTileRetain.recording) {
                 // Block being recorded for retention: the vertices go first to memory of our own
-                // (the
-                // ring is write-only) and commitDynamic copies them to the ring and to the
+                // (the ring is write-only) and commitDynamic copies them to the ring and to the
                 // retention.
                 dynRing = dynVertices.address(at);
                 return SteinTileRetain.scratch(bytes);
@@ -321,8 +320,8 @@ final class SteinDeferredDynamic {
      * A fixed-buffer item model ({@link SteinTessCapture#staticGeometry()}); false = did not fit.
      */
     static boolean commitStatic(int first, int verts) {
-        SteinTileRetain.taint(); // fixed geometry (item lists, owned ranges): retention does not
-        // cover it
+        // Fixed geometry (item lists, owned ranges): retention does not cover it.
+        SteinTileRetain.taint();
         long inst = reserveInstance();
         if (inst < 0) {
             return false;

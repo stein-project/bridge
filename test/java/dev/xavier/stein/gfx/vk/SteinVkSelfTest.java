@@ -6,8 +6,7 @@
  * Copyright (c) 2026 Breno Xavier
  */
 
-// How to run (standalone, outside the game; not part of the Bridge jar). After tools/build.sh:
-//   java -cp "build/classes;build/test;libs/*" dev.xavier.stein.gfx.vk.SteinVkSelfTest
+// How to run (standalone, outside the game; not part of the Bridge jar): ./gradlew vkSelfTest
 
 package dev.xavier.stein.gfx.vk;
 
@@ -24,12 +23,9 @@ import java.util.List;
  * pixels. Exits with 0 if it passed; {@code -Dsteinbridge.gfx.vkNoPush=true} tests the path without
  * push descriptors.
  *
- * <pre>
- * java -cp build/classes;libs/* -Dsteinbridge.gfx.vkValidation=true
- * dev.xavier.stein.gfx.vk.SteinVkSelfTest
- * </pre>
+ * <p>{@code ./gradlew vkSelfTest -Pstein.jvmArgs=-Dsteinbridge.gfx.vkValidation=true}
  *
- * (validation needs the Vulkan SDK; without it the test runs without validation.)
+ * <p>(validation needs the Vulkan SDK; without it the test runs without validation.)
  */
 public final class SteinVkSelfTest {
 

@@ -80,8 +80,7 @@ public final class SteinParticles {
             float rz,
             float ryz,
             float rxy,
-            float rxz)
-            throws Throwable {
+            float rxz) {
         EntityFX fx = (EntityFX) fxObject;
         WorldRenderer wr = (WorldRenderer) wrObject;
         float u0 = (float) fx.particleTextureIndexX / 16.0F;

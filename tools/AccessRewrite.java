@@ -24,6 +24,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Stream;
 import java.util.zip.ZipEntry;
@@ -64,6 +65,16 @@ public final class AccessRewrite {
                             + "Ljava/lang/invoke/MethodType;"
                             + "ILjava/lang/String;Ljava/lang/String;)Ljava/lang/invoke/CallSite;",
                     false);
+
+    /**
+     * The final instance fields of the game the Bridge writes on purpose, as declaring class and
+     * name (obfuscated); they go through GameAccess, which can set an instance final. Any other
+     * write to a final game field fails the build.
+     */
+    private static final Set<String> FINAL_WRITES =
+            Set.of(
+                    "ave.ae" // Minecraft.session, swapped by GameHooks.setSession for the Loader
+                    );
 
     private final Map<String, byte[]> own = new HashMap<>();
     private final Map<String, Info> cache = new HashMap<>();
@@ -183,9 +194,33 @@ public final class AccessRewrite {
                         case Opcodes.GETSTATIC -> GET_STATIC;
                         default -> PUT_STATIC;
                     };
-            Member m = field(owner, name, desc);
             boolean statik = kind == GET_STATIC || kind == PUT_STATIC;
-            if (m != null && denied(className, owner, m, statik)) {
+            // Resolved with the instruction's own kind: the obfuscated game has static and instance
+            // fields that share name and type along one hierarchy (BlockPos.c is a static constant,
+            // Vec3i.c the inherited y), and the JVM, resolving by name and type only, would stop at
+            // the first one.
+            Member m = field(owner, name, desc, statik);
+            Member jvm = field(owner, name, desc, null);
+            String ref = className + "." + where + " -> " + owner + "." + name + ":" + desc;
+            if (jvm != null && m == null) {
+                errors.add(ref + ": no " + (statik ? "static" : "instance") + " field like that");
+                super.visitFieldInsn(op, owner, name, desc);
+                return;
+            }
+            boolean finalWrite =
+                    m != null
+                            && gameMember(m)
+                            && (kind == PUT || kind == PUT_STATIC)
+                            && (m.access() & Opcodes.ACC_FINAL) != 0;
+            if (finalWrite && (statik || !FINAL_WRITES.contains(m.owner() + "." + name))) {
+                // The readable-name jar is opened for compiling, finals included, so javac accepts
+                // the write; the game would refuse it (IllegalAccessError).
+                errors.add(ref + ": writes a final field");
+                super.visitFieldInsn(op, owner, name, desc);
+                return;
+            }
+            // An accepted final write goes through GameAccess, which can set an instance final.
+            if (m != null && (finalWrite || denied(className, owner, m, statik))) {
                 String type =
                         switch (kind) {
                             case GET -> "(L" + owner + ";)" + desc;
@@ -197,7 +232,9 @@ public final class AccessRewrite {
                 super.visitInvokeDynamicInsn(name, erase(type), ACCESS, kind, m.owner(), desc);
                 return;
             }
-            super.visitFieldInsn(op, owner, name, desc);
+            // Accessible, but the JVM would resolve the reference to the other field of that name
+            // and type: the declaring class goes in the instruction.
+            super.visitFieldInsn(op, m != null && !m.equals(jvm) ? m.owner() : owner, name, desc);
         }
 
         @Override
@@ -298,23 +335,27 @@ public final class AccessRewrite {
         return new Info(head[0], classAccess[0], sup[0], itfs[0], fields, methods);
     }
 
-    /** The field as the JVM resolves it: the class, its interfaces, the superclass. */
-    private Member field(String owner, String name, String desc) {
+    /**
+     * The field in the JVM's resolution order: the class, its interfaces, the superclass. With
+     * {@code statik} null, the first one of that name and type, as the JVM resolves it; otherwise
+     * the first one that is also static (or instance) as asked, skipping the others.
+     */
+    private Member field(String owner, String name, String desc, Boolean statik) {
         Info c = get(owner);
         if (c == null) {
             return null;
         }
         Integer a = c.fields().get(name + ":" + desc);
-        if (a != null) {
+        if (a != null && (statik == null || ((a & Opcodes.ACC_STATIC) != 0) == statik)) {
             return new Member(c.name(), a);
         }
         for (String i : c.itfs()) {
-            Member m = field(i, name, desc);
+            Member m = field(i, name, desc, statik);
             if (m != null) {
                 return m;
             }
         }
-        return field(c.sup(), name, desc);
+        return field(c.sup(), name, desc, statik);
     }
 
     /** The method through the superclass chain (interface ones are public). */
@@ -366,9 +407,14 @@ public final class AccessRewrite {
         return t;
     }
 
+    /** Declared in a class of the game jar (not the Bridge's own, LWJGL or the JDK). */
+    private boolean gameMember(Member m) {
+        return !own.containsKey(m.owner()) && game.getEntry(m.owner() + ".class") != null;
+    }
+
     /** Would the JVM refuse this access? Only for members declared in a class of the game jar. */
     private boolean denied(String accessor, String owner, Member m, boolean statik) {
-        if (own.containsKey(m.owner()) || game.getEntry(m.owner() + ".class") == null) {
+        if (!gameMember(m)) {
             return false;
         }
         // A member of a class the Bridge cannot name is refused whatever the member's own access.

@@ -33,7 +33,7 @@ public abstract class SteinDevice {
     public static synchronized SteinDevice get() {
         if (current == null) {
             current = new SteinGlDevice();
-            Log.info("gfx", "" + current.caps());
+            Log.info("gfx", String.valueOf(current.caps()));
         }
         return current;
     }

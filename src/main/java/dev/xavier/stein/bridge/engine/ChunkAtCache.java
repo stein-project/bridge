@@ -8,8 +8,6 @@
 
 package dev.xavier.stein.bridge.engine;
 
-import static dev.xavier.stein.bridge.engine.ChunkGraph.*;
-
 import net.minecraft.util.BlockPos;
 import net.minecraft.world.World;
 
@@ -28,7 +26,8 @@ final class ChunkAtCache {
     // — the 16 sections of a column give the same chunk —, world and chunk-map version.
     // -Dsteinbridge.opt.vanillaChunkAt=true: the lookup every frame.
 
-    private static final boolean VANILLA_CHUNK = VANILLA || EngineOptions.VANILLA_CHUNK_AT;
+    private static final boolean VANILLA_CHUNK =
+            ChunkGraph.VANILLA || EngineOptions.VANILLA_CHUNK_AT;
 
     /** 128 x 128 columns: covers the maximum distance (32 chunks, 65 columns) with no collision. */
     private static final int CHUNK_SLOTS = 128 * 128;
@@ -52,15 +51,15 @@ final class ChunkAtCache {
         int cx = pos.x >> 4;
         int cz = pos.z >> 4;
         int i = (cx & 127) | (cz & 127) << 7;
-        int epoch = chunkEpoch;
+        int epoch = ChunkGraph.chunkEpoch;
         Object c = slotChunk[i];
         if (c != null
                 && slotCx[i] == cx
                 && slotCz[i] == cz
                 && slotWorld[i] == world
                 && slotEpoch[i] == epoch) {
-            if (CHECK) {
-                check(c == world.getChunkFromBlockCoords(pos), "chunk");
+            if (ChunkGraph.CHECK) {
+                ChunkGraph.check(c == world.getChunkFromBlockCoords(pos), "chunk");
             }
             return c;
         }

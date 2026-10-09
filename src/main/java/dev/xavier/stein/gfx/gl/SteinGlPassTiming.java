@@ -22,7 +22,7 @@ import dev.xavier.stein.bridge.core.Log;
  */
 final class SteinGlPassTiming {
 
-    static final boolean ON = SteinGlOptions.PASS_TIMING;
+    static final boolean ON = dev.xavier.stein.gfx.SteinGfxOptions.PASS_TIMING;
 
     private SteinGlPassTiming() {}
 

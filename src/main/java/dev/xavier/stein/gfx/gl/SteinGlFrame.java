@@ -109,9 +109,7 @@ public final class SteinGlFrame {
             return;
         }
         String why = null;
-        if (!SteinCoreGl.CORE) {
-            why = "compatibility context (the game draws through the driver in the middle)";
-        } else if (!GL.getCapabilities().OpenGL45) {
+        if (!GL.getCapabilities().OpenGL45) {
             why = "no GL 4.5";
         } else if (!dev.caps().persistentMapping
                 || !dev.caps().multiDrawIndirect

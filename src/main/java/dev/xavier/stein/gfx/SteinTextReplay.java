@@ -90,8 +90,7 @@ final class SteinTextReplay {
      * refused on the first run): the caller repeats through the copy path. A refusal after the
      * first run continues through the copy path from that batch on, in the same order.
      */
-    private static boolean replayResident(TextureManager tm, SteinTextCache.Entry e)
-            throws Throwable {
+    private static boolean replayResident(TextureManager tm, SteinTextCache.Entry e) {
         if (e.runs == 0) {
             return false;
         }
@@ -140,8 +139,7 @@ final class SteinTextReplay {
      * The batches from {@code from} onward through the copy path: texture, color and the vertices
      * of each.
      */
-    private static void replayCopy(TextureManager tm, SteinTextCache.Entry e, int from)
-            throws Throwable {
+    private static void replayCopy(TextureManager tm, SteinTextCache.Entry e, int from) {
         long at = MemoryUtil.memAddress(e.data);
         for (int i = 0; i < from; i++) {
             at += (long) e.counts[i] * SteinTessCapture.VERTEX_BYTES;
@@ -159,7 +157,7 @@ final class SteinTextReplay {
      * The text again: each batch with its texture and color, and the font left as the assembly
      * would leave it.
      */
-    static void replay(FontRenderer font, SteinTextCache.Entry e) throws Throwable {
+    static void replay(FontRenderer font, SteinTextCache.Entry e) {
         TextureManager tm = font.renderEngine;
         if (!SteinTextGpu.REQUESTED || !SteinTextGpu.active() || !replayResident(tm, e)) {
             replayCopy(tm, e, 0);
@@ -186,7 +184,7 @@ final class SteinTextReplay {
     }
 
     /** Binds the batch's texture as the FontRenderer (or the TextHook) would. */
-    private static void bind(TextureManager tm, Object location) throws Throwable {
+    private static void bind(TextureManager tm, Object location) {
         if (location instanceof SteinOwnText.Texture o) {
             FontBatch.bindOwn(o.id);
         } else {

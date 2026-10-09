@@ -87,10 +87,10 @@ public final class SteinGfxOptions {
     public static final boolean FRAME_SUBMIT_STATS = Opt.flag("steinbridge.gfx.frameSubmitStats");
 
     /**
-     * {@code -Dsteinbridge.gfx.passTiming=...}: (diagnostics) times each pass on the CPU and prints
-     * it periodically (default: off).
+     * {@code -Dsteinbridge.gfx.passTiming=true}: (diagnostics) measures the CPU time to open and
+     * close each pass and prints it periodically (default: off).
      */
-    static final boolean PASS_TIMING = Opt.flag("steinbridge.gfx.passTiming");
+    public static final boolean PASS_TIMING = Opt.flag("steinbridge.gfx.passTiming");
 
     /**
      * {@code -Dsteinbridge.gfx.chunkFade=...}: turns the chunk fade-in animation on or off
@@ -105,11 +105,12 @@ public final class SteinGfxOptions {
     static final int CHUNK_FADE_MS = Opt.integer("steinbridge.gfx.chunkFadeMs", 700);
 
     /**
-     * {@code -Dsteinbridge.gfx.deferredDynamic=...}: records dynamic geometry (Tessellator, font,
-     * items) in the deferred entities too (default: on; only the exact value false turns it off).
+     * {@code -Dsteinbridge.gfx.deferredDynamic=false}: only model parts in the deferred entities,
+     * no dynamic geometry (Tessellator, font, items); only the exact value {@code false} turns it
+     * off (default: on).
      */
     static final boolean DEFERRED_DYNAMIC =
-            !"false".equals(Opt.text("steinbridge.gfx.deferredDynamic", null));
+            ENABLED && Opt.unlessFalse("steinbridge.gfx.deferredDynamic");
 
     /**
      * {@code -Dsteinbridge.gfx.deferredStats=...}: (diagnostics) prints the deferred entity, label
@@ -124,17 +125,18 @@ public final class SteinGfxOptions {
     static final boolean DEFERRED_TILES = feature("deferredTiles", true);
 
     /**
-     * {@code -Dsteinbridge.gfx.instancedModels=...}: draws the model parts per instance with the
-     * direct draw of SteinModelInstancer in the fixed-function pipeline (compatibility context, GL
-     * 4.4; default: off; with Stein GFX it is not used).
+     * {@code -Dsteinbridge.gfx.instancedModels=true}: (experimental) in the fixed-function
+     * pipeline, draws the model parts per instance with SteinModelInstancer's own indirect draw (GL
+     * 4.4; default: off). With Stein GFX the option changes nothing: the parts' geometry is always
+     * on the GPU and the deferred entities draw it.
      */
     static final boolean INSTANCED_MODELS = Opt.flag("steinbridge.gfx.instancedModels");
 
     /**
-     * {@code -Dsteinbridge.gfx.selfTest=...}: (diagnostics) runs the Stein GFX self-test at startup
-     * (default: off).
+     * {@code -Dsteinbridge.gfx.selfTest=true}: (diagnostics) runs the Stein GFX self-test at
+     * startup; only with Stein GFX on, since its passes need the core context (default: off).
      */
-    static final boolean SELF_TEST = Opt.flag("steinbridge.gfx.selfTest");
+    static final boolean SELF_TEST = feature("selfTest", false);
 
     /** {@code -Dsteinbridge.gfx.gpuHeldItem=...}: held items drawn on the GPU (default: on). */
     static final boolean GPU_HELD_ITEM = feature("gpuHeldItem", true);
@@ -157,7 +159,10 @@ public final class SteinGfxOptions {
     /** {@code -Dsteinbridge.gfx.ownTextCache=...}: Stein's own text cache (default: on). */
     static final boolean OWN_TEXT_CACHE = feature("ownTextCache", true);
 
-    /** {@code -Dsteinbridge.gfx.particles=...}: fast particle path (default: on). */
+    /**
+     * {@code -Dsteinbridge.gfx.particles=false}: the particles drawn call by call, as the game
+     * does: no fast particle path and no recorded particle pass (default: on).
+     */
     static final boolean PARTICLES = feature("particles", true);
 
     /**
@@ -227,7 +232,7 @@ public final class SteinGfxOptions {
      * {@code -Dsteinbridge.gfx.terrainCacheCheck=...}: (diagnostics) checks the terrain cache
      * against a reassembly (default: off).
      */
-    static final boolean TERRAIN_CACHE_CHECK = feature("terrainCacheCheck", false);
+    static final boolean TERRAIN_CACHE_CHECK = Opt.flag("steinbridge.gfx.terrainCacheCheck");
 
     /**
      * {@code -Dsteinbridge.gfx.terrainCacheCheckEvery=...}: uses of the terrain cache between
@@ -292,11 +297,12 @@ public final class SteinGfxOptions {
     static final boolean RETAIN_TILES_STATS = Opt.flag("steinbridge.gfx.retainTilesStats");
 
     /**
-     * {@code -Dsteinbridge.gfx.retainTilesPredict=...}: predicts the state between blocks of a
-     * sequence (default: on; only the exact value false turns it off).
+     * {@code -Dsteinbridge.gfx.retainTilesPredict=false}: the retained tiles read the state for
+     * every block instead of predicting it between blocks of a sequence; only the exact value
+     * {@code false} turns the prediction off (default: on).
      */
     static final boolean RETAIN_TILES_PREDICT =
-            !"false".equals(Opt.text("steinbridge.gfx.retainTilesPredict", null));
+            ENABLED && Opt.unlessFalse("steinbridge.gfx.retainTilesPredict");
 
     private static final Pattern GL_VERSION = Pattern.compile("^(\\d+\\.\\d+)");
 

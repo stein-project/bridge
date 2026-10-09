@@ -342,8 +342,7 @@ public final class SteinPlayerPose {
      * renderer's capture like that of any entity.
      */
     private static void layers(
-            Object render, Object e, double x, double y, double z, float pt, int j, int bits)
-            throws Throwable {
+            Object render, Object e, double x, double y, double z, float pt, int j, int bits) {
         ModelPlayer mm = infos[jInfo[j]].mainModel;
         RendererLivingEntity renderer = (RendererLivingEntity) render;
         AbstractClientPlayer player = (AbstractClientPlayer) e;
@@ -397,8 +396,7 @@ public final class SteinPlayerPose {
             } else if (held == H_RECORD
                     && SteinHeldItem.CHECK
                     && heldEntry.state == SteinHeldItem.Entry.READY) {
-                // the prediction before any layer (an immediate draw inside them empties the
-                // list)
+                // the prediction before any layer (an immediate draw inside them empties the list)
                 Scratch w = scratch0();
                 pose(j, w);
                 predicted = w.item;
@@ -478,7 +476,7 @@ public final class SteinPlayerPose {
      * of the compute shader. Nothing is reserved before the read: an error in it only removes the
      * player.
      */
-    private static void gpuPlayer(int j, int first) throws Throwable {
+    private static void gpuPlayer(int j, int first) {
         float[] a = GPU_ARGS;
         args(jEntity[j], jMount[j], jPt[j], a);
         float[] r = GPU_ROOT;
@@ -512,8 +510,7 @@ public final class SteinPlayerPose {
         int s0 = j * STATES;
         int k = 0;
         while (k < len) {
-            // the states come in sequences in the plan (body, each piece, overlay, each glint
-            // pass)
+            // the states come in sequences in the plan (body, each piece, overlay, each glint pass)
             int st = plan[(at + k) * 2 + 1];
             int end = k + 1;
             while (end < len && plan[(at + end) * 2 + 1] == st) {

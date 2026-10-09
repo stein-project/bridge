@@ -179,8 +179,8 @@ public abstract class SteinBuffer {
         }
         long at = r.place(bytes, Math.max(alignment, 1), desc.name);
         if (at < 0) {
-            return -2; // the whole buffer is taken by the current region, or it would wrap: flush
-            // and close
+            // The whole buffer is taken by the current region, or it would wrap: flush and close.
+            return -2;
         }
         r.written += pad + bytes;
         return at;
@@ -194,8 +194,9 @@ public abstract class SteinBuffer {
     public void nextRegion() {
         Ring r = ring;
         if (r.written == 0) {
-            return; // region with nothing written: the GPU reads nothing from it, it needs no fence
-            // or switch
+            // Region with nothing written: the GPU reads nothing from it, it needs no fence or
+            // switch.
+            return;
         }
         commitRing();
         r.push(r.openStart, SteinDevice.get().fence());
@@ -327,8 +328,7 @@ public abstract class SteinBuffer {
         }
     }
 
-    // ---- diagnostics ({@code -Dsteinbridge.gfx.passTiming=true}): ring fence waits every
-    // 5 s ----
+    // ---- diagnostics (-Dsteinbridge.gfx.passTiming=true): ring fence waits, every 5 s ----
 
     private static final boolean TIMING = SteinGfxOptions.PASS_TIMING;
     private static final Map<String, long[]> WAITS = new TreeMap<>();

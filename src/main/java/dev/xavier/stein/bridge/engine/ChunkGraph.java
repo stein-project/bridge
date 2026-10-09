@@ -25,7 +25,9 @@ import java.util.Set;
  * Entry points, game handles and versions of the cheaper chunk visibility search
  * (RenderGlobal.setupTerrain), with the same result. The work itself lives in {@link ChunkCull},
  * {@link ChunkAtCache}, {@link ChunkInfoFilter} and {@link ChunkSearch}; this class keeps the
- * reflection handles they share and the frozen patcher targets, which delegate.
+ * reflection handles and the mutable state they share (the direction offsets and the versions,
+ * always read as {@code ChunkGraph.x}, so every write to shared state is visible at a glance) and
+ * the frozen patcher targets, which delegate.
  *
  * <p>1.8.9 redoes the whole search — over the chunks from the camera, face by face — whenever the
  * player moves, the camera turns or there is still a chunk waiting to be built: walking or looking

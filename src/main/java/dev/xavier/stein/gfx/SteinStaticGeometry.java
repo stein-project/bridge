@@ -124,7 +124,7 @@ final class SteinStaticGeometry {
      * The draw inside the list being recorded: converted for the copy (and drawn into the list
      * through the original path).
      */
-    static void record(Object tess) throws Throwable {
+    static void record(Object tess) {
         if (!recOk) {
             return;
         }
@@ -220,8 +220,7 @@ final class SteinStaticGeometry {
      * of its own (reused while it fits). false = not suitable (a format or mode we do not record,
      * buffer full): the owner draws as usual.
      */
-    static boolean slot(Object owner, long src, Object format, int mode, int count)
-            throws Throwable {
+    static boolean slot(Object owner, long src, Object format, int mode, int count) {
         if (!staticReady()) {
             return false;
         }
@@ -239,11 +238,8 @@ final class SteinStaticGeometry {
         SteinVertexConverter.convert(src, f, mode, count, slotAddr, false);
         int[] s = SLOTS.get(owner);
         if (s == null || s[1] < out) {
-            int cap =
-                    s == null
-                            ? out
-                            : out * 2; // grew (clouds seen from another side): headroom for the
-            // next
+            // Grew (clouds seen from another side): headroom for the next.
+            int cap = s == null ? out : out * 2;
             if (staticUsed + (long) cap * VERTEX_BYTES > STATIC_BYTES) {
                 SLOTS.remove(owner);
                 return false;

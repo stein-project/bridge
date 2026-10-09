@@ -17,22 +17,15 @@ import static org.lwjgl.vulkan.EXTDebugUtils.VK_EXT_DEBUG_UTILS_EXTENSION_NAME;
 import static org.lwjgl.vulkan.EXTDebugUtils.vkCreateDebugUtilsMessengerEXT;
 import static org.lwjgl.vulkan.EXTDebugUtils.vkDestroyDebugUtilsMessengerEXT;
 import static org.lwjgl.vulkan.VK10.VK_ACCESS_HOST_READ_BIT;
-import static org.lwjgl.vulkan.VK10.VK_ACCESS_MEMORY_READ_BIT;
-import static org.lwjgl.vulkan.VK10.VK_ACCESS_MEMORY_WRITE_BIT;
 import static org.lwjgl.vulkan.VK10.VK_ACCESS_TRANSFER_WRITE_BIT;
 import static org.lwjgl.vulkan.VK10.VK_API_VERSION_1_0;
 import static org.lwjgl.vulkan.VK10.VK_API_VERSION_MAJOR;
 import static org.lwjgl.vulkan.VK10.VK_API_VERSION_MINOR;
-import static org.lwjgl.vulkan.VK10.VK_API_VERSION_PATCH;
 import static org.lwjgl.vulkan.VK10.VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-import static org.lwjgl.vulkan.VK10.VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 import static org.lwjgl.vulkan.VK10.VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 import static org.lwjgl.vulkan.VK10.VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
 import static org.lwjgl.vulkan.VK10.VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 import static org.lwjgl.vulkan.VK10.VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
-import static org.lwjgl.vulkan.VK10.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-import static org.lwjgl.vulkan.VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-import static org.lwjgl.vulkan.VK10.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 import static org.lwjgl.vulkan.VK10.VK_ERROR_OUT_OF_DEVICE_MEMORY;
 import static org.lwjgl.vulkan.VK10.VK_FALSE;
 import static org.lwjgl.vulkan.VK10.VK_FORMAT_D32_SFLOAT;
@@ -48,21 +41,13 @@ import static org.lwjgl.vulkan.VK10.VK_MEMORY_PROPERTY_HOST_CACHED_BIT;
 import static org.lwjgl.vulkan.VK10.VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 import static org.lwjgl.vulkan.VK10.VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT;
 import static org.lwjgl.vulkan.VK10.VK_NULL_HANDLE;
-import static org.lwjgl.vulkan.VK10.VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU;
-import static org.lwjgl.vulkan.VK10.VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
-import static org.lwjgl.vulkan.VK10.VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU;
-import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
 import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_HOST_BIT;
 import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_TRANSFER_BIT;
-import static org.lwjgl.vulkan.VK10.VK_QUEUE_COMPUTE_BIT;
-import static org.lwjgl.vulkan.VK10.VK_QUEUE_FAMILY_IGNORED;
-import static org.lwjgl.vulkan.VK10.VK_QUEUE_GRAPHICS_BIT;
 import static org.lwjgl.vulkan.VK10.VK_SHARING_MODE_EXCLUSIVE;
 import static org.lwjgl.vulkan.VK10.VK_SUCCESS;
 import static org.lwjgl.vulkan.VK10.VK_TIMEOUT;
 import static org.lwjgl.vulkan.VK10.VK_WHOLE_SIZE;
 import static org.lwjgl.vulkan.VK10.vkAllocateCommandBuffers;
-import static org.lwjgl.vulkan.VK10.vkAllocateDescriptorSets;
 import static org.lwjgl.vulkan.VK10.vkAllocateMemory;
 import static org.lwjgl.vulkan.VK10.vkBeginCommandBuffer;
 import static org.lwjgl.vulkan.VK10.vkBindBufferMemory;
@@ -72,34 +57,26 @@ import static org.lwjgl.vulkan.VK10.vkCmdCopyImageToBuffer;
 import static org.lwjgl.vulkan.VK10.vkCmdPipelineBarrier;
 import static org.lwjgl.vulkan.VK10.vkCreateBuffer;
 import static org.lwjgl.vulkan.VK10.vkCreateCommandPool;
-import static org.lwjgl.vulkan.VK10.vkCreateDescriptorPool;
 import static org.lwjgl.vulkan.VK10.vkCreateDevice;
 import static org.lwjgl.vulkan.VK10.vkCreateInstance;
 import static org.lwjgl.vulkan.VK10.vkCreatePipelineCache;
 import static org.lwjgl.vulkan.VK10.vkCreateSemaphore;
 import static org.lwjgl.vulkan.VK10.vkDestroyBuffer;
 import static org.lwjgl.vulkan.VK10.vkDestroyCommandPool;
-import static org.lwjgl.vulkan.VK10.vkDestroyDescriptorPool;
 import static org.lwjgl.vulkan.VK10.vkDestroyDevice;
 import static org.lwjgl.vulkan.VK10.vkDestroyInstance;
 import static org.lwjgl.vulkan.VK10.vkDestroyPipelineCache;
 import static org.lwjgl.vulkan.VK10.vkDestroySemaphore;
 import static org.lwjgl.vulkan.VK10.vkDeviceWaitIdle;
 import static org.lwjgl.vulkan.VK10.vkEndCommandBuffer;
-import static org.lwjgl.vulkan.VK10.vkEnumerateDeviceExtensionProperties;
-import static org.lwjgl.vulkan.VK10.vkEnumerateInstanceExtensionProperties;
-import static org.lwjgl.vulkan.VK10.vkEnumerateInstanceLayerProperties;
-import static org.lwjgl.vulkan.VK10.vkEnumeratePhysicalDevices;
 import static org.lwjgl.vulkan.VK10.vkFreeMemory;
 import static org.lwjgl.vulkan.VK10.vkGetBufferMemoryRequirements;
 import static org.lwjgl.vulkan.VK10.vkGetDeviceQueue;
 import static org.lwjgl.vulkan.VK10.vkGetPhysicalDeviceFormatProperties;
 import static org.lwjgl.vulkan.VK10.vkGetPhysicalDeviceMemoryProperties;
 import static org.lwjgl.vulkan.VK10.vkGetPhysicalDeviceProperties;
-import static org.lwjgl.vulkan.VK10.vkGetPhysicalDeviceQueueFamilyProperties;
 import static org.lwjgl.vulkan.VK10.vkMapMemory;
 import static org.lwjgl.vulkan.VK10.vkQueueSubmit;
-import static org.lwjgl.vulkan.VK10.vkResetDescriptorPool;
 import static org.lwjgl.vulkan.VK10.vkUnmapMemory;
 import static org.lwjgl.vulkan.VK11.vkEnumerateInstanceVersion;
 import static org.lwjgl.vulkan.VK11.vkGetPhysicalDeviceFeatures2;
@@ -142,19 +119,13 @@ import org.lwjgl.vulkan.VkCommandPoolCreateInfo;
 import org.lwjgl.vulkan.VkDebugUtilsMessengerCallbackDataEXT;
 import org.lwjgl.vulkan.VkDebugUtilsMessengerCallbackEXT;
 import org.lwjgl.vulkan.VkDebugUtilsMessengerCreateInfoEXT;
-import org.lwjgl.vulkan.VkDescriptorPoolCreateInfo;
-import org.lwjgl.vulkan.VkDescriptorPoolSize;
-import org.lwjgl.vulkan.VkDescriptorSetAllocateInfo;
 import org.lwjgl.vulkan.VkDevice;
 import org.lwjgl.vulkan.VkDeviceCreateInfo;
 import org.lwjgl.vulkan.VkDeviceQueueCreateInfo;
-import org.lwjgl.vulkan.VkExtensionProperties;
 import org.lwjgl.vulkan.VkFormatProperties;
 import org.lwjgl.vulkan.VkImageCopy;
-import org.lwjgl.vulkan.VkImageMemoryBarrier;
 import org.lwjgl.vulkan.VkInstance;
 import org.lwjgl.vulkan.VkInstanceCreateInfo;
-import org.lwjgl.vulkan.VkLayerProperties;
 import org.lwjgl.vulkan.VkMemoryAllocateInfo;
 import org.lwjgl.vulkan.VkMemoryBarrier;
 import org.lwjgl.vulkan.VkMemoryRequirements;
@@ -171,7 +142,6 @@ import org.lwjgl.vulkan.VkPhysicalDevicePushDescriptorPropertiesKHR;
 import org.lwjgl.vulkan.VkPhysicalDeviceVulkan12Features;
 import org.lwjgl.vulkan.VkPipelineCacheCreateInfo;
 import org.lwjgl.vulkan.VkQueue;
-import org.lwjgl.vulkan.VkQueueFamilyProperties;
 import org.lwjgl.vulkan.VkRenderingInfo;
 import org.lwjgl.vulkan.VkSemaphoreCreateInfo;
 import org.lwjgl.vulkan.VkSemaphoreTypeCreateInfo;
@@ -183,7 +153,6 @@ import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.nio.LongBuffer;
 import java.util.ArrayDeque;
-import java.util.HashSet;
 import java.util.Set;
 
 /**
@@ -259,8 +228,8 @@ public final class SteinVkDevice extends SteinDevice {
     private final ArrayDeque<Pending> inflight = new ArrayDeque<>();
     private final ArrayDeque<VkCommandBuffer> freeCmds = new ArrayDeque<>();
     private final ArrayDeque<Pending> retired = new ArrayDeque<>();
-    private final Staging staging = new Staging();
-    private final Descriptors descriptors = new Descriptors();
+    private final SteinVkStaging staging = new SteinVkStaging(this);
+    private final SteinVkDescriptors descriptors = new SteinVkDescriptors(this);
     private final long pipelineCache;
     private SteinVkCommands openPass;
     private boolean destroyed;
@@ -276,14 +245,14 @@ public final class SteinVkDevice extends SteinDevice {
             if (VK_API_VERSION_MAJOR(instanceVersion) == 1
                     && VK_API_VERSION_MINOR(instanceVersion) < 2) {
                 throw new IllegalStateException(
-                        "Vulkan " + version(instanceVersion) + ": Stein needs 1.2");
+                        "Vulkan " + SteinVkProbe.version(instanceVersion) + ": Stein needs 1.2");
             }
             int apiVersion =
                     VK_API_VERSION_MINOR(instanceVersion) >= 3
                             ? VK13.VK_API_VERSION_1_3
                             : VK_API_VERSION_1_2;
-            Set<String> instExt = instanceExtensions(stack);
-            Set<String> layers = instanceLayers(stack);
+            Set<String> instExt = SteinVkProbe.instanceExtensions(stack);
+            Set<String> layers = SteinVkProbe.instanceLayers(stack);
             PointerBuffer enable = stack.mallocPointer(8);
             int flags = 0;
             if (instExt.contains(
@@ -332,13 +301,13 @@ public final class SteinVkDevice extends SteinDevice {
             }
 
             // ---- GPU ----
-            physical = pickPhysical(stack, apiVersion);
+            physical = SteinVkProbe.pickPhysical(instance, stack, apiVersion);
             VkPhysicalDeviceProperties props = VkPhysicalDeviceProperties.calloc(stack);
             vkGetPhysicalDeviceProperties(physical, props);
             int deviceVersion = Math.min(props.apiVersion(), apiVersion);
             core13 = VK_API_VERSION_MINOR(deviceVersion) >= 3;
-            family = graphicsFamily(stack, physical);
-            Set<String> devExt = deviceExtensions(stack, physical);
+            family = SteinVkProbe.graphicsFamily(stack, physical);
+            Set<String> devExt = SteinVkProbe.deviceExtensions(stack, physical);
             pushDescriptors =
                     devExt.contains(KHRPushDescriptor.VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME)
                             && !SteinVkOptions.NO_PUSH;
@@ -448,7 +417,7 @@ public final class SteinVkDevice extends SteinDevice {
             }
             caps =
                     new SteinCaps(
-                            "Vulkan " + version(deviceVersion),
+                            "Vulkan " + SteinVkProbe.version(deviceVersion),
                             props.deviceNameString(),
                             true,
                             has.multiDrawIndirect(),
@@ -512,123 +481,10 @@ public final class SteinVkDevice extends SteinDevice {
                         + (depth24 == VK_FORMAT_D32_SFLOAT ? "as D32F" : "X8_D24"));
     }
 
-    private static String version(int v) {
-        return VK_API_VERSION_MAJOR(v)
-                + "."
-                + VK_API_VERSION_MINOR(v)
-                + "."
-                + VK_API_VERSION_PATCH(v);
-    }
-
     static void check(int result, String what) {
         if (result != VK_SUCCESS) {
             throw new IllegalStateException("vulkan: " + what + " failed (" + result + ")");
         }
-    }
-
-    private static Set<String> instanceExtensions(MemoryStack stack) {
-        IntBuffer n = stack.mallocInt(1);
-        vkEnumerateInstanceExtensionProperties((ByteBuffer) null, n, null);
-        Set<String> out = new HashSet<>();
-        try (VkExtensionProperties.Buffer p = VkExtensionProperties.malloc(n.get(0))) {
-            vkEnumerateInstanceExtensionProperties((ByteBuffer) null, n, p);
-            for (VkExtensionProperties e : p) {
-                out.add(e.extensionNameString());
-            }
-        }
-        return out;
-    }
-
-    private static Set<String> instanceLayers(MemoryStack stack) {
-        IntBuffer n = stack.mallocInt(1);
-        vkEnumerateInstanceLayerProperties(n, null);
-        Set<String> out = new HashSet<>();
-        try (VkLayerProperties.Buffer p = VkLayerProperties.malloc(n.get(0))) {
-            vkEnumerateInstanceLayerProperties(n, p);
-            for (VkLayerProperties l : p) {
-                out.add(l.layerNameString());
-            }
-        }
-        return out;
-    }
-
-    private static Set<String> deviceExtensions(MemoryStack stack, VkPhysicalDevice pd) {
-        IntBuffer n = stack.mallocInt(1);
-        vkEnumerateDeviceExtensionProperties(pd, (ByteBuffer) null, n, null);
-        Set<String> out = new HashSet<>();
-        try (VkExtensionProperties.Buffer p = VkExtensionProperties.malloc(n.get(0))) {
-            vkEnumerateDeviceExtensionProperties(pd, (ByteBuffer) null, n, p);
-            for (VkExtensionProperties e : p) {
-                out.add(e.extensionNameString());
-            }
-        }
-        return out;
-    }
-
-    /**
-     * The GPU: the discrete one before the integrated one, only those with Vulkan 1.2 and a
-     * graphics queue with compute. {@code -Dsteinbridge.gfx.vkDevice=N} chooses by driver order.
-     */
-    private VkPhysicalDevice pickPhysical(MemoryStack stack, int apiVersion) {
-        IntBuffer n = stack.mallocInt(1);
-        check(vkEnumeratePhysicalDevices(instance, n, null), "GPUs");
-        if (n.get(0) == 0) {
-            throw new IllegalStateException("vulkan: no GPU");
-        }
-        PointerBuffer list = stack.mallocPointer(n.get(0));
-        check(vkEnumeratePhysicalDevices(instance, n, list), "GPUs");
-        int forced = SteinVkOptions.DEVICE;
-        VkPhysicalDevice best = null;
-        int bestScore = -1;
-        for (int i = 0; i < list.capacity(); i++) {
-            VkPhysicalDevice pd = new VkPhysicalDevice(list.get(i), instance);
-            VkPhysicalDeviceProperties p = VkPhysicalDeviceProperties.calloc(stack);
-            vkGetPhysicalDeviceProperties(pd, p);
-            int v = Math.min(p.apiVersion(), apiVersion);
-            boolean ok = VK_API_VERSION_MINOR(v) >= 2 && graphicsFamily(stack, pd) >= 0;
-            if (ok && VK_API_VERSION_MINOR(v) < 3) {
-                ok =
-                        deviceExtensions(stack, pd)
-                                .contains(
-                                        KHRDynamicRendering
-                                                .VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME);
-            }
-            if (!ok) {
-                continue;
-            }
-            int score =
-                    switch (p.deviceType()) {
-                        case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU -> 3;
-                        case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU -> 2;
-                        case VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU -> 1;
-                        default -> 0;
-                    };
-            if (i == forced) {
-                score = 100;
-            }
-            if (score > bestScore) {
-                best = pd;
-                bestScore = score;
-            }
-        }
-        if (best == null) {
-            throw new IllegalStateException("vulkan: no GPU with Vulkan 1.2 and dynamic rendering");
-        }
-        return best;
-    }
-
-    private static int graphicsFamily(MemoryStack stack, VkPhysicalDevice pd) {
-        IntBuffer n = stack.mallocInt(1);
-        vkGetPhysicalDeviceQueueFamilyProperties(pd, n, null);
-        VkQueueFamilyProperties.Buffer q = VkQueueFamilyProperties.malloc(n.get(0), stack);
-        vkGetPhysicalDeviceQueueFamilyProperties(pd, n, q);
-        int want = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT;
-        for (int i = 0; i < q.capacity(); i++) {
-            if ((q.get(i).queueFlags() & want) == want) {
-                return i;
-            }
-        }
-        return -1;
     }
 
     private boolean depthAttachable(MemoryStack stack, int format) {
@@ -963,69 +819,6 @@ public final class SteinVkDevice extends SteinDevice {
         }
     }
 
-    // ---- barriers ----
-
-    /**
-     * Every earlier write becomes visible to every later read and write (wide barrier, always
-     * correct).
-     */
-    static void memoryBarrier(VkCommandBuffer c) {
-        try (MemoryStack stack = MemoryStack.stackPush()) {
-            VkMemoryBarrier.Buffer b = VkMemoryBarrier.calloc(1, stack);
-            b.get(0)
-                    .sType$Default()
-                    .srcAccessMask(VK_ACCESS_MEMORY_WRITE_BIT)
-                    .dstAccessMask(VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT);
-            vkCmdPipelineBarrier(
-                    c,
-                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                    0,
-                    b,
-                    null,
-                    null);
-        }
-    }
-
-    /** Changes the layout of {@code mips} levels (from {@code mip}) of all the image's layers. */
-    static void layout(
-            VkCommandBuffer c,
-            long image,
-            int aspect,
-            int mip,
-            int mips,
-            int layers,
-            int from,
-            int to) {
-        try (MemoryStack stack = MemoryStack.stackPush()) {
-            VkImageMemoryBarrier.Buffer b = VkImageMemoryBarrier.calloc(1, stack);
-            b.get(0)
-                    .sType$Default()
-                    .srcAccessMask(VK_ACCESS_MEMORY_WRITE_BIT)
-                    .dstAccessMask(VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT)
-                    .oldLayout(from)
-                    .newLayout(to)
-                    .srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-                    .dstQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
-                    .image(image)
-                    .subresourceRange(
-                            r ->
-                                    r.aspectMask(aspect)
-                                            .baseMipLevel(mip)
-                                            .levelCount(mips)
-                                            .baseArrayLayer(0)
-                                            .layerCount(layers));
-            vkCmdPipelineBarrier(
-                    c,
-                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                    0,
-                    null,
-                    null,
-                    b);
-        }
-    }
-
     // ---- staging ----
 
     /** A staging slice: the buffer, the offset in it and the CPU address. */
@@ -1036,101 +829,6 @@ public final class SteinVkDevice extends SteinDevice {
         return staging.alloc(bytes, alignment);
     }
 
-    /**
-     * Staging in mapped 8 MB chunks: each upload takes the next slice of the current chunk; a full
-     * chunk is only reused once the GPU has finished the last submission that read from it. An
-     * upload bigger than half a chunk gets its own buffer, released by the timeline.
-     */
-    private final class Staging {
-        static final long CHUNK = 8L << 20;
-
-        final class Chunk {
-            final long buffer;
-            final Allocation mem;
-            long used;
-            long lastValue;
-
-            Chunk() {
-                Allocation[] a = new Allocation[1];
-                buffer =
-                        createRawBuffer(
-                                CHUNK,
-                                VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-                                        | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                0,
-                                "staging",
-                                a);
-                mem = a[0];
-            }
-        }
-
-        final ArrayDeque<Chunk> free = new ArrayDeque<>();
-        final ArrayDeque<Chunk> busy = new ArrayDeque<>();
-        Chunk current;
-
-        StagingSlice alloc(long bytes, long alignment) {
-            if (bytes > CHUNK / 2) {
-                Allocation[] a = new Allocation[1];
-                long b =
-                        createRawBuffer(
-                                bytes,
-                                VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                                VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT
-                                        | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                                0,
-                                "large staging",
-                                a);
-                Allocation mem = a[0];
-                retire(
-                        () -> {
-                            vkDestroyBuffer(device, b, null);
-                            free(mem);
-                        });
-                return new StagingSlice(b, 0L, mem.mapped);
-            }
-            long at = current == null ? 0L : align(current.used, alignment);
-            if (current == null || at + bytes > CHUNK) {
-                if (current != null) {
-                    busy.add(current);
-                }
-                current = free.poll();
-                if (current == null) {
-                    current = new Chunk();
-                }
-                current.used = 0L;
-                at = 0L;
-            }
-            current.used = at + bytes;
-            current.lastValue = recordingValue();
-            return new StagingSlice(current.buffer, at, current.mem.mapped + at);
-        }
-
-        void reclaim(long done) {
-            while (!busy.isEmpty() && busy.peek().lastValue <= done) {
-                free.add(busy.poll());
-            }
-        }
-
-        void destroyAll() {
-            if (current != null) {
-                busy.add(current);
-                current = null;
-            }
-            busy.addAll(free);
-            for (Chunk c : busy) {
-                vkDestroyBuffer(device, c.buffer, null);
-                SteinVkDevice.this.free(c.mem);
-            }
-            busy.clear();
-            free.clear();
-        }
-    }
-
-    static long align(long v, long alignment) {
-        return alignment <= 1 ? v : (v + alignment - 1) / alignment * alignment;
-    }
-
     // ---- descriptors (without push descriptor: one pool per submission) ----
 
     /**
@@ -1139,91 +837,6 @@ public final class SteinVkDevice extends SteinDevice {
      */
     long descriptorSet(long layout) {
         return descriptors.allocate(layout);
-    }
-
-    private final class Descriptors {
-        final ArrayDeque<long[]> busy = new ArrayDeque<>(); // {pool, value}
-        final ArrayDeque<Long> free = new ArrayDeque<>();
-        long current = VK_NULL_HANDLE;
-        final java.util.List<Long> used = new java.util.ArrayList<>();
-
-        long allocate(long layout) {
-            try (MemoryStack stack = MemoryStack.stackPush()) {
-                LongBuffer lp = stack.mallocLong(1);
-                for (int attempt = 0; attempt < 2; attempt++) {
-                    if (current == VK_NULL_HANDLE) {
-                        current = free.isEmpty() ? createPool(stack) : free.poll();
-                        used.add(current);
-                    }
-                    int r =
-                            vkAllocateDescriptorSets(
-                                    device,
-                                    VkDescriptorSetAllocateInfo.calloc(stack)
-                                            .sType$Default()
-                                            .descriptorPool(current)
-                                            .pSetLayouts(stack.longs(layout)),
-                                    lp);
-                    if (r == VK_SUCCESS) {
-                        return lp.get(0);
-                    }
-                    current = VK_NULL_HANDLE; // full: the next pool
-                }
-                throw new IllegalStateException("vulkan: descriptor set did not fit in a new pool");
-            }
-        }
-
-        private long createPool(MemoryStack stack) {
-            VkDescriptorPoolSize.Buffer sizes = VkDescriptorPoolSize.calloc(3, stack);
-            sizes.get(0).type(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER).descriptorCount(4096);
-            sizes.get(1).type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER).descriptorCount(4096);
-            sizes.get(2).type(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER).descriptorCount(1024);
-            LongBuffer lp = stack.mallocLong(1);
-            check(
-                    vkCreateDescriptorPool(
-                            device,
-                            VkDescriptorPoolCreateInfo.calloc(stack)
-                                    .sType$Default()
-                                    .maxSets(1024)
-                                    .pPoolSizes(sizes),
-                            null,
-                            lp),
-                    "descriptor pool");
-            return lp.get(0);
-        }
-
-        /**
-         * The pools used in the submission that just went out come back when the GPU finishes it.
-         */
-        void onSubmit(long value) {
-            for (long p : used) {
-                busy.add(new long[] {p, value});
-            }
-            used.clear();
-            current = VK_NULL_HANDLE;
-        }
-
-        void reclaim(long done) {
-            while (!busy.isEmpty() && busy.peek()[1] <= done) {
-                long p = busy.poll()[0];
-                vkResetDescriptorPool(device, p, 0);
-                free.add(p);
-            }
-        }
-
-        void destroyAll() {
-            for (long p : used) {
-                vkDestroyDescriptorPool(device, p, null);
-            }
-            for (long[] p : busy) {
-                vkDestroyDescriptorPool(device, p[0], null);
-            }
-            for (long p : free) {
-                vkDestroyDescriptorPool(device, p, null);
-            }
-            used.clear();
-            busy.clear();
-            free.clear();
-        }
     }
 
     // ---- resources ----
@@ -1374,13 +987,13 @@ public final class SteinVkDevice extends SteinDevice {
     public void copyBuffer(
             SteinBuffer src, long srcOffset, SteinBuffer dst, long dstOffset, long bytes) {
         VkCommandBuffer c = outside();
-        memoryBarrier(c);
+        SteinVkBarriers.memoryBarrier(c);
         try (MemoryStack stack = MemoryStack.stackPush()) {
             VkBufferCopy.Buffer region = VkBufferCopy.calloc(1, stack);
             region.get(0).srcOffset(srcOffset).dstOffset(dstOffset).size(bytes);
             vkCmdCopyBuffer(c, src.handle(), dst.handle(), region);
         }
-        memoryBarrier(c);
+        SteinVkBarriers.memoryBarrier(c);
     }
 
     @Override
@@ -1432,7 +1045,8 @@ public final class SteinVkDevice extends SteinDevice {
                         a);
         try {
             VkCommandBuffer c = outside();
-            memoryBarrier(c); // what a compute or a copy wrote before becomes visible to the copy
+            SteinVkBarriers.memoryBarrier(
+                    c); // what a compute or a copy wrote before becomes visible to the copy
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 VkBufferCopy.Buffer region = VkBufferCopy.calloc(1, stack);
                 region.get(0).srcOffset(offset).dstOffset(0L).size(bytes);

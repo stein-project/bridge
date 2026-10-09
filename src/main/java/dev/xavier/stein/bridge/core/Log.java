@@ -31,6 +31,24 @@ public final class Log {
         System.out.println("[" + tag + "] " + String.format(format, args));
     }
 
+    /**
+     * Prints {@code [tag] message} and then where it was called from, one {@code [tag] at ...} line
+     * per frame, on the standard output: for diagnostics that need the origin of a call (the {@code
+     * *Check} modes), not for errors.
+     */
+    public static void trace(String tag, String message) {
+        StackTraceElement[] stack = new Throwable().getStackTrace();
+        StringBuilder b = new StringBuilder("[").append(tag).append("] ").append(message);
+        for (int i = 1; i < stack.length; i++) {
+            b.append(System.lineSeparator())
+                    .append('[')
+                    .append(tag)
+                    .append("]   at ")
+                    .append(stack[i]);
+        }
+        System.out.println(b);
+    }
+
     /** Prints {@code [tag] warning: message} on the error output. */
     public static void warn(String tag, String message) {
         System.err.println("[" + tag + "] warning: " + message);

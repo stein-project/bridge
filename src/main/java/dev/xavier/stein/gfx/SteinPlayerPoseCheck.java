@@ -69,8 +69,7 @@ final class SteinPlayerPoseCheck {
             float partialTicks)
             throws Throwable {
         int j = jobs - 1;
-        // The game's path draws (it is what appears) and its matrices are compared with
-        // ours.
+        // The game's path draws (it is what appears) and its matrices are compared with ours.
         boolean predicted = false;
         try {
             predict(j, render, entity);
@@ -114,7 +113,7 @@ final class SteinPlayerPoseCheck {
     private static int checkWorstPart = -1;
 
     /** Compares the game path's matrices (annotated by SteinEntityInstancer) with ours. */
-    private static void compare(int j, int captured) throws Throwable {
+    private static void compare(int j, int captured) {
         Scratch w = scratch0();
         pose(j, w);
         Info info = infos[jInfo[j]];
@@ -242,7 +241,7 @@ final class SteinPlayerPoseCheck {
      * The matrices that player {@code j}'s layers should have, before the game's path runs (what it
      * changes in the shared model has not changed yet). Game thread.
      */
-    private static void predict(int j, Object render, Object e) throws Throwable {
+    private static void predict(int j, Object render, Object e) {
         Scratch w = scratch0();
         pose(j, w);
         float pt = jPt[j];
@@ -285,8 +284,7 @@ final class SteinPlayerPoseCheck {
             }
         }
 
-        // LayerArrow: the Random with the id seed, the part and box drawn, three floats per
-        // arrow.
+        // LayerArrow: the Random with the id seed, the part and box drawn, three floats per arrow.
         int arrows = p.getArrowCountInEntity();
         if (arrows > 0) {
             Random random = new Random((long) p.getEntityId());
@@ -558,7 +556,7 @@ final class SteinPlayerPoseCheck {
     /**
      * Compares the matrices annotated on the game's path with the predicted ones (after compare).
      */
-    private static void compareLayers(int j, int captured) throws Throwable {
+    private static void compareLayers(int j, int captured) {
         boolean sequence = recN == predN;
         for (int k = 0; k < Math.min(recN, predN); k++) {
             if (recKind[k] != predKind[k]) {

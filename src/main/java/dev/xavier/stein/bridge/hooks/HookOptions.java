@@ -22,8 +22,10 @@ public final class HookOptions {
     static final boolean DEBUG = Opt.flag("steinbridge.hooks.debug");
 
     /**
-     * {@code -Dsteinbridge.diag.semFantasma=true}: does not ask the mods whether an entity is a
-     * ghost, only for A/B measuring (default: off).
+     * {@code -Dsteinbridge.diag.noGhost=true}: does not ask the mods whether an entity is a ghost,
+     * only for A/B measuring; the old name {@code -Dsteinbridge.diag.semFantasma=true} still works
+     * (default: off).
      */
-    static final boolean SKIP_GHOST_QUERY = Opt.flag("steinbridge.diag.semFantasma");
+    static final boolean SKIP_GHOST_QUERY =
+            Opt.flag("steinbridge.diag.noGhost") || Opt.flag("steinbridge.diag.semFantasma");
 }

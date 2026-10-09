@@ -158,8 +158,7 @@ final class DiagLocalCommands {
         Minecraft mc = DiagGame.mc();
         GameSettings settings = DiagGame.settings();
         String want = text.substring(7).trim();
-        // What the GlStateManager thinks is enabled x what the driver has, before the
-        // reload.
+        // What the GlStateManager thinks is enabled x what the driver has, before the reload.
         int activeNow = org.lwjgl.opengl.GL11.glGetInteger(org.lwjgl.opengl.GL13.GL_ACTIVE_TEXTURE);
         StringBuilder st =
                 new StringBuilder(

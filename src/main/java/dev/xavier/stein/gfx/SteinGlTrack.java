@@ -85,8 +85,7 @@ public final class SteinGlTrack {
         return blendSeparate;
     }
 
-    // ---- framebuffer, viewport and program: the bindings that the Stein pass restores
-    // (gl.SteinGlBindings) ----
+    // ---- framebuffer, viewport and program, restored by the pass (gl.SteinGlBindings) ----
     //
     // Patcher rules (redirects-opt.tsv) at the call sites of the game and of mods: the same OpenGL
     // call, and the value is noted so the pass does not need to ask the driver. They apply with the
@@ -298,8 +297,7 @@ public final class SteinGlTrack {
                 eyeKnown[c] = invert(GLMatrix.current(), scratchInverse);
                 for (int j = 0; j < 4; j++) {
                     // row * inverse: p_eye[j] = sum_i p[i] * inverse(i, j); the inverse is in
-                    // columns,
-                    // so inverse(i, j) = scratchInverse[j * 4 + i]
+                    // columns, so inverse(i, j) = scratchInverse[j * 4 + i]
                     eyePlane[c * 4 + j] =
                             p0 * scratchInverse[j * 4]
                                     + p1 * scratchInverse[j * 4 + 1]

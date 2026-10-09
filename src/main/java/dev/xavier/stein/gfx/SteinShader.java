@@ -90,7 +90,7 @@ public final class SteinShader {
                 InputStream res = SteinShader.class.getResourceAsStream(dir + ".res")) {
             if (glsl == null) {
                 throw new IllegalStateException(
-                        "shader " + name + " is not in the jar (run tools/build.sh)");
+                        "shader " + name + " is not in the jar (built by ./gradlew shaders)");
             }
             String source = new String(glsl.readAllBytes(), StandardCharsets.UTF_8);
             List<Resource> resources = new ArrayList<>();

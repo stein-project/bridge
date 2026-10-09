@@ -134,7 +134,7 @@ public final class HudBatch {
                         && firstDepthTest == GL11.glIsEnabled(GL11.GL_DEPTH_TEST)
                         && Arrays.equals(firstColor, currentColor);
         if (REPORT.compared(ok)) {
-            Log.warn("hud", "DIVERGENCE: GL state changed between merged icons");
+            Log.info("hud", "DIVERGENCE: GL state changed between merged icons");
         }
         REPORT.maybeReport("hud");
     }

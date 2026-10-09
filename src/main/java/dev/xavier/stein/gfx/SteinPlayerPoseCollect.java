@@ -219,7 +219,7 @@ final class SteinPlayerPoseCollect {
     }
 
     /** The engine is ready for a pose job: geometry resident, plain matrix stack, no outline. */
-    private static boolean acceptGameState(Object render, Object e) throws Throwable {
+    private static boolean acceptGameState(Object render, Object e) {
         if (!SteinModelInstancer.geometryReady()
                 || !GLMatrix.batchable()
                 || GLMatrix.textureOrNull() != null
@@ -236,7 +236,7 @@ final class SteinPlayerPoseCollect {
     }
 
     /** The reads that decide how the body is drawn, and the ridden mount. */
-    private static void readFlags(Object render, Object e) throws Throwable {
+    private static void readFlags(Object render, Object e) {
         AbstractClientPlayer p = (AbstractClientPlayer) e;
         name = p.getName();
         deathTime = p.deathTime;
@@ -256,7 +256,7 @@ final class SteinPlayerPoseCollect {
 
     /** rotateCorpse (RenderPlayer and RendererLivingEntity) and RenderPlayer's renderLivingAt. */
     private static void classifyCorpse(
-            Object render, Object e, double x, double y, double z, float pt) throws Throwable {
+            Object render, Object e, double x, double y, double z, float pt) {
         corpse = C_NORMAL;
         corpse0 = 0f;
         corpse1 = 0f;
@@ -295,7 +295,7 @@ final class SteinPlayerPoseCollect {
     }
 
     /** The game layers to run for this player (L_* bits), see the comment inside. */
-    private static void layerBits(Object e) throws Throwable {
+    private static void layerBits(Object e) {
         // The game layers that have something to draw (the others would just return doing
         // nothing). The head one runs with anything in the helmet slot, armor included: it sets
         // the color to white even without drawing. The spectator has no layers (doRender skips
@@ -335,7 +335,7 @@ final class SteinPlayerPoseCollect {
     }
 
     /** The player's model copy and the model state the game set for it. */
-    private static boolean readModel(Object render, Object e) throws Throwable {
+    private static boolean readModel(Object render, Object e) {
         infoIndex = info(render);
         if (infoIndex < 0) {
             return reject(R_MODEL);
@@ -405,7 +405,7 @@ final class SteinPlayerPoseCollect {
     }
 
     /** The body: skin texture, state and key (the translucent invisible body included). */
-    private static boolean addBody(Object render, Object e) throws Throwable {
+    private static boolean addBody(Object render, Object e) {
         if (drawBody) {
             // The skin, bound the way renderModel binds it.
             if (!((Render) render).bindEntityTexture((Entity) e)) {
@@ -589,7 +589,7 @@ final class SteinPlayerPoseCollect {
     }
 
     /** The enchantment glint of the armor: two passes with the rotating texture matrix. */
-    private static boolean addGlint(Object render, Object e, float pt) throws Throwable {
+    private static boolean addGlint(Object render, Object e, float pt) {
         glint = enchanted != 0 && !Visuals.glintSkipped();
         if (glint) {
             // The glint (ArmorGlint / renderGlint): glint texture, no light, fixed color, blend
@@ -652,7 +652,7 @@ final class SteinPlayerPoseCollect {
     }
 
     /** The held item through the pose, if whitelisted and with a recorded template. */
-    private static void decideHeldItem(Object e) throws Throwable {
+    private static void decideHeldItem(Object e) {
         // The held item (SteinHeldItem): if whitelisted and with a ready template, it becomes
         // states (the template's draws, with this player's lightmap and the current glint texture
         // matrix) and a pose part, attached to the right arm; with no template yet, it goes through
@@ -700,7 +700,7 @@ final class SteinPlayerPoseCollect {
     }
 
     /** The plan: each instance (part, state), in the game's order. */
-    private static void buildPlan() throws Throwable {
+    private static void buildPlan() {
         int at = planN;
         if ((at + MAX_PLAN) * 2 > plan.length) {
             plan = Arrays.copyOf(plan, plan.length * 2);
@@ -856,7 +856,7 @@ final class SteinPlayerPoseCollect {
     }
 
     /** Something worn (armor, pumpkin, skull): the armor layer has something to paint red. */
-    private static boolean wearsArmor(Object e) throws Throwable {
+    private static boolean wearsArmor(Object e) {
         for (int slot = 0; slot < 4; slot++) {
             if (((EntityLivingBase) e).getCurrentArmor(slot) != null) {
                 return true;

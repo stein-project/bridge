@@ -92,7 +92,7 @@ public final class NameCache {
         if (VANILLA) {
             Log.info(
                     "names",
-                    "hover, lower case and unformatted name rebuilt every frame" + " (vanilla)");
+                    "hover, lower case and unformatted name rebuilt every frame (vanilla)");
         }
     }
 
@@ -100,15 +100,17 @@ public final class NameCache {
 
     /** In place of getHoverEvent() inside getDisplayName (Entity and EntityPlayer). */
     public static Object hover(Object entity) {
-        if (VANILLA || Thread.currentThread() != renderThread()) {
+        // Only compares: the render thread is the one lower() saw draw text (getDisplayName also
+        // runs on other threads, which must not claim the cache).
+        if (VANILLA || Thread.currentThread() != renderThread) {
             return ((Entity) entity).getHoverEvent();
         }
         UUID id = ((Entity) entity).getUniqueID();
         String name = ((Entity) entity).getName();
         VarHandle field = SLOT;
         // VarHandle with only Object in the descriptor: obfuscation renames Hover and does not
-        // rewrite the descriptor of a call
-        // with a polymorphic signature (in the obfuscated build, NoClassDefFoundError)
+        // rewrite the descriptor of a call with a polymorphic signature (in the obfuscated build,
+        // NoClassDefFoundError).
         Hover h = (Hover) (Object) field.get(entity);
         if (h == null || h.type != entity.getClass() || !h.id.equals(id) || !h.name.equals(name)) {
             h = new Hover(entity.getClass(), id, name, ((Entity) entity).getHoverEvent());
@@ -125,8 +127,8 @@ public final class NameCache {
             return text.toLowerCase(locale);
         }
         // In front of the map, a cache by the String's identity: the same text (the same object)
-        // comes back every frame
-        // for each name, and comparing by reference avoids the hash and the equals.
+        // comes back every frame for each name, and comparing by reference avoids the hash and the
+        // equals.
         int slot = System.identityHashCode(text) & (ID_SLOTS - 1);
         if (ID_KEY[slot] == text) {
             return ID_VALUE[slot];

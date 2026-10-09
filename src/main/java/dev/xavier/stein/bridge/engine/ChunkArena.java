@@ -130,8 +130,8 @@ public final class ChunkArena {
 
     /**
      * -1 = not yet decided (needs the GL context), 0 = game, 1 = regions, 2 = the terrain on
-     * Stein's graphics API ({@link SteinTerrain}, with {@code -Dsteinbridge.gfx=true}): the same
-     * hooks, its geometry and its drawing.
+     * Stein's graphics API ({@link SteinTerrain}, with Stein GFX on, the default): the same hooks,
+     * its geometry and its drawing.
      */
     private static int state = -1;
 

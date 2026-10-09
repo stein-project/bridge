@@ -116,13 +116,13 @@ final class SteinVkBuffer extends SteinBuffer {
         SteinVkDevice.StagingSlice s = device.stage(n, 4);
         MemoryUtil.memCopy(MemoryUtil.memAddress(data), s.address(), n);
         VkCommandBuffer c = device.outside();
-        SteinVkDevice.memoryBarrier(c); // whoever read the range before finishes before the copy
+        SteinVkBarriers.memoryBarrier(c); // whoever read the range before finishes before the copy
         try (MemoryStack stack = MemoryStack.stackPush()) {
             VkBufferCopy.Buffer region = VkBufferCopy.calloc(1, stack);
             region.get(0).srcOffset(s.offset()).dstOffset(offset).size(n);
             vkCmdCopyBuffer(c, s.buffer(), buffer, region);
         }
-        SteinVkDevice.memoryBarrier(c); // and whatever comes after reads the new one
+        SteinVkBarriers.memoryBarrier(c); // and whatever comes after reads the new one
     }
 
     @Override

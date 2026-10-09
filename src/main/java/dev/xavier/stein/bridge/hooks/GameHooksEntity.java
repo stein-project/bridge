@@ -259,9 +259,9 @@ final class GameHooksEntity {
     }
 
     /**
-     * {@code -Dsteinbridge.diag.semFantasma=true}: does not ask the mods whether the entity is a
-     * ghost. Only for measuring — it is what isolates, in an A/B comparison, the cost of asking,
-     * which happens five times per entity per frame.
+     * {@code -Dsteinbridge.diag.noGhost=true}: does not ask the mods whether the entity is a ghost.
+     * Only for measuring — it is what isolates, in an A/B comparison, the cost of asking, which
+     * happens five times per entity per frame.
      */
     private static final boolean SKIP_GHOST_QUERY = HookOptions.SKIP_GHOST_QUERY;
 

@@ -286,8 +286,7 @@ public final class Display {
             Win.resized = refreshSizes();
         }
         // The game idle (out of focus, title screen, Esc menu): fewer frames, less load on the
-        // processor and
-        // the graphics card.
+        // processor and the graphics card.
         IdleLimit.frame();
     }
 

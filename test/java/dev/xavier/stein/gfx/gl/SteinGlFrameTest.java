@@ -6,8 +6,7 @@
  * Copyright (c) 2026 Breno Xavier
  */
 
-// How to run (standalone, outside the game; not part of the Bridge jar). After tools/build.sh:
-//   java -cp "build/classes;build/test;libs/*" dev.xavier.stein.gfx.gl.SteinGlFrameTest
+// How to run (standalone, outside the game; not part of the Bridge jar): ./gradlew gpuFrameTest
 //   It sets -Dsteinbridge.gfx.test.noGame=true itself (SteinGlGame.NO_GAME, the test switch).
 
 package dev.xavier.stein.gfx.gl;
@@ -52,10 +51,8 @@ import java.util.List;
  * on; with {@code -Dsteinbridge.gfx.recordFrame=false} the same tests with immediate submission.
  * Exits with 0 if it passed.
  *
- * <pre>
- * java --enable-native-access=ALL-UNNAMED -cp "&lt;classes&gt;;build/classes;libs/*"
- * dev.xavier.stein.gfx.gl.SteinGlFrameTest
- * </pre>
+ * <p>{@code ./gradlew gpuFrameTest} (extra flags with {@code -Pstein.jvmArgs=...}, the number of
+ * rounds with {@code -Pstein.args=N}).
  */
 public final class SteinGlFrameTest {
 
@@ -63,7 +60,6 @@ public final class SteinGlFrameTest {
 
     private static void defaults() {
         def("steinbridge.gfx.test.noGame", "true");
-        def("steinbridge.gfx.core", "true");
         def("steinbridge.gfx.bindCache", "true");
         def("steinbridge.gfx.recordFrame", "true");
         def("steinbridge.gfx.deferFences", "true");
@@ -81,6 +77,9 @@ public final class SteinGlFrameTest {
 
     public static void main(String[] args) {
         defaults();
+        // As Display does in the game, before SteinGfxOptions loads: the context below is core, so
+        // Stein GFX is on (SteinGfxOptions.ENABLED) and the test runs its real path.
+        dev.xavier.stein.bridge.core.Win.coreContext = true;
         GLFW.glfwInit();
         GLFW.glfwWindowHint(GLFW.GLFW_VISIBLE, GLFW.GLFW_FALSE);
         GLFW.glfwWindowHint(GLFW.GLFW_CONTEXT_VERSION_MAJOR, 4);

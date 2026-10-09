@@ -212,9 +212,8 @@ public final class ArmorGlint {
             GLMatrix.translate(0.0F, time * (0.001F + (float) i * 0.003F) * 20.0F, 0.0F);
             GLMatrix.matrixMode(GL11.GL_MODELVIEW);
             if (replay) {
-                // New renderer: the same base commands, with the matrices already on the card
-                // (the same depth, which depthFunc EQUAL requires) and the glint's texture
-                // matrix.
+                // New renderer: the same base commands, with the matrices already on the card (the
+                // same depth, which depthFunc EQUAL requires) and the glint's texture matrix.
                 SteinModelInstancer.replay(RECS, n, GLMatrix.textureOrNull());
                 continue;
             }

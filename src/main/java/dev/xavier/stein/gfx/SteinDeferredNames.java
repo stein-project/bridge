@@ -34,10 +34,8 @@ final class SteinDeferredNames {
     static int names;
 
     /** Render.renderName inside doRender (patcher rule): during the pass, stores it for the end. */
-    public static void renderName(Object render, Object entity, double x, double y, double z)
-            throws Throwable {
-        // With the colour mask off nothing shows: immediate, like the
-        // game.
+    public static void renderName(Object render, Object entity, double x, double y, double z) {
+        // With the colour mask off nothing shows: immediate, like the game.
         if (!capturing || draining || !SteinGameState.colorMaskAll()) {
             ((Render) render).renderName((Entity) entity, x, y, z);
             return;
@@ -74,8 +72,7 @@ final class SteinDeferredNames {
                 LightmapUnit.set(true);
             }
             // Direct label (SteinNameLabels): the common case goes out as a record and commands;
-            // the
-            // rest through the game.
+            // the rest through the game.
             boolean labels = SteinNameLabels.REQUESTED;
             if (labels) {
                 SteinNameLabels.begin();

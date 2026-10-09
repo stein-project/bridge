@@ -41,7 +41,7 @@ final class SteinLabelTail {
      * renderOffsetLivingLabel (virtual: RenderPlayer's adds the scoreboard line); sneaking, the
      * renderName section, with the same calls in the same order.
      */
-    static void tail() throws Throwable {
+    static void tail() {
         Render render = (Render) SteinLabelContext.render;
         Entity entity = (Entity) SteinLabelContext.entity;
         RenderManager rm = (RenderManager) SteinLabelContext.manager;

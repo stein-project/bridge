@@ -201,6 +201,13 @@ public final class EngineOptions {
      */
     static final boolean VANILLA_SKIN_LOAD = Opt.flag("steinbridge.opt.vanillaSkinLoad");
 
+    /**
+     * {@code -Dsteinbridge.opt.noSharedSkin=true}: one texture per waiting skin, as before the
+     * default skin was shared, for the A/B measurement (default: off, the waiting skins share one
+     * texture).
+     */
+    static final boolean NO_SHARED_SKIN = Opt.flag("steinbridge.opt.noSharedSkin");
+
     // ---- visuals ----
 
     /**
@@ -234,10 +241,10 @@ public final class EngineOptions {
     static final int NAMETAGS = Opt.integer("steinbridge.visuals.nametags", 0);
 
     /**
-     * {@code -Dsteinbridge.visuals.armor=true}: shows armor on entities; only the exact value
-     * {@code false} turns it off (default: on).
+     * {@code -Dsteinbridge.visuals.armor=false}: hides armor on entities; only the exact value
+     * {@code false} turns it off (default: on, armor shown).
      */
-    static final boolean ARMOR = !"false".equals(Opt.text("steinbridge.visuals.armor", null));
+    static final boolean ARMOR = Opt.unlessFalse("steinbridge.visuals.armor");
 
     /**
      * {@code -Dsteinbridge.visuals.fog=N}: initial fog mode: 0 normal, otherwise light or off
@@ -252,11 +259,10 @@ public final class EngineOptions {
     static final int CLOUD_HEIGHT = Opt.integer("steinbridge.visuals.cloudHeight", 0);
 
     /**
-     * {@code -Dsteinbridge.oldAnimations=true}: old 1.7 animations; only the exact value {@code
-     * false} turns them all off (default: on).
+     * {@code -Dsteinbridge.oldAnimations=false}: turns all the old 1.7 animations off; only the
+     * exact value {@code false} does (default: on).
      */
-    static final boolean OLD_ANIMATIONS =
-            !"false".equals(Opt.text("steinbridge.oldAnimations", null));
+    static final boolean OLD_ANIMATIONS = Opt.unlessFalse("steinbridge.oldAnimations");
 
     // ---- matrices / text / models ----
 
@@ -391,11 +397,10 @@ public final class EngineOptions {
     static final boolean VANILLA_DATA_WATCHER = Opt.flag("steinbridge.opt.vanillaDataWatcher");
 
     /**
-     * {@code -Dsteinbridge.opt.watchedMirror=true}: mirrors data watcher values; only the exact
-     * value {@code false} turns it off (default: on).
+     * {@code -Dsteinbridge.opt.watchedMirror=false}: stops mirroring data watcher values; only the
+     * exact value {@code false} does (default: on, the values are mirrored).
      */
-    static final boolean WATCHED_MIRROR =
-            !"false".equals(Opt.text("steinbridge.opt.watchedMirror", null));
+    static final boolean WATCHED_MIRROR = Opt.unlessFalse("steinbridge.opt.watchedMirror");
 
     /**
      * {@code -Dsteinbridge.opt.checkWatchedMirror=true}: uses the mirror and checks every read
@@ -404,11 +409,10 @@ public final class EngineOptions {
     static final boolean CHECK_WATCHED_MIRROR = Opt.flag("steinbridge.opt.checkWatchedMirror");
 
     /**
-     * {@code -Dsteinbridge.opt.entityFlags=true}: mirrors the entity flags; only the exact value
-     * {@code false} turns it off (default: on).
+     * {@code -Dsteinbridge.opt.entityFlags=false}: stops mirroring the entity flags; only the exact
+     * value {@code false} does (default: on, the flags are mirrored).
      */
-    static final boolean ENTITY_FLAGS =
-            !"false".equals(Opt.text("steinbridge.opt.entityFlags", null));
+    static final boolean ENTITY_FLAGS = Opt.unlessFalse("steinbridge.opt.entityFlags");
 
     /**
      * {@code -Dsteinbridge.opt.checkEntityFlags=true}: uses the flags mirror and checks each read

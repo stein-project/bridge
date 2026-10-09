@@ -124,19 +124,19 @@ public final class SteinNameLabels {
     /**
      * A name went through the whole game path (another renderer): it may have changed any state.
      */
-    static void slow() throws Throwable {
+    static void slow() {
         leave();
         SteinLabelTemplates.invalidate();
     }
 
     /** End of the drain. */
-    static void end() throws Throwable {
+    static void end() {
         leave();
         SteinLabelContext.clear();
         SteinLabelStats.report();
     }
 
-    private static void leave() throws Throwable {
+    private static void leave() {
         if (pendingEntry != null) {
             SteinTextCache.leaveFont(pendingFont, pendingEntry);
             pendingEntry = null;
@@ -218,7 +218,7 @@ public final class SteinNameLabels {
      * order). 0 = something outside the common case. Reads the name in progress from {@link
      * SteinLabelContext}.
      */
-    private static int prepare(Slot slot) throws Throwable {
+    private static int prepare(Slot slot) {
         int kind = SteinLabelContext.kind;
         boolean sneak = SteinLabelContext.sneak;
         Entity entity = (Entity) SteinLabelContext.entity;
@@ -300,8 +300,7 @@ public final class SteinNameLabels {
             float h,
             double x,
             double y,
-            double z)
-            throws Throwable {
+            double z) {
         l.kind = LABEL;
         l.tx = (float) x + 0.0F;
         l.ty = (float) y + h + 0.5F;
@@ -323,7 +322,7 @@ public final class SteinNameLabels {
      * Binds the texture of each run of the pass (as the FontRenderer would) and stores each one's
      * texture.
      */
-    private static boolean bind(TextureManager tm, Label l, int pass) throws Throwable {
+    private static boolean bind(TextureManager tm, Label l, int pass) {
         Object e = l.entry[pass];
         int runs = SteinTextCache.runs(e);
         if (l.keys[pass].length < runs) {

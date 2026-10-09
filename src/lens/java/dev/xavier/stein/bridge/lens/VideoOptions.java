@@ -449,6 +449,8 @@ final class VideoOptions {
     private static void slider(GuiButton b, GameSettings s) {
         try {
             if (sliderOption == null) {
+                // Private in the SRG jar the visual options compile against, like a mod's: by
+                // reflection (ModRemap maps the SRG names).
                 Field option = GuiOptionSlider.class.getDeclaredField("field_146133_q");
                 Field value = GuiOptionSlider.class.getDeclaredField("field_146134_p");
                 option.setAccessible(true);

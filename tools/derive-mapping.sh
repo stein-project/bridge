@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#
+# Copyright (c) 2026 Breno Xavier
+#
 # Derives the LWJGL 2 -> LWJGL 3 mapping for the incompatible methods.
 #
 # Rule: LWJGL 3 kept OpenGL's C names, so the equivalent has the LWJGL 2

@@ -50,12 +50,14 @@ import java.util.Arrays;
  *       alpha test, blend, the glint pass — with nothing imitated.
  * </ul>
  *
- * <p>Also enabled by {@code -Dsteinbridge.gfx.instancedModels=true}, and whenever the deferred
- * entities are on (the default). Requires GL 4.4 (multi indirect draw with base instance and
- * persistent buffers) and what the ModelBatch already requires.
+ * <p>With Stein GFX (the default) only the fixed geometry on the card is used: the deferred
+ * entities draw the parts from it, and the direct draw here stays off. In the fixed-function
+ * pipeline the direct draw is experimental and off by default ({@code
+ * -Dsteinbridge.gfx.instancedModels=true} turns it on); it requires GL 4.4 (multi indirect draw
+ * with base instance and persistent buffers) and what the ModelBatch already requires.
  *
- * <p>Pipeline: both — Stein GFX uses it by default; the fixed pipeline only with
- * -Dsteinbridge.gfx.instancedModels=true (experimental, GL 4.4).
+ * <p>Pipeline: both — Stein GFX uses the fixed geometry on the GPU; the fixed pipeline uses the
+ * direct draw only with -Dsteinbridge.gfx.instancedModels=true (experimental, GL 4.4).
  */
 public final class SteinModelInstancer {
 
@@ -183,8 +185,7 @@ public final class SteinModelInstancer {
         }
         SteinDevice device = SteinDevice.get();
         // The fixed geometry on the card works at any level (the deferred renderer uses it on
-        // 4.1); the direct draw from here
-        // requires indirect and the persistent buffer.
+        // 4.1); the direct draw from here requires indirect draw and the persistent buffer.
         geometry =
                 device.createBuffer(
                         new SteinBuffer.Desc(
@@ -455,10 +456,8 @@ public final class SteinModelInstancer {
         }
         SteinLazyGl.sync();
         // the recorded frame goes to the driver BEFORE binding program, VAO and indirect buffer:
-        // replay changes and zeroes those
-        // bindings (after binding, the draw came out without an indirect buffer:
-        // GL_INVALID_OPERATION
-        // in "Post render")
+        // replay changes and zeroes those bindings (after binding, the draw came out without an
+        // indirect buffer: GL_INVALID_OPERATION in "Post render")
         SteinGlFrame.sync("direct draw of instanced parts");
         flushing = true;
         int n = pendingCount;
@@ -466,9 +465,8 @@ public final class SteinModelInstancer {
         pendingCount = 0;
         try {
             // The state comes from GlStateManager's cache (asking the driver on every batch cost
-            // ~5%
-            // of the frame); the
-            // game does not leave a program bound when drawing models, so the way back is to 0.
+            // ~5% of the frame); the game does not leave a program bound when drawing models, so
+            // the way back is to 0.
             GL20.glUseProgram(program);
             boolean light = SteinGameState.lighting();
             boolean colorMat = SteinGameState.colorMaterial();

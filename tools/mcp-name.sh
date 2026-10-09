@@ -1,4 +1,10 @@
 #!/usr/bin/env bash
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at https://mozilla.org/MPL/2.0/.
+#
+# Copyright (c) 2026 Breno Xavier
+#
 # SRG name of a Minecraft 1.8.9 method or field, from the MCP readable name,
 # for writing Stein Loader mods, which use SRG names (like a compiled Forge
 # mod).
