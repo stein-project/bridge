@@ -1,0 +1,21 @@
+# Every library and plugin version of the build, in one place. Gradle checks each download against the sha256 in
+# gradle/verification-metadata.xml.
+[versions]
+asm = "9.10.1"
+google-java-format = "1.36.1"
+lwjgl = "3.4.3"
+mcp-srg = "1.8.9"
+mcp-stable = "22-1.8.9"
+special-source = "1.11.4"
+
+[libraries]
+asm = { module = "org.ow2.asm:asm", version.ref = "asm" }
+asm-analysis = { module = "org.ow2.asm:asm-analysis", version.ref = "asm" }
+asm-commons = { module = "org.ow2.asm:asm-commons", version.ref = "asm" }
+asm-tree = { module = "org.ow2.asm:asm-tree", version.ref = "asm" }
+mcp-srg = { module = "de.oceanlabs.mcp:mcp", version.ref = "mcp-srg" }
+mcp-stable = { module = "de.oceanlabs.mcp:mcp_stable", version.ref = "mcp-stable" }
+special-source = { module = "net.md-5:SpecialSource", version.ref = "special-source" }
+
+[plugins]
+spotless = { id = "com.diffplug.spotless", version = "8.10.4" }

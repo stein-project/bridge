@@ -1,0 +1,32 @@
+# Mod jars: direct GL11 matrix calls. The game always goes through
+# GlStateManager (redirected to GLMatrix in redirects-opt.tsv); a mod
+# that calls GL11 directly would change the driver's matrix behind the Java stack,
+# and the next glLoadMatrixf from GLMatrix would undo what it did. Here those
+# calls go to the same stack. LWJGL 2 names (those of the mod jar); these
+# rules come after the name mapping and replace it on the same keys.
+org/lwjgl/opengl/GL11	glMatrixMode	(I)V	matrixMode	dev/xavier/stein/bridge/engine/GLMatrix
+org/lwjgl/opengl/GL11	glLoadIdentity	()V	loadIdentity	dev/xavier/stein/bridge/engine/GLMatrix
+org/lwjgl/opengl/GL11	glPushMatrix	()V	pushMatrix	dev/xavier/stein/bridge/engine/GLMatrix
+org/lwjgl/opengl/GL11	glPopMatrix	()V	popMatrix	dev/xavier/stein/bridge/engine/GLMatrix
+org/lwjgl/opengl/GL11	glGetFloat	(ILjava/nio/FloatBuffer;)V	getFloat	dev/xavier/stein/bridge/engine/GLMatrix
+org/lwjgl/opengl/GL11	glOrtho	(DDDDDD)V	ortho	dev/xavier/stein/bridge/engine/GLMatrix
+org/lwjgl/opengl/GL11	glRotatef	(FFFF)V	rotate	dev/xavier/stein/bridge/engine/GLMatrix
+org/lwjgl/opengl/GL11	glScalef	(FFF)V	scale	dev/xavier/stein/bridge/engine/GLMatrix
+org/lwjgl/opengl/GL11	glScaled	(DDD)V	scaled	dev/xavier/stein/bridge/engine/GLMatrix
+org/lwjgl/opengl/GL11	glTranslatef	(FFF)V	translate	dev/xavier/stein/bridge/engine/GLMatrix
+org/lwjgl/opengl/GL11	glTranslated	(DDD)V	translated	dev/xavier/stein/bridge/engine/GLMatrix
+org/lwjgl/opengl/GL11	glMultMatrix	(Ljava/nio/FloatBuffer;)V	multMatrix	dev/xavier/stein/bridge/engine/GLMatrix
+# Lists called in bulk (the game only uses glCallList): the driver needs the pending matrix.
+org/lwjgl/opengl/GL11	glCallLists	(Ljava/nio/IntBuffer;)V	flush	dev/xavier/stein/bridge/engine/GLMatrix	before
+# Fixed-function pipeline called directly by mods (the game never calls these): through SteinCoreGl, which forwards to the driver in the
+# usual context and, in the core profile of the Stein renderer, does not call what the driver lacks (calling it would abort the JVM).
+org/lwjgl/opengl/GL11	glCallLists	(Ljava/nio/IntBuffer;)V	glCallLists	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glBegin	(I)V	glBegin	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glEnd	()V	glEnd	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glVertex3f	(FFF)V	glVertex3f	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glVertex2f	(FF)V	glVertex2f	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glTexCoord2f	(FF)V	glTexCoord2f	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glColor4f	(FFFF)V	glColor4f	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glColor3f	(FFF)V	glColor3f	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glAlphaFunc	(IF)V	glAlphaFunc	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glShadeModel	(I)V	glShadeModel	dev/xavier/stein/gfx/gl/SteinCoreGl

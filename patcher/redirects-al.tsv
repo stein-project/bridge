@@ -1,0 +1,8 @@
+# paulscode (Minecraft's sound library): it also calls LWJGL 2.
+# class	name2	descriptor	name3	newOwner
+org/lwjgl/openal/AL10	alListener	(ILjava/nio/FloatBuffer;)V	alListenerfv
+org/lwjgl/openal/AL10	alSource	(IILjava/nio/FloatBuffer;)V	alSourcefv
+org/lwjgl/openal/AL10	alSourceStop	(Ljava/nio/IntBuffer;)V	alSourceStopv
+org/lwjgl/openal/AL	create	()V	create	dev/xavier/stein/bridge/compat/ALCompat
+org/lwjgl/openal/AL	destroy	()V	destroy	dev/xavier/stein/bridge/compat/ALCompat
+org/lwjgl/openal/AL	isCreated	()Z	isCreated	dev/xavier/stein/bridge/compat/ALCompat

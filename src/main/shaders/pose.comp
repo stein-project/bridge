@@ -1,0 +1,590 @@
+#version 450
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+//
+// Copyright (c) 2026 Breno Xavier
+// Player pose on the GPU (SteinPoseGpu; -Dsteinbridge.gfx.gpuPose=false goes back to the CPU). One invocation per drawn
+// part (one "entry" of the SteinPlayerPose plan): redoes its player's ModelBiped.setRotationAngles from
+// the numbers the CPU read from the entity, builds the part's matrix like ModelRenderer.render (the computations of
+// SteinEntityInstancer) on top of the root the CPU already computed, and writes the instance (3 matrix rows + the "rest" of the
+// state: texture, color, lightmap, damage) and the indirect command in the same format that entity.vert and the draw in
+// SteinEntityDeferred already consume.
+//
+// The math is the game's, in the same order of float operations: everything "precise" (no fma by contraction or reordering),
+// and opaque() where the driver fuses or reassociates anyway; the MathHelper sine and cosine from the SAME table as the game
+// (PoseSin, 65536 floats; or the compact 4096 one from AngleTable), division and square root corrected for exact rounding
+// (the table index depends on the last bit), and the hit's double computation done in float-float. What remains of the difference is
+// the sine/cosine of radians for the part rotations ((float) Math.sin/cos on the CPU; here in float-float, ~0.3% of the
+// time 1 ulp off): outside the game, 99.5% of the matrices bit-identical to the CPU, worst relative error 2.3e-7.
+
+layout(local_size_x = 64) in;
+
+// Frame input (written by the CPU, aligned to 256): header, bases of the command blocks, models, players,
+// states and entries. The indices of each section are in the header (in 32-bit words).
+layout(std430, set = 0, binding = 0) readonly buffer PoseIn {
+    uint d[];
+};
+layout(std430, set = 0, binding = 1) readonly buffer PoseSin {
+    float sinTable[];
+};
+// The SteinEntityDeferred instances (8 vec4 each) and the indirect commands (count, instanceCount, first, baseInstance).
+layout(std430, set = 0, binding = 2) writeonly buffer PoseInstances {
+    vec4 inst[];
+};
+layout(std430, set = 0, binding = 3) writeonly buffer PoseCommands {
+    uvec4 cmd[];
+};
+
+// header (SteinPoseGpu.H_*)
+#define H_COUNT 0u
+#define H_PLAYERS 1u
+#define H_STATES 2u
+#define H_ENTRIES 3u
+#define H_BLOCKS 4u
+#define H_MODELS 5u
+#define H_MASK 6u
+#define H_SCALE 7u
+#define H_SHIFT 8u
+#define H_ZERO 9u
+// record sizes (SteinPoseGpu.*_WORDS)
+#define PLAYER_WORDS 44u
+#define STATE_WORDS 28u
+#define PART_WORDS 12u
+#define MODEL_PARTS 16u
+// parts of the biped pose (indices in rp/ang)
+#define HEAD 0
+#define BODY 1
+#define RARM 2
+#define LARM 3
+#define RLEG 4
+#define LLEG 5
+
+float fd(uint i) {
+    return uintBitsToFloat(d[i]);
+}
+
+// Java's (int): truncates toward zero; NaN becomes 0 and out-of-int saturates (in GLSL it would be undefined).
+int javaInt(float v) {
+    if (isnan(v)) {
+        return 0;
+    }
+    if (v >= 2147483648.0) {
+        return 2147483647;
+    }
+    if (v <= -2147483648.0) {
+        return int(0x80000000u);
+    }
+    return int(v);
+}
+
+// The value as is, rounded, without the driver seeing through it (xor with a zero that only exists at run time). The
+// precise qualifier is not enough on every driver: AMD's OpenGL still fuses x * scale + 16384 into an fma, and with the product around
+// 10^7 (ulp 4) one less rounding changes the table index.
+float opaque(float v) {
+    return uintBitsToFloat(floatBitsToUint(v) ^ d[H_ZERO]);
+}
+
+// MathHelper.sin: table[(int) (x * 65536 / 2pi) & mask]
+float tsin(float x) {
+    precise float i = opaque(opaque(x) * fd(H_SCALE));
+    return sinTable[uint(javaInt(i)) & d[H_MASK]];
+}
+
+// MathHelper.cos: a quarter turn ahead (two rounded operations, as in Java)
+float tcos(float x) {
+    precise float i = opaque(opaque(x) * fd(H_SCALE));
+    precise float j = opaque(i + fd(H_SHIFT));
+    return sinTable[uint(javaInt(j)) & d[H_MASK]];
+}
+
+// The exact error of p = a * b (a*b - p), by Dekker: each factor split into two 12-bit halves (Veltkamp), only
+// IEEE multiplications and additions. No fma on purpose: GLSL's fma() is only guaranteed fused with NoContraction, and
+// the decoration is lost along the way (SPIR-V -> SPIRV-Cross GLSL); split apart, the remainder vanishes and the correction does not correct.
+float prodErr(float a, float b, float p) {
+    precise float ca = opaque(4097.0 * a);   // without opaque, ca - a could become fma(4097, a, -a) and the split fails
+    precise float ah = ca - (ca - a);
+    precise float al = a - ah;
+    precise float cb = opaque(4097.0 * b);
+    precise float bh = cb - (cb - b);
+    precise float bl = b - bh;
+    precise float e = (((ah * bh - p) + ah * bl) + al * bh) + al * bl;
+    return e;
+}
+
+// |s*s - x|, exact down to the last bit of the remainder (s*s - x is exact: both are close)
+float sqErr(float s, float x) {
+    precise float p = s * s;
+    precise float e = abs((p - x) + prodErr(s, s, p));
+    return e;
+}
+
+// a / b correctly rounded (GLSL's "/" tolerates 2.5 ulp): quotient by the reciprocal and a correction by the exact remainder
+// (a - q*b, with q*b in two parts).
+float jdiv(float a, float b) {
+    precise float r = 1.0 / b;
+    precise float q = a * r;
+    precise float p = opaque(q * b);
+    precise float e = (a - p) - prodErr(q, b, p);
+    precise float o = q + e * r;
+    return o;
+}
+
+// (float) Math.sqrt((double) x): the GPU's root is the 1-ulp neighbor closest to the exact root.
+float jsqrt(float x) {
+    precise float s = sqrt(x);
+    if (!(x > 0.0) || isinf(x)) {
+        return s;
+    }
+    precise float up = uintBitsToFloat(floatBitsToUint(s) + 1u);
+    precise float dn = uintBitsToFloat(floatBitsToUint(s) - 1u);
+    precise float es = sqErr(s, x);
+    precise float eu = sqErr(up, x);
+    precise float ed = sqErr(dn, x);
+    precise float o = s;
+    if (eu < es) {
+        o = up;
+    } else if (ed < es) {
+        o = dn;
+    }
+    return o;
+}
+
+// (float) ((double) a - ((double) f1 * 1.2D + (double) f2)), in float-float: 1.2D = HI + LO (LO rounded, the leftover is
+// below 2^-48 of the result).
+float strikeSubtract(float a, float f1, float f2) {
+    const float HI = 1.2;
+    const float LO = -4.7683717e-8;
+    precise float ph = f1 * HI;
+    precise float pl = prodErr(f1, HI, ph) + f1 * LO;
+    // s = p + f2
+    precise float sh = ph + f2;
+    precise float sb = sh - ph;
+    precise float se = (ph - (sh - sb)) + (f2 - sb);
+    precise float sl = se + pl;
+    // r = a - s
+    precise float nh = -sh;
+    precise float rh = a + nh;
+    precise float rb = rh - a;
+    precise float re = (a - (rh - rb)) + (nh - rb);
+    precise float rl = re - sl;
+    precise float o = rh + rl;
+    return o;
+}
+
+// Sine and cosine of radians, like (float) Math.sin/cos((double) x), which is the float closest to the exact value. In
+// float-float up to the last addition, so the final rounding comes out the same almost always: the reduction by pi/4 in three
+// parts (Cody-Waite; the first with 8 bits, product and subtraction exact) with the errors of the operations kept (Dekker and
+// twoSum), and the Taylor series (up to r^11 and r^10: what is left out is smaller than 2^-36) with the first correction
+// term (r^3/6 in the sine, r^2/2 in the cosine) also in float-float.
+// sin and cos of r = rh + rl (|r| <= pi/4, a bit more does no harm) in quadrant q: q*pi/2 + r.
+void sincosCore(float rh, float rl, int q, out float sinOut, out float cosOut) {
+    const float S1H = -0.16666667;      // -1/6 rounded
+    const float S1L = 4.967054e-9;      // -1/6 - S1H
+    // z = r^2 = z + zl
+    precise float z = rh * rh;
+    precise float zl = prodErr(rh, rh, z) + 2.0 * rh * rl;
+    // sine: r + r*z*(-1/6 + z*(1/120 - z*(1/5040 - ...)))
+    precise float t = z * (0.0083333333 + z * (-1.984127e-4 + z * (2.7557319e-6 + z * -2.5052108e-8)));
+    precise float ah = S1H + t;
+    precise float ab = ah - S1H;
+    precise float al = ((S1H - (ah - ab)) + (t - ab)) + S1L;
+    precise float q0 = rh * z;
+    precise float qe = prodErr(rh, z, q0) + (rh * zl + rl * z);   // r^3 = rh^3 + 3 rh^2 rl (zl already carries 2 rh rl)
+    precise float ch = q0 * ah;
+    precise float ce = prodErr(q0, ah, ch) + (q0 * al + qe * ah);
+    precise float s1 = rh + ch;
+    precise float s1b = s1 - rh;
+    precise float s1e = (rh - (s1 - s1b)) + (ch - s1b);
+    precise float ps = s1 + ((s1e + ce) + rl);
+    // cosine: 1 - (z + zl)/2 + z^2*(1/24 - z*(1/720 - ...)) (the cross term of rl is already in zl)
+    precise float hz = z * 0.5;
+    precise float c0 = 1.0 - hz;
+    precise float c0e = (1.0 - c0) - hz;
+    precise float tc = (z * z) * (0.041666668 + z * (-0.0013888889 + z * (2.4801588e-5 + z * (-2.7557319e-7
+            + z * 2.0876757e-9))));
+    precise float pc = c0 + ((c0e - zl * 0.5) + tc);
+    sinOut = (q == 0) ? ps : (q == 1) ? pc : (q == 2) ? -ps : -pc;
+    cosOut = (q == 0) ? pc : (q == 1) ? -ps : (q == 2) ? -pc : ps;
+}
+
+void jsincos(float x, out float sinOut, out float cosOut) {
+    const float DP1 = 0.78515625;
+    const float DP2 = 2.4187564849853515625e-4;
+    const float DP3 = 3.77489497744594108e-8;
+    precise float ax = abs(x);
+    int j = int(ax * 1.2732395);   // 4/pi
+    if ((j & 1) != 0) {
+        j += 1;
+    }
+    precise float y = float(j);
+    // r = ax - y * pi/4 = rh + rl
+    precise float t1 = ax - y * DP1;
+    precise float p2 = y * DP2;
+    precise float e2 = prodErr(y, DP2, p2);
+    precise float np2 = -p2;
+    precise float s0 = t1 + np2;
+    precise float sb = s0 - t1;
+    precise float se = (t1 - (s0 - sb)) + (np2 - sb);
+    precise float low = (se - e2) - y * DP3;
+    precise float rh = s0 + low;
+    precise float rl = low - (rh - s0);
+    float s;
+    float c;
+    sincosCore(rh, rl, (j >> 1) & 3, s, c);
+    sinOut = x < 0.0 ? -s : s;
+    cosOut = c;
+}
+
+// (float) Math.sin/cos(Math.toRadians(degrees)), the one in Mat4.rotate (the game's glRotatef): exact reduction by 90 degrees
+// (degrees - k*90 is representable) and the remainder in radians in float-float (pi/180 in two parts).
+void sincosDeg(float deg, out float sinOut, out float cosOut) {
+    const float P_HI = 0.017453292;
+    const float P_LO = 1.351996e-10;
+    int k = int(floor(opaque(deg * (1.0 / 90.0)) + 0.5));
+    precise float dr = deg - opaque(float(k) * 90.0);
+    precise float h = opaque(dr * P_HI);
+    precise float l = prodErr(dr, P_HI, h) + opaque(dr * P_LO);
+    precise float rh = opaque(h + l);
+    precise float rl = l - opaque(rh - h);
+    sincosCore(rh, rl, k & 3, sinOut, cosOut);
+}
+
+// Mat4.rotate(m, degrees, unit axis) over the 3 rows: the same computation as Java with the axis (1,0,0), (0,1,0) or
+// (0,0,1) — the terms with the axis's 0 give exact zero and vanish; the axis diagonal one is (1 - c) + c, which is not always 1.
+// One row (col0, col1, col2, col3 of a matrix row) rotated; axis 0 = x, 1 = y, 2 = z. A function, not a macro: the
+// generated GLSL has to fit on the LWJGL stack (glShaderSource encodes the text on it, 64 KB).
+vec4 rotRow(vec4 r, float c, float s, float tc, int axis) {
+    // each product goes through opaque(): AMD's OpenGL fused the sum of two products here (precise was not enough)
+    precise vec4 o = r;
+    if (axis == 0) {
+        o.x = r.x * tc;
+        o.y = opaque(r.y * c) + opaque(r.z * s);
+        o.z = opaque(r.y * -s) + opaque(r.z * c);
+    } else if (axis == 1) {
+        o.x = opaque(r.x * c) + opaque(r.z * -s);
+        o.y = r.y * tc;
+        o.z = opaque(r.x * s) + opaque(r.z * c);
+    } else {
+        o.x = opaque(r.x * c) + opaque(r.y * s);
+        o.y = opaque(r.x * -s) + opaque(r.y * c);
+        o.z = r.z * tc;
+    }
+    return o;
+}
+
+// Mat4.rotate(degrees, axis) on the 3 rows.
+void rotDeg(inout vec4 r0, inout vec4 r1, inout vec4 r2, float deg, int axis) {
+    float s;
+    float c;
+    sincosDeg(deg, s, c);
+    precise float tc = opaque(1.0 - c) + c;
+    r0 = rotRow(r0, c, s, tc, axis);
+    r1 = rotRow(r1, c, s, tc, axis);
+    r2 = rotRow(r2, c, s, tc, axis);
+}
+#define ROTATE_DEG(DEG, AXIS) rotDeg(r0, r1, r2, DEG, AXIS);
+#define SCALE3(X, Y, Z) { r0.xyz = r0.xyz * vec3(X, Y, Z); r1.xyz = r1.xyz * vec3(X, Y, Z); \
+    r2.xyz = r2.xyz * vec3(X, Y, Z); }
+// (with opaque on the products: with constants AMD's OpenGL fused the sum even with precise)
+#define TRANSLATE_O(R, X, Y, Z) R.w = R.w + ((opaque(R.x * (X)) + opaque(R.y * (Y))) + opaque(R.z * (Z)))
+#define TRANSLATE3(X, Y, Z) { TRANSLATE_O(r0, X, Y, Z); TRANSLATE_O(r1, X, Y, Z); TRANSLATE_O(r2, X, Y, Z); }
+
+// ModelRenderer.render over the 3 rows (each row r = (m[r], m[4+r], m[8+r], m[12+r]) of the game's matrix).
+#define TRANSLATE(R, X, Y, Z) R.w = R.w + ((R.x * (X) + R.y * (Y)) + R.z * (Z))
+#define ROT_Z(R, C, S) { precise float a0 = R.x; precise float a1 = R.y; \
+    R.x = (C) * a0 + (S) * a1; R.y = -(S) * a0 + (C) * a1; }
+#define ROT_Y(R, C, S) { precise float a0 = R.x; precise float a2 = R.z; \
+    R.x = (C) * a0 - (S) * a2; R.z = (S) * a0 + (C) * a2; }
+#define ROT_X(R, C, S) { precise float a1 = R.y; precise float a2 = R.z; \
+    R.y = (C) * a1 + (S) * a2; R.z = -(S) * a1 + (C) * a2; }
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= d[H_COUNT]) {
+        return;
+    }
+    uint e = d[d[H_ENTRIES] + i];
+    uint kind = (e >> 4) & 3u;          // model: player, armor, pants; 3 = held item (attached to the arm)
+    uint part = e & 15u;
+    uint so = d[H_STATES] + (e >> 6) * STATE_WORDS;
+    uint po = d[H_PLAYERS] + d[so] * PLAYER_WORDS;
+    uint k = i - d[so + 3u];            // position within the state
+    uint instance = d[so + 4u] + k;
+    uint command = d[d[H_BLOCKS] + d[so + 1u]] + d[so + 2u] + k;
+    // the held item does the player model's setRotationAngles (its right arm)
+    uint mo = d[H_MODELS] + (d[po + 19u] + (kind == 3u ? 0u : kind)) * MODEL_PARTS * PART_WORDS;
+
+    float netHeadYaw = fd(po + 12u);
+    float pitch = fd(po + 13u);
+    float age = fd(po + 14u);
+    float amount = fd(po + 15u);
+    float limbSwing = fd(po + 16u);
+    float swing = fd(po + 17u);
+    uint flags = d[po + 18u];
+    bool sneak = (flags & 1u) != 0u;
+    bool riding = (flags & 2u) != 0u;
+    bool bow = (flags & 4u) != 0u;
+    int heldLeft = bitfieldExtract(int(flags), 8, 8);
+    int heldRight = bitfieldExtract(int(flags), 16, 8);
+
+    // ---- the biped pose over the 7 lower parts, as modifiers in the CPU order: head, walk cycle, riding, held items, swing, stance, idle, bow ----
+    precise vec3 rp[7];
+    precise vec3 ang[7];
+    for (uint p = 0u; p < 7u; p++) {
+        uint b = mo + p * PART_WORDS;
+        rp[p] = vec3(fd(b + 4u), fd(b + 5u), fd(b + 6u));
+        ang[p] = vec3(fd(b + 8u), fd(b + 9u), fd(b + 10u));
+    }
+    // Every computed argument goes through a precise local: precise only covers what reaches a precise l-value in the
+    // same function, and a computation passed straight to tsin/tcos could become an fma in the driver (AMD's OpenGL fuses
+    // limbSwing * 0.6662 + pi, and the table index changes).
+    // And where order matters (product before sum; chain of products that are not by a power of 2) the middle value
+    // goes through opaque(): AMD's OpenGL reassociates and fuses even with precise.
+    precise float aLimb = opaque(limbSwing * 0.6662);
+    precise float aLimbPi = aLimb + 3.1415927;
+    precise float aIdle = age * 0.09;
+    precise float aIdle2 = age * 0.067;
+    precise float idleZ = opaque(opaque(tcos(aIdle) * 0.05) + 0.05);
+    precise float idleX = opaque(tsin(aIdle2) * 0.05);
+    // part indices in rp/ang
+    ang[HEAD].y = jdiv(netHeadYaw, 57.295776);
+    ang[HEAD].x = jdiv(pitch, 57.295776);
+    ang[RARM].x = tcos(aLimbPi) * 2.0 * amount * 0.5;   // by 2 and by 0.5: exact in any order
+    ang[LARM].x = tcos(aLimb) * 2.0 * amount * 0.5;
+    ang[RARM].z = 0.0;
+    ang[LARM].z = 0.0;
+    ang[RLEG].x = opaque(tcos(aLimb) * 1.4) * amount;
+    ang[LLEG].x = opaque(tcos(aLimbPi) * 1.4) * amount;
+    ang[RLEG].y = 0.0;
+    ang[LLEG].y = 0.0;
+    if (riding) {
+        ang[RARM].x += -0.62831855;
+        ang[LARM].x += -0.62831855;
+        ang[RLEG].x = -1.2566371;
+        ang[LLEG].x = -1.2566371;
+        ang[RLEG].y = 0.31415927;
+        ang[LLEG].y = -0.31415927;
+    }
+    if (heldLeft != 0) {
+        ang[LARM].x = ang[LARM].x * 0.5 - opaque(0.31415927 * float(heldLeft));
+    }
+    ang[RARM].y = 0.0;
+    ang[RARM].z = 0.0;
+    if (heldRight == 1 || heldRight == 3) {
+        ang[RARM].x = ang[RARM].x * 0.5 - opaque(0.31415927 * float(heldRight));
+        if (heldRight == 3) {
+            ang[RARM].y = -0.5235988;
+        }
+    }
+    ang[LARM].y = 0.0;
+    if (swing > -9990.0) {
+        precise float aRoot = jsqrt(swing) * 3.1415927 * 2.0;
+        precise float aSwing = swing * 3.1415927;
+        ang[BODY].y = tsin(aRoot) * 0.2;
+        precise float by = ang[BODY].y;
+        rp[RARM].z = tsin(by) * 5.0;
+        rp[RARM].x = -tcos(by) * 5.0;
+        rp[LARM].z = -tsin(by) * 5.0;
+        rp[LARM].x = tcos(by) * 5.0;
+        ang[RARM].y += by;
+        ang[LARM].y += by;
+        ang[LARM].x += by;
+        precise float f = 1.0 - swing;
+        f = f * f;
+        f = opaque(f * f);
+        f = 1.0 - f;
+        precise float aF = f * 3.1415927;
+        precise float f1 = tsin(aF);
+        precise float f2 = opaque(tsin(aSwing) * -(ang[HEAD].x - 0.7)) * 0.75;
+        precise float a2x = ang[RARM].x;
+        ang[RARM].x = strikeSubtract(a2x, f1, f2);
+        ang[RARM].y += ang[BODY].y * 2.0;
+        ang[RARM].z += opaque(tsin(aSwing) * -0.4);
+    }
+    if (sneak) {
+        ang[BODY].x = 0.5;
+        ang[RARM].x += 0.4;
+        ang[LARM].x += 0.4;
+        rp[RLEG].z = 4.0;
+        rp[LLEG].z = 4.0;
+        rp[RLEG].y = 9.0;
+        rp[LLEG].y = 9.0;
+        rp[HEAD].y = 1.0;
+    } else {
+        ang[BODY].x = 0.0;
+        rp[RLEG].z = 0.1;
+        rp[LLEG].z = 0.1;
+        rp[RLEG].y = 12.0;
+        rp[LLEG].y = 12.0;
+        rp[HEAD].y = 0.0;
+    }
+    ang[RARM].z += idleZ;
+    ang[LARM].z -= idleZ;
+    ang[RARM].x += idleX;
+    ang[LARM].x -= idleX;
+    if (bow) {
+        // f3 = f4 = 0 in the game: the computations with them are Java's (0 - 0, x - 0), changing nothing
+        ang[RARM].z = 0.0;
+        ang[LARM].z = 0.0;
+        ang[RARM].y = -0.1 + ang[HEAD].y;
+        ang[LARM].y = opaque(0.1 + ang[HEAD].y) + 0.4;
+        ang[RARM].x = -1.5707964 + ang[HEAD].x;
+        ang[LARM].x = -1.5707964 + ang[HEAD].x;
+        ang[RARM].z += idleZ;
+        ang[LARM].z -= idleZ;
+        ang[RARM].x += idleX;
+        ang[LARM].x -= idleX;
+    }
+
+
+    precise vec4 r0;
+    precise vec4 r1;
+    precise vec4 r2;
+    uint geoVerts;
+    uint geoFirst;
+    if (kind == 3u) {
+        // ---- the held item (SteinHeldItem.matrix): the root without the sneak, the right arm's postRenderArm of this
+        // pose, the LayerHeldItem, the item's scale 2, the third-person transform and the renderItem ----
+        uint fl = d[po + 41u];
+        r0 = vec4(fd(po + 20u), fd(po + 21u), fd(po + 22u), fd(po + 23u));
+        r1 = vec4(fd(po + 24u), fd(po + 25u), fd(po + 26u), fd(po + 27u));
+        r2 = vec4(fd(po + 28u), fd(po + 29u), fd(po + 30u), fd(po + 31u));
+        if ((fl & 1u) != 0u) {
+            precise float hx = rp[RARM].x;
+            if ((fl & 2u) != 0u) {
+                hx = hx + 1.0;   // slim arm: ++rotationPointX during postRender
+            }
+            precise float hy = rp[RARM].y;
+            precise float hz = rp[RARM].z;
+            precise float tx = hx * 0.0625;
+            precise float ty = hy * 0.0625;
+            precise float tz = hz * 0.0625;
+            precise vec3 ha = ang[RARM];
+            if (ha.x == 0.0 && ha.y == 0.0 && ha.z == 0.0) {
+                if (hx != 0.0 || hy != 0.0 || hz != 0.0) {
+                    TRANSLATE3(tx, ty, tz)
+                }
+            } else {
+                TRANSLATE3(tx, ty, tz)
+                if (ha.z != 0.0) {
+                    precise float dz = ha.z * 57.295776;
+                    ROTATE_DEG(dz, 2)
+                }
+                if (ha.y != 0.0) {
+                    precise float dy = ha.y * 57.295776;
+                    ROTATE_DEG(dy, 1)
+                }
+                if (ha.x != 0.0) {
+                    precise float dx = ha.x * 57.295776;
+                    ROTATE_DEG(dx, 0)
+                }
+            }
+        }
+        TRANSLATE3(-0.0625, 0.4375, 0.0625)
+        if ((fl & 4u) != 0u) {
+            // render-type-2 ItemBlock
+            TRANSLATE3(0.0, 0.1875, -0.3125)
+            ROTATE_DEG(20.0, 0)
+            ROTATE_DEG(45.0, 1)
+            SCALE3(-0.375, -0.375, 0.375)
+        }
+        if ((fl & 8u) != 0u) {
+            TRANSLATE3(0.0, 0.203125, 0.0)   // sneaking
+        }
+        SCALE3(2.0, 2.0, 2.0)
+        if ((fl & 16u) != 0u) {
+            // ItemCameraTransforms.applyTransform: translate, rotation about y, x, z, scale
+            precise float xx = fd(po + 32u);
+            precise float xy = fd(po + 33u);
+            precise float xz = fd(po + 34u);
+            TRANSLATE3(xx, xy, xz)
+            precise float gy = fd(po + 36u);
+            ROTATE_DEG(gy, 1)
+            precise float gx = fd(po + 35u);
+            ROTATE_DEG(gx, 0)
+            precise float gz = fd(po + 37u);
+            ROTATE_DEG(gz, 2)
+            precise float sx = fd(po + 38u);
+            precise float sy = fd(po + 39u);
+            precise float sz = fd(po + 40u);
+            SCALE3(sx, sy, sz)
+        }
+        SCALE3(0.5, 0.5, 0.5)
+        TRANSLATE3(-0.5, -0.5, -0.5)
+        geoFirst = d[so + 5u];
+        geoVerts = d[so + 6u];
+    } else {
+        // The part the pose comes from: the hat copies the head (end of setRotationAngles); in the player model, the
+        // skin layers copy the lower part (ModelPlayer.setRotationAngles). Offset and geometry belong to the part.
+        uint src = part;
+        if (part == 6u) {
+            src = 0u;
+        } else if (kind == 0u && part >= 7u) {
+            // 7 left pants <- left leg, 8 right pants <- right leg, 9 left sleeve <- left arm, 10 right sleeve <- right
+            // arm, 11 jacket <- body
+            src = part == 7u ? 5u : part == 8u ? 4u : part == 9u ? 3u : part == 10u ? 2u : 1u;
+        }
+        precise vec3 prp = rp[0];
+        precise vec3 pang = ang[0];
+        for (uint p = 1u; p < 7u; p++) {
+            if (p == src) {
+                prp = rp[p];
+                pang = ang[p];
+            }
+        }
+
+        // ---- ModelRenderer.render (SteinPlayerPose.partMatrix): root, offset, rotation point, Z, Y, X ----
+        uint pb = mo + part * PART_WORDS;
+        r0 = vec4(fd(po), fd(po + 1u), fd(po + 2u), fd(po + 3u));
+        r1 = vec4(fd(po + 4u), fd(po + 5u), fd(po + 6u), fd(po + 7u));
+        r2 = vec4(fd(po + 8u), fd(po + 9u), fd(po + 10u), fd(po + 11u));
+        precise float ox = fd(pb);
+        precise float oy = fd(pb + 1u);
+        precise float oz = fd(pb + 2u);
+        TRANSLATE(r0, ox, oy, oz);
+        TRANSLATE(r1, ox, oy, oz);
+        TRANSLATE(r2, ox, oy, oz);
+        precise float rx = prp.x * 0.0625;
+        precise float ry = prp.y * 0.0625;
+        precise float rz = prp.z * 0.0625;
+        if (rx != 0.0 || ry != 0.0 || rz != 0.0) {
+            TRANSLATE(r0, rx, ry, rz);
+            TRANSLATE(r1, rx, ry, rz);
+            TRANSLATE(r2, rx, ry, rz);
+        }
+        float sn;
+        float cs;
+        if (pang.z != 0.0) {
+            jsincos(pang.z, sn, cs);
+            ROT_Z(r0, cs, sn)
+            ROT_Z(r1, cs, sn)
+            ROT_Z(r2, cs, sn)
+        }
+        if (pang.y != 0.0) {
+            jsincos(pang.y, sn, cs);
+            ROT_Y(r0, cs, sn)
+            ROT_Y(r1, cs, sn)
+            ROT_Y(r2, cs, sn)
+        }
+        if (pang.x != 0.0) {
+            jsincos(pang.x, sn, cs);
+            ROT_X(r0, cs, sn)
+            ROT_X(r1, cs, sn)
+            ROT_X(r2, cs, sn)
+        }
+        geoVerts = d[pb + 7u];
+        geoFirst = d[pb + 3u];
+    }
+
+    // ---- the instance and the command ----
+    uint io = instance * 8u;
+    inst[io] = r0;
+    inst[io + 1u] = r1;
+    inst[io + 2u] = r2;
+    for (uint q = 0u; q < 5u; q++) {
+        uint s = so + 8u + q * 4u;
+        inst[io + 3u + q] = vec4(fd(s), fd(s + 1u), fd(s + 2u), fd(s + 3u));
+    }
+    cmd[command] = uvec4(geoVerts, 1u, geoFirst, instance);
+}

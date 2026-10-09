@@ -1,0 +1,38 @@
+Stein Bridge
+Copyright (c) 2026 Breno Xavier (https://github.com/brenoxavier)
+
+Part of Stein (https://github.com/Stein-Project). Licensed under the Mozilla Public License 2.0 (see LICENSE).
+
+The Stein name and logo are trademarks of Breno Xavier and are not covered by the licence.
+See TRADEMARK.md for what is allowed.
+
+NOT AN OFFICIAL MINECRAFT PRODUCT. NOT APPROVED BY OR ASSOCIATED WITH MOJANG OR MICROSOFT.
+Minecraft is a trademark of Mojang AB. No Minecraft code or assets are distributed by this project:
+the game is patched at runtime, on the player's machine, from the player's own copy.
+
+-------------------------------------------------------------------------------
+Third-party software used by Stein Bridge
+-------------------------------------------------------------------------------
+LWJGL 3 (https://www.lwjgl.org) - downloaded by Gradle, shipped with Stein releases
+  Copyright (c) 2012-present Lightweight Java Game Library. BSD 3-Clause License.
+
+ASM (https://asm.ow2.io) - downloaded by Gradle, used by the patcher
+  Copyright (c) 2000-2011 INRIA, France Telecom. BSD 3-Clause License (tools/asm-license.txt).
+
+shaderc and SPIRV-Cross, through LWJGL (build time only, downloaded by Gradle)
+  Apache License 2.0.
+
+MCP mappings (build time only, downloaded by Gradle) are downloaded from their original source
+and never redistributed.
+
+-------------------------------------------------------------------------------
+Compatibility code
+-------------------------------------------------------------------------------
+The classes under org.lwjgl in src/main/java implement the part of the LWJGL 2 public API the game
+uses, on top of LWJGL 3, and are written for Stein, except:
+
+- org/lwjgl/util/vector/Matrix4f.java and Vector3f.java: their matrix and vector arithmetic is taken
+  from LWJGL 2. Copyright (c) 2002-2008 LWJGL Project. All rights reserved. BSD 3-clause licence;
+  full text in licenses/LWJGL2-LICENSE.txt.
+- org/lwjgl/util/glu/GLU.java: the 4x4 matrix inversion (invert) is adapted from gluInvertMatrix of
+  the Mesa 3D GLU library (SGI Free Software License B, equivalent to the X11/MIT licence).

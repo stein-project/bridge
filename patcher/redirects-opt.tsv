@@ -1,0 +1,502 @@
+# Client optimizations applied by patching. They go only into the
+# SteinBridge variants; the vanilla variant remains the baseline.
+# class	name2	descriptor	name3	newOwner
+# LongHashMap.getHashedKey: the x^z hash collides massively on the chunks around the player.
+nq	g	(J)I	hashedKey	dev/xavier/stein/bridge/engine/ChunkHash
+# World.setActivePlayerChunksAndCheckLight: O(players x radius^2) per tick; runs with one representative per chunk.
+adm	D	()V	setActivePlayerChunksAndCheckLight	dev/xavier/stein/bridge/engine/ActiveChunks	static
+# ThreadDownloadImageData.loadTexture: reads the skin from the cache on the render thread; the body now sends that to background threads.
+bma	a	(Lbni;)V	loadTexture	dev/xavier/stein/bridge/engine/AsyncSkins	body
+# ContainerPlayer.<init>: recipe lookup on a freshly created (empty) 2x2 grid for each player; constructor only.
+xy	a	(Log;)V	skipInitialCraftCheck	dev/xavier/stein/bridge/engine/CraftingInit	static	xy.<init>
+# ChunkRenderDispatcher.<init>: 2 fixed chunk-building threads -> N (ChunkThreads).
+# The queue of geometry builders grows, and the second worker in the list triggers the missing ones.
+com/google/common/collect/Queues	newArrayBlockingQueue	(I)Ljava/util/concurrent/ArrayBlockingQueue;	queue	dev/xavier/stein/bridge/engine/ChunkThreads	static	bho.<init>
+java/util/List	add	(Ljava/lang/Object;)Z	addWorker	dev/xavier/stein/bridge/engine/ChunkThreads	static	bho.<init>
+# WorldChunkManager.getBiomeGenerator(pos, default): BiomeCache has no lock, and with N threads building chunks two
+# would write together ("Getting biome" crash). One at a time (BiomeLock).
+aec	a	(Lcj;Lady;)Lady;	biomeAt	dev/xavier/stein/bridge/engine/BiomeLock	static
+# Chunk packets (NetHandlerPlayClient: S21 = bcy.a(go), S26 = bcy.a(gp)): the sections
+# are prepared on the network thread, on the first pass through the handler (ChunkPrepare), and
+# fillChunk on the game thread only swaps them in.
+fh	a	(Lff;Lep;Lod;)V	checkThread	dev/xavier/stein/bridge/engine/ChunkPrepare	static	bcy.a(Lgo;)V
+fh	a	(Lff;Lep;Lod;)V	checkThread	dev/xavier/stein/bridge/engine/ChunkPrepare	static	bcy.a(Lgp;)V
+amy	a	([BIZ)V	fill	dev/xavier/stein/bridge/engine/ChunkPrepare	static	bcy.a(Lgo;)V
+amy	a	([BIZ)V	fill	dev/xavier/stein/bridge/engine/ChunkPrepare	static	bcy.a(Lgp;)V
+# Terrain by region (ChunkArena): geometry in mapped buffers per region and one
+# glMultiDrawArrays per run of chunks of the same region. With this, the VBO path
+# always applies (OpenGlHelper.useVbo); upload in uploadVertexBuffer (bho.a(bfd,bmt)),
+# drawing in renderBlockLayer (bfr.a(adf)), range returned in deleteGlResources (bht.a).
+bqs	f	()Z	useVbo	dev/xavier/stein/bridge/engine/ChunkArena
+bfz	a	(Lbfd;)V	upload	dev/xavier/stein/bridge/engine/ChunkArena	static	bho.a(Lbfd;Lbmt;)V
+bfh	a	(Ladf;)V	render	dev/xavier/stein/bridge/engine/ChunkArena	static	bfr.a(Ladf;)V
+bmt	c	()V	delete	dev/xavier/stein/bridge/engine/ChunkArena	static	bht.a()V
+bmt	sbRegion	Ljava/lang/Object;	-	-	field
+bmt	sbFirst	I	-	-	field
+bmt	sbCount	I	-	-	field
+# Chunks adjacent to the player marked dirty only because the data arrived (ChunkSync): on the threads,
+# not on the render thread. The marking in the chunk handlers opens the "arrival" mode; the
+# ViewFrustum's setNeedsUpdate (bga.a) records the origin; the updateChunkNow of setupTerrain decides.
+bdb	b	(IIIIII)V	arrivalBegin	dev/xavier/stein/bridge/engine/ChunkSync	before	bcy.a(Lgo;)V
+bdb	b	(IIIIII)V	arrivalEnd	dev/xavier/stein/bridge/engine/ChunkSync	after	bcy.a(Lgo;)V
+bdb	b	(IIIIII)V	arrivalBegin	dev/xavier/stein/bridge/engine/ChunkSync	before	bcy.a(Lgp;)V
+bdb	b	(IIIIII)V	arrivalEnd	dev/xavier/stein/bridge/engine/ChunkSync	after	bcy.a(Lgp;)V
+bht	a	(Z)V	markDirty	dev/xavier/stein/bridge/engine/ChunkSync	static	bga.a(IIIIII)V
+bho	b	(Lbht;)Z	buildNear	dev/xavier/stein/bridge/engine/ChunkSync	static	bfr.a(Lpk;DLbia;IZ)V
+bht	sbArrival	Z	-	-	field
+
+# GlStateManager: the MODELVIEW and TEXTURE stacks are kept in Java (GLMatrix); Stein GFX reads the finished
+# matrices from there, and the fixed-function fallback sends only the finished MODELVIEW to the driver. Every matrix operation of the game goes through
+# one of these methods — each with a single GL11 call site.
+bfl	n	(I)V	matrixMode	dev/xavier/stein/bridge/engine/GLMatrix
+bfl	D	()V	loadIdentity	dev/xavier/stein/bridge/engine/GLMatrix
+bfl	E	()V	pushMatrix	dev/xavier/stein/bridge/engine/GLMatrix
+bfl	F	()V	popMatrix	dev/xavier/stein/bridge/engine/GLMatrix
+bfl	a	(ILjava/nio/FloatBuffer;)V	getFloat	dev/xavier/stein/bridge/engine/GLMatrix
+bfl	a	(DDDDDD)V	ortho	dev/xavier/stein/bridge/engine/GLMatrix
+bfl	b	(FFFF)V	rotate	dev/xavier/stein/bridge/engine/GLMatrix
+bfl	a	(FFF)V	scale	dev/xavier/stein/bridge/engine/GLMatrix
+bfl	a	(DDD)V	scaled	dev/xavier/stein/bridge/engine/GLMatrix
+bfl	b	(FFF)V	translate	dev/xavier/stein/bridge/engine/GLMatrix
+bfl	b	(DDD)V	translated	dev/xavier/stein/bridge/engine/GLMatrix
+bfl	a	(Ljava/nio/FloatBuffer;)V	multMatrix	dev/xavier/stein/bridge/engine/GLMatrix
+# Before each use of MODELVIEW by the driver, the pending matrix goes in a glLoadMatrixf.
+# Names from the original jar (LWJGL 2); the renaming to LWJGL 3 still applies.
+org/lwjgl/opengl/GL11	glCallList	(I)V	flush	dev/xavier/stein/bridge/engine/GLMatrix	before
+org/lwjgl/opengl/GL11	glDrawArrays	(III)V	flush	dev/xavier/stein/bridge/engine/GLMatrix	before
+org/lwjgl/opengl/GL11	glBegin	(I)V	flush	dev/xavier/stein/bridge/engine/GLMatrix	before
+org/lwjgl/opengl/GL11	glLight	(IILjava/nio/FloatBuffer;)V	flush	dev/xavier/stein/bridge/engine/GLMatrix	before
+org/lwjgl/opengl/GL11	glTexGen	(IILjava/nio/FloatBuffer;)V	flush	dev/xavier/stein/bridge/engine/GLMatrix	before
+# Display list compilation: nothing is deferred in there.
+org/lwjgl/opengl/GL11	glNewList	(II)V	beginList	dev/xavier/stein/bridge/engine/GLMatrix	before
+org/lwjgl/opengl/GL11	glEndList	()V	endList	dev/xavier/stein/bridge/engine/GLMatrix	before
+
+# FontRenderer (avn): the immediate mode of each character (renderDefaultChar = a,
+# renderUnicodeChar = b) goes to a batch, drawn with one glDrawArrays per text.
+org/lwjgl/opengl/GL11	glBegin	(I)V	glBegin	dev/xavier/stein/bridge/engine/FontBatch		avn.a
+org/lwjgl/opengl/GL11	glBegin	(I)V	glBegin	dev/xavier/stein/bridge/engine/FontBatch		avn.b
+org/lwjgl/opengl/GL11	glTexCoord2f	(FF)V	glTexCoord2f	dev/xavier/stein/bridge/engine/FontBatch		avn.a
+org/lwjgl/opengl/GL11	glTexCoord2f	(FF)V	glTexCoord2f	dev/xavier/stein/bridge/engine/FontBatch		avn.b
+org/lwjgl/opengl/GL11	glVertex3f	(FFF)V	glVertex3f	dev/xavier/stein/bridge/engine/FontBatch		avn.a
+org/lwjgl/opengl/GL11	glVertex3f	(FFF)V	glVertex3f	dev/xavier/stein/bridge/engine/FontBatch		avn.b
+org/lwjgl/opengl/GL11	glEnd	()V	glEnd	dev/xavier/stein/bridge/engine/FontBatch		avn.a
+org/lwjgl/opengl/GL11	glEnd	()V	glEnd	dev/xavier/stein/bridge/engine/FontBatch		avn.b
+# A texture change (unicode page) closes the batch; same texture, it continues.
+bmj	a	(Ljy;)V	bindTexture	dev/xavier/stein/bridge/engine/FontBatch	static	avn.a
+bmj	a	(Ljy;)V	bindTexture	dev/xavier/stein/bridge/engine/FontBatch	static	avn.b
+# Color (formatting code) and underline/strikethrough (Tessellator without texture) close the batch.
+bfl	c	(FFFF)V	flush	dev/xavier/stein/bridge/engine/FontBatch	before	avn.a
+bfl	x	()V	flush	dev/xavier/stein/bridge/engine/FontBatch	before	avn.a
+# End of each text (renderStringAtPos).
+avn	a	(Ljava/lang/String;Z)V	flush	dev/xavier/stein/bridge/engine/FontBatch	after
+# The game's font replaced by another (TextHook): the drawing of each character inside renderStringAtPos, and the
+# width of each character wherever the game measures text. With no font registered, the game's path applies.
+avn	a	(CZ)F	renderChar	dev/xavier/stein/bridge/engine/TextHook	static	avn.a(Ljava/lang/String;Z)V
+avn	a	(C)I	charWidth	dev/xavier/stein/bridge/engine/TextHook	static
+# The chat on the grid is drawn in the HUD font: the splitting of each message into lines (GuiUtilRenderComponents.splitText,
+# called by GuiNewChat.setChatLine) measures with the same font.
+avu	a	(Leu;ILavn;ZZ)Ljava/util/List;	chatSplitBegin	dev/xavier/stein/bridge/hooks/VanillaHud	before	avt.a(Leu;IIZ)V
+avu	a	(Leu;ILavn;ZZ)Ljava/util/List;	chatSplitEnd	dev/xavier/stein/bridge/hooks/VanillaHud	after	avt.a(Leu;IIZ)V
+
+# RenderItem.renderModel(model, color, stack): the vertices depend only on model and
+# color (apart from the item's tint); each pair becomes a display list recorded once.
+bjh	a	(Lboq;ILzx;)V	renderModel	dev/xavier/stein/bridge/engine/ItemModelCache	static	bjh.a
+# Check (checkItemModel): bytes that would go to the driver, before Tessellator.draw.
+bfx	b	()V	beforeDraw	dev/xavier/stein/bridge/engine/ItemModelCache	before	bjh.a
+# A resource reload recreates the models: the old lists are deleted.
+bnj	a	(Lbni;)V	clear	dev/xavier/stein/bridge/engine/ItemModelCache	after
+
+# DataWatcher.getWatchedObject (pz.j): the read without the ReadWriteLock (the map only
+# changes structure when the entity is constructed).
+pz	j	(I)Lpz$a;	getWatchedObject	dev/xavier/stein/bridge/engine/DataWatchers	body
+
+# ItemStack.isItemEnchanted (zx.w): result stored in the ItemStack itself, in
+# fields created here, and invalidated by a counter that goes up when "ench" changes
+# in any NBT (NBTTagCompound's map replaced in the constructor).
+zx	sbEnchTag	Ljava/lang/Object;	-	-	field
+zx	sbEnchVer	I	-	-	field
+zx	sbEnch	Z	-	-	field
+zx	w	()Z	isItemEnchanted	dev/xavier/stein/bridge/engine/EnchCache	body
+com/google/common/collect/Maps	newHashMap	()Ljava/util/HashMap;	newTagMap	dev/xavier/stein/bridge/engine/EnchCache		dn.<init>
+
+# LayerArmorBase: the glint of each piece (renderGlint, in renderLayer) is recorded
+# and the two passes come out grouped after the whole layer.
+bkn	a	(Lpr;Lbbo;FFFFFFF)V	deferGlint	dev/xavier/stein/bridge/engine/ArmorGlint	static	bkn.a
+bkn	a	(Lbbo;I)V	setVisible	dev/xavier/stein/bridge/engine/ArmorGlint	static	bkn.a
+blb	a	(Lpr;FFFFFFF)V	flushDeferred	dev/xavier/stein/bridge/engine/ArmorGlint	after
+
+# FontRenderer: String.indexOf(char) on the fixed glyph and format-code
+# strings becomes a table lookup (FontIndex), with the same result.
+java/lang/String	indexOf	(I)I	indexOf	dev/xavier/stein/bridge/engine/FontIndex	static	avn.a
+java/lang/String	indexOf	(I)I	indexOf	dev/xavier/stein/bridge/engine/FontIndex	static	avn.b
+
+# Signs: splitText and getFormattedText of each line, redone every frame in
+# TileEntitySignRenderer (bhj.a), are kept in fields of the text component
+# (ChatComponentStyle, es). The generation goes up on each resource reload.
+es	sbSplit	Ljava/lang/Object;	-	-	field
+es	sbSplitFont	Ljava/lang/Object;	-	-	field
+es	sbSplitKey	I	-	-	field
+es	sbSplitGen	I	-	-	field
+es	sbSplitUnicode	Z	-	-	field
+es	sbText	Ljava/lang/String;	-	-	field
+es	sbTextGen	I	-	-	field
+avu	a	(Leu;ILavn;ZZ)Ljava/util/List;	splitText	dev/xavier/stein/bridge/engine/SignText	static	bhj.a
+eu	d	()Ljava/lang/String;	formatted	dev/xavier/stein/bridge/engine/SignText	static	bhj.a
+bnj	a	(Lbni;)V	invalidate	dev/xavier/stein/bridge/engine/SignText	after
+
+# Fancy clouds kept between frames (CloudCache): the game's renderCloudsFancy (bfr.c) only
+# runs when the geometry changes, with Tessellator.draw detoured to copy the vertices; on the
+# other frames the copy comes from a VBO, with the cloud offset in a translation.
+bfr	c	(FI)V	renderFancy	dev/xavier/stein/bridge/engine/CloudCache	static	bfr.b(FI)V
+bfx	b	()V	draw	dev/xavier/stein/bridge/engine/CloudCache	static	bfr.c(FI)V
+# EffectRenderer.updateEffectAlphaLayer (bec.a(List)): dead particles are removed in a
+# single pass (Particles), instead of the quadratic removeAll.
+java/util/List	removeAll	(Ljava/util/Collection;)Z	removeDead	dev/xavier/stein/bridge/engine/Particles	static	bec.a(Ljava/util/List;)V
+# Cheaper chunk visibility search (setupTerrain, bfr.a(Lpk;DLbia;IZ)V)
+# (ChunkGraph): each chunk's neighbor in arithmetic on the ViewFrustum grid, and the
+# visible faces of the camera's section kept while the camera and the blocks do not change.
+bfr	a	(Lcj;Lbht;Lcq;)Lbht;	neighbor	dev/xavier/stein/bridge/engine/ChunkGraph	static	bfr.a(Lpk;DLbia;IZ)V
+bfr	c	(Lcj;)Ljava/util/Set;	visibleFacings	dev/xavier/stein/bridge/engine/ChunkGraph	static	bfr.a(Lpk;DLbia;IZ)V
+# The search loop (ChunkGraph.bfsLoop at queue.isEmpty()) without allocating per visited chunk; the
+# setupTerrain call in renderWorldPass keeps the arguments the search uses.
+bfr	a	(Lpk;DLbia;IZ)V	setupTerrain	dev/xavier/stein/bridge/engine/ChunkGraph	static	bfk.a(IFJ)V
+java/util/Queue	isEmpty	()Z	bfsLoop	dev/xavier/stein/bridge/engine/ChunkGraph	static	bfr.a(Lpk;DLbia;IZ)V
+bht	sbInfo	Ljava/lang/Object;	-	-	field
+# Version of the compilations, for the search check (ChunkGraph.compiled): after each
+# RenderChunk.setCompiledChunk and stopCompileTask.
+bht	a	(Lbhq;)V	compiled	dev/xavier/stein/bridge/engine/ChunkGraph	after
+bht	h	()V	compiled	dev/xavier/stein/bridge/engine/ChunkGraph	after
+# Entity and particle light kept between frames (LightCache): the body of
+# Entity.getBrightnessForRender, fields on the entity and the light version (before each
+# NibbleArray.set, the only light write path).
+pk	b	(F)I	brightness	dev/xavier/stein/bridge/engine/LightCache	body
+pk	sbLightKey	J	-	-	field
+pk	sbLightVer	J	-	-	field
+pk	sbLight	I	-	-	field
+pk	sbLightWorld	Ljava/lang/Object;	-	-	field
+amw	a	(IIII)V	bump	dev/xavier/stein/bridge/engine/LightCache	before
+# The float brightness (Entity.getBrightness) that RendererLivingEntity.setBrightness asks for on each layer of each
+# living entity per frame, kept the same way (LightCache.entityBrightness; only with the Stein renderer on, outside it the
+# game's call): fields on the entity, with the sky darkening alongside the version.
+pr	c	(F)F	entityBrightness	dev/xavier/stein/bridge/engine/LightCache	static	bjl.a(Lpr;FZ)Z
+pk	sbBrightKey	J	-	-	field
+pk	sbBrightVer	J	-	-	field
+pk	sbBrightSky	I	-	-	field
+pk	sbBright	F	-	-	field
+pk	sbBrightWorld	Ljava/lang/Object;	-	-	field
+# Block version (ChunkGraph.bump): before each block write in a section
+# (ExtendedBlockStorage.set), each chunk data swap (Chunk.fillChunk) and each
+# chunk load and unload (ChunkProviderClient.loadChunk / unloadChunk).
+amz	a	(IIILalz;)V	bump	dev/xavier/stein/bridge/engine/ChunkGraph	before
+amy	a	([BIZ)V	bump	dev/xavier/stein/bridge/engine/ChunkGraph	before
+bcz	c	(II)Lamy;	chunkMap	dev/xavier/stein/bridge/engine/ChunkGraph	before
+bcz	b	(II)V	chunkMap	dev/xavier/stein/bridge/engine/ChunkGraph	before
+# renderEntities (bfr.a(Lpk;Lbia;F)V): the chunk of each section kept by BlockPos, world and
+# chunk map version (ChunkGraph.chunkAt), instead of a map lookup every frame.
+bdb	f	(Lcj;)Lamy;	chunkAt	dev/xavier/stein/bridge/engine/ChunkGraph	static	bfr.a(Lpk;Lbia;F)V
+# renderInfos loops over filtered copies (ChunkGraph): in renderBlockLayer, the layer loop (size/get)
+# only on chunks with some used layer — the translucent reordering uses an
+# iterator and stays on the whole list; in renderEntities, the two loops (iterator) only on chunks
+# with an entity in the section or a tile entity. Entity version before each add/remove on the chunk.
+java/util/List	size	()I	layerSize	dev/xavier/stein/bridge/engine/ChunkGraph	static	bfr.a(Ladf;DILpk;)I
+java/util/List	get	(I)Ljava/lang/Object;	layerGet	dev/xavier/stein/bridge/engine/ChunkGraph	static	bfr.a(Ladf;DILpk;)I
+java/util/List	iterator	()Ljava/util/Iterator;	entityIterator	dev/xavier/stein/bridge/engine/ChunkGraph	static	bfr.a(Lpk;Lbia;F)V
+amy	a	(Lpk;)V	entities	dev/xavier/stein/bridge/engine/ChunkGraph	before
+amy	b	(Lpk;)V	entities	dev/xavier/stein/bridge/engine/ChunkGraph	before
+amy	a	(Lpk;I)V	entities	dev/xavier/stein/bridge/engine/ChunkGraph	before
+
+# Status bar icons in a single draw (HudBatch): during renderPlayerStats (avo.d,
+# called in renderGameOverlay), drawTexturedModalRect (avp.b) does not close the draw of
+# each icon; Tessellator.draw goes out once, at the end.
+avo	d	(Lavr;)V	playerStats	dev/xavier/stein/bridge/engine/HudBatch	static	avo.a(F)V
+bfd	a	(ILbmu;)V	begin	dev/xavier/stein/bridge/engine/HudBatch	static	avp.b(IIIIII)V
+bfx	b	()V	draw	dev/xavier/stein/bridge/engine/HudBatch	static	avp.b(IIIIII)V
+# Ping and connection without waiting for reverse DNS (engine/NetAddress): Mojang's Netty checks the server name against the
+# block list (getHostName) and, with a server given by IP, did a reverse DNS lookup — 4.5 s per ping and per entry. The getByName of the ping
+# (OldServerPinger.ping) and of the connection (GuiConnecting) returns the address already carrying the typed name.
+java/net/InetAddress	getByName	(Ljava/lang/String;)Ljava/net/InetAddress;	getByName	dev/xavier/stein/bridge/engine/NetAddress	static	bdg.a(Lbde;)V
+java/net/InetAddress	getByName	(Ljava/lang/String;)Ljava/net/InetAddress;	getByName	dev/xavier/stein/bridge/engine/NetAddress	static	awz$1.run()V
+# Shared default skin (engine/AsyncSkins): the sbSharedSkin field keeps, in each ThreadDownloadImageData, the common default
+# texture while the real skin has not arrived, and TextureManager's bind goes through here to choose between the
+# two. Without this, the arrival of a crowd uploaded the same image once per player.
+bma	sbSharedSkin	I	-	-	field
+bmk	b	()I	textureId	dev/xavier/stein/bridge/engine/AsyncSkins	static	bmj.a(Ljy;)V
+# Names redone every frame with the same result (engine/NameCache): the getDisplayName hover
+# (NBT with a text UUID, for the hover event that the nametag does not even read), the lowercase of the whole text
+# at each color code in renderStringAtPos and the "Dinnerbone" regular expression in rotateCorpse.
+wn	aQ	()Lew;	hover	dev/xavier/stein/bridge/engine/NameCache	static	wn.f_()Leu;
+pk	aQ	()Lew;	hover	dev/xavier/stein/bridge/engine/NameCache	static	pk.f_()Leu;
+# ... the hover kept on the entity itself (a patcher field), instead of the WeakHashMap.
+pk	sbHover	Ljava/lang/Object;	-	-	field
+java/lang/String	toLowerCase	(Ljava/util/Locale;)Ljava/lang/String;	lower	dev/xavier/stein/bridge/engine/NameCache	static	avn.a(Ljava/lang/String;Z)V
+a	a	(Ljava/lang/String;)Ljava/lang/String;	stripFormatting	dev/xavier/stein/bridge/engine/NameCache		bjl.a(Lpr;FFF)V
+# New renderer, deferred entities (dev.xavier.stein.gfx.SteinEntityDeferred; only active with
+# -Dsteinbridge.gfx.deferredEntities=true): the entity pass around renderEntities,
+# framebuffer switch in the middle of it, names after the bodies.
+bfr	a	(Lpk;Lbia;F)V	begin	dev/xavier/stein/gfx/SteinEntityDeferred	before	bfk.a(IFJ)V
+bfr	a	(Lpk;Lbia;F)V	end	dev/xavier/stein/gfx/SteinEntityDeferred	after	bfk.a(IFJ)V
+# Particles in the new renderer (step 4): the same recording around the two EffectRenderer passes.
+bec	b	(Lpk;F)V	particlesBegin	dev/xavier/stein/gfx/SteinEntityDeferred	before	bfk.a(IFJ)V
+bec	b	(Lpk;F)V	particlesEnd	dev/xavier/stein/gfx/SteinEntityDeferred	after	bfk.a(IFJ)V
+bec	a	(Lpk;F)V	particlesBegin	dev/xavier/stein/gfx/SteinEntityDeferred	before	bfk.a(IFJ)V
+bec	a	(Lpk;F)V	particlesEnd	dev/xavier/stein/gfx/SteinEntityDeferred	after	bfk.a(IFJ)V
+# ... and the base drawing of each particle (EntityFX.renderParticle) written straight into the buffer (SteinParticles).
+beb	a	(Lbfd;Lpk;FFFFFF)V	render	dev/xavier/stein/gfx/SteinParticles	body
+# ... the sky (renderSky) and the clouds (renderClouds) recorded in strict order, and the three fixed sky VBOs registered
+# in the recording's fixed geometry when the game fills them (SteinSky): generateSky2 (o), generateSky (p), generateStars (q).
+bfr	a	(FI)V	skyBegin	dev/xavier/stein/gfx/SteinEntityDeferred	before	bfk.a(IFJ)V
+bfr	a	(FI)V	skyEnd	dev/xavier/stein/gfx/SteinEntityDeferred	after	bfk.a(IFJ)V
+bfr	b	(FI)V	cloudsBegin	dev/xavier/stein/gfx/SteinEntityDeferred	before	bfk.a(Lbfr;FI)V
+bfr	b	(FI)V	cloudsEnd	dev/xavier/stein/gfx/SteinEntityDeferred	after	bfk.a(Lbfr;FI)V
+bmt	a	(Ljava/nio/ByteBuffer;)V	sky2	dev/xavier/stein/gfx/SteinSky	static	bfr.o()V
+bmt	a	(Ljava/nio/ByteBuffer;)V	sky	dev/xavier/stein/gfx/SteinSky	static	bfr.p()V
+bmt	a	(Ljava/nio/ByteBuffer;)V	stars	dev/xavier/stein/gfx/SteinSky	static	bfr.q()V
+bmt	a	(I)V	draw	dev/xavier/stein/gfx/SteinSky	static	bfr.a(FI)V
+bfl	o	(I)V	callList	dev/xavier/stein/gfx/SteinSky	static	bfr.a(FI)V
+# ... rain and snow (renderRainSnow), world border, outline of the targeted block and cracking.
+bfk	c	(F)V	worldBegin	dev/xavier/stein/gfx/SteinEntityDeferred	before	bfk.a(IFJ)V
+bfk	c	(F)V	worldEnd	dev/xavier/stein/gfx/SteinEntityDeferred	after	bfk.a(IFJ)V
+bfr	a	(Lpk;F)V	worldBegin	dev/xavier/stein/gfx/SteinEntityDeferred	before	bfk.a(IFJ)V
+bfr	a	(Lpk;F)V	worldEnd	dev/xavier/stein/gfx/SteinEntityDeferred	after	bfk.a(IFJ)V
+bfr	a	(Lwn;Lauh;IF)V	worldBegin	dev/xavier/stein/gfx/SteinEntityDeferred	before	bfk.a(IFJ)V
+bfr	a	(Lwn;Lauh;IF)V	worldEnd	dev/xavier/stein/gfx/SteinEntityDeferred	after	bfk.a(IFJ)V
+bfr	a	(Lbfx;Lbfd;Lpk;F)V	worldBegin	dev/xavier/stein/gfx/SteinEntityDeferred	before	bfk.a(IFJ)V
+bfr	a	(Lbfx;Lbfd;Lpk;F)V	worldEnd	dev/xavier/stein/gfx/SteinEntityDeferred	after	bfk.a(IFJ)V
+# ... and first person (renderHand: arm, held item, map, overlays), step 5.
+bfk	b	(FI)V	handBegin	dev/xavier/stein/gfx/SteinEntityDeferred	before	bfk.a(IFJ)V
+bfk	b	(FI)V	handEnd	dev/xavier/stein/gfx/SteinEntityDeferred	after	bfk.a(IFJ)V
+bqs	h	(II)V	barrier	dev/xavier/stein/gfx/SteinEntityDeferred	before
+biv	a	(Lpk;DDD)V	renderName	dev/xavier/stein/gfx/SteinEntityDeferred	static	biv.a(Lpk;DDDFF)V
+# The state that the new renderer reads: lightmap coordinates (setLightmapTextureCoords, which
+# GlStateManager does not store) and textures rewritten or deleted (SteinTextureArrays).
+bqs	a	(IFF)V	lightmapCoords	dev/xavier/stein/gfx/SteinGameState
+bfl	h	(I)V	deleteTexture	dev/xavier/stein/gfx/SteinTextureArrays
+org/lwjgl/opengl/GL11	glTexImage2D	(IIIIIIIILjava/nio/ByteBuffer;)V	touchBound	dev/xavier/stein/gfx/SteinTextureArrays	before
+org/lwjgl/opengl/GL11	glTexImage2D	(IIIIIIIILjava/nio/IntBuffer;)V	touchBound	dev/xavier/stein/gfx/SteinTextureArrays	before
+org/lwjgl/opengl/GL11	glTexSubImage2D	(IIIIIIIILjava/nio/IntBuffer;)V	touchBound	dev/xavier/stein/gfx/SteinTextureArrays	before
+org/lwjgl/opengl/GL11	glCopyTexSubImage2D	(IIIIIIII)V	touchBound	dev/xavier/stein/gfx/SteinTextureArrays	before
+# Blocks with a tile entity (signs, chests...) stay on today's path: the sign writes its text without
+# depth after the wood, and the deferred wood would cover it.
+bhc	a	(Lakw;FI)V	pause	dev/xavier/stein/gfx/SteinEntityDeferred	before	bfr.a(Lpk;Lbia;F)V
+bhc	a	(Lakw;FI)V	resume	dev/xavier/stein/gfx/SteinEntityDeferred	after	bfr.a(Lpk;Lbia;F)V
+# New renderer: the damage color kept when the game turns it on (setBrightness/unsetBrightness;
+# doRender's setDoRenderBrightness already goes through GameHooks.ghostHurt).
+bjl	a	(Lpr;FZ)Z	setBrightness	dev/xavier/stein/gfx/SteinGameState	static	bjl.a(Lpr;FFFFFFF)V
+bjl	f	()V	unsetBrightness	dev/xavier/stein/gfx/SteinGameState	static	bjl.a(Lpr;FFFFFFF)V
+bjl	f	()V	unsetBrightness	dev/xavier/stein/gfx/SteinGameState	static	bjl.a(Lpr;DDDFF)V
+# New renderer, step 1: GlStateManager state changes deferred during the recorded pass
+# (SteinLazyGl; only with -Dsteinbridge.gfx.lazyState=true). Solo mode: without the flush before, which the destination does.
+org/lwjgl/opengl/GL11	glDepthMask	(Z)V	glDepthMask	dev/xavier/stein/gfx/SteinLazyGl	solo	bfl.a(Z)V
+org/lwjgl/opengl/GL11	glColorMask	(ZZZZ)V	glColorMask	dev/xavier/stein/gfx/SteinLazyGl	solo	bfl.a(ZZZZ)V
+org/lwjgl/opengl/GL11	glPolygonOffset	(FF)V	glPolygonOffset	dev/xavier/stein/gfx/SteinLazyGl	solo	bfl.a(FF)V
+org/lwjgl/opengl/GL11	glAlphaFunc	(IF)V	glAlphaFunc	dev/xavier/stein/gfx/SteinLazyGl	solo	bfl.a(IF)V
+org/lwjgl/opengl/GL11	glColorMaterial	(II)V	glColorMaterial	dev/xavier/stein/gfx/SteinLazyGl	solo	bfl.a(II)V
+org/lwjgl/opengl/GL11	glBlendFunc	(II)V	glBlendFunc	dev/xavier/stein/gfx/SteinLazyGl	solo	bfl.b(II)V
+org/lwjgl/opengl/GL11	glColor4f	(FFFF)V	glColor4f	dev/xavier/stein/gfx/SteinLazyGl	solo	bfl.c(FFFF)V
+org/lwjgl/opengl/GL11	glDepthFunc	(I)V	glDepthFunc	dev/xavier/stein/gfx/SteinLazyGl	solo	bfl.c(I)V
+org/lwjgl/opengl/GL11	glCullFace	(I)V	glCullFace	dev/xavier/stein/gfx/SteinLazyGl	solo	bfl.e(I)V
+org/lwjgl/opengl/GL11	glLogicOp	(I)V	glLogicOp	dev/xavier/stein/gfx/SteinLazyGl	solo	bfl.f(I)V
+org/lwjgl/opengl/GL11	glBindTexture	(II)V	glBindTexture	dev/xavier/stein/gfx/SteinLazyGl	solo	bfl.i(I)V
+org/lwjgl/opengl/GL11	glShadeModel	(I)V	glShadeModel	dev/xavier/stein/gfx/SteinLazyGl	solo	bfl.j(I)V
+org/lwjgl/opengl/GL11	glEnable	(I)V	glEnable	dev/xavier/stein/gfx/SteinLazyGl	solo	bfl$c.a(Z)V
+org/lwjgl/opengl/GL11	glDisable	(I)V	glDisable	dev/xavier/stein/gfx/SteinLazyGl	solo	bfl$c.a(Z)V
+org/lwjgl/opengl/GL11	glBlendFunc	(II)V	glBlendFunc	dev/xavier/stein/gfx/SteinLazyGl	solo	bqs.c(IIII)V
+org/lwjgl/opengl/GL14	glBlendFuncSeparate	(IIII)V	glBlendFuncSeparate	dev/xavier/stein/gfx/SteinLazyGl	solo	bqs.c(IIII)V
+org/lwjgl/opengl/EXTBlendFuncSeparate	glBlendFuncSeparateEXT	(IIII)V	glBlendFuncSeparateEXT	dev/xavier/stein/gfx/SteinLazyGl	solo	bqs.c(IIII)V
+org/lwjgl/opengl/GL13	glActiveTexture	(I)V	glActiveTexture	dev/xavier/stein/gfx/SteinLazyGl	solo	bqs.k(I)V
+org/lwjgl/opengl/ARBMultitexture	glActiveTextureARB	(I)V	glActiveTextureARB	dev/xavier/stein/gfx/SteinLazyGl	solo	bqs.k(I)V
+# New renderer, steps 3 and 4: dynamic geometry recorded in the deferred pass (dev.xavier.stein.gfx.SteinTessCapture;
+# only active with -Dsteinbridge.gfx.deferredEntities=true). Every Tessellator.draw of the game (except the call sites with their
+# own detour: clouds in bfr.c, status bar in avp.b) goes through the capture: in the entity pass it becomes data in the groups
+# by state; outside it, and while recording a display list, it is the original draw.
+bfx	b	()V	draw	dev/xavier/stein/gfx/SteinTessCapture	static
+# Game texture filter (AbstractTexture.setBlurMipmapDirect and TextureUtil.setTextureBlurMipmap): RenderItem
+# removes the atlas mipmap for each item and puts it back afterwards; the recorded item comes out with the filter from when it was recorded.
+# Solo mode: the batch flush before the call is taken out of here; in the recorded pass the filter is only registered (it goes to the driver
+# with the rest of the deferred state), without first sending all the deferred state to the driver on each item.
+org/lwjgl/opengl/GL11	glTexParameteri	(III)V	texParameter	dev/xavier/stein/gfx/SteinTessCapture	solo	bly.a(ZZ)V
+org/lwjgl/opengl/GL11	glTexParameteri	(III)V	texParameter	dev/xavier/stein/gfx/SteinTessCapture	solo	bml.a(ZZ)V
+# Blocks with a tile entity recorded too (only with -Dsteinbridge.gfx.deferredTiles=true; the pause above becomes nothing): the
+# cracking of the block being broken draws immediately, after what is already recorded.
+bhc	a	(Lakw;FI)V	renderTile	dev/xavier/stein/gfx/SteinEntityDeferred	static	bfr.a(Lpk;Lbia;F)V
+# New renderer, step 2: the players' pose computed by us, on several threads (gfx/SteinPlayerPose; only active with
+# -Dsteinbridge.gfx.deferredEntities=true and -Dsteinbridge.gfx.ownPose=true or poseCheck=true). RenderPlayer.doRender
+# calls RendererLivingEntity's doRender (the super) through here: an eligible player becomes data, the rest follows the game's own.
+# The stored poses go out before each profiler section change in renderEntities (the last is "blockentities",
+# before the tile entities); the list is cleared before each pass.
+bjl	a	(Lpr;DDDFF)V	doRender	dev/xavier/stein/gfx/SteinPlayerPose	static	bln.a(Lbet;DDDFF)V
+nt	c	(Ljava/lang/String;)V	drain	dev/xavier/stein/gfx/SteinPlayerPose	before	bfr.a(Lpk;Lbia;F)V
+bfr	a	(Lpk;Lbia;F)V	passBegin	dev/xavier/stein/gfx/SteinPlayerPose	before	bfk.a(IFJ)V
+# New renderer, step 2, layers through our own pose (gfx/SteinPlayerPose): only for the check
+# (-Dsteinbridge.gfx.poseCheck=true; outside it each hook is a boolean test). They note the stack matrix right
+# after LayerHeldItem's postRenderArm and each postRender of LayerArrow and LayerCustomHead, to compare with
+# the one our pose predicts.
+bbj	a	(F)V	afterArm	dev/xavier/stein/gfx/SteinPlayerPose	after	bky.a(Lpr;FFFFFFF)V
+bct	c	(F)V	afterArrowPart	dev/xavier/stein/gfx/SteinPlayerPose	after	bko.a(Lpr;FFFFFFF)V
+bct	c	(F)V	afterHeadPart	dev/xavier/stein/gfx/SteinPlayerPose	after	bks.a(Lpr;FFFFFFF)V
+# New renderer, deferred edge cases (gfx/SteinGlTrack, SteinEntityDeferred, ArmorGlint; only act with the
+# deferred renderer on, otherwise they are the original call).
+# Blend alpha factors: GlStateManager.blendFunc(II) does not update the alpha in the cache, but the driver's glBlendFunc
+# applies to both. The same call sites as SteinLazyGl above (these rules replace them, still in solo mode),
+# keeping track of which was the last one emitted.
+org/lwjgl/opengl/GL11	glBlendFunc	(II)V	glBlendFunc	dev/xavier/stein/gfx/SteinGlTrack	solo	bfl.b(II)V
+org/lwjgl/opengl/GL11	glBlendFunc	(II)V	glBlendFunc	dev/xavier/stein/gfx/SteinGlTrack	solo	bqs.c(IIII)V
+org/lwjgl/opengl/GL14	glBlendFuncSeparate	(IIII)V	glBlendFuncSeparate	dev/xavier/stein/gfx/SteinGlTrack	solo	bqs.c(IIII)V
+org/lwjgl/opengl/EXTBlendFuncSeparate	glBlendFuncSeparateEXT	(IIII)V	glBlendFuncSeparateEXT	dev/xavier/stein/gfx/SteinGlTrack	solo	bqs.c(IIII)V
+# The current normal (glNormal3f): the sign text and the arrow draw with light and no per-vertex normal.
+org/lwjgl/opengl/GL11	glNormal3f	(FFF)V	glNormal3f	dev/xavier/stein/gfx/SteinGlTrack
+# ... and at the call sites inside the entity pass (sign, arrow, name above the head, RendererLivingEntity's name,
+# item frame name), through SteinLazyGl in solo mode: the normal does not depend on the rest of the state, so in the recorded pass
+# only the pending batch of the moment goes out before, without sending all the deferred state to the driver on each sign and each name (outside it,
+# the usual batch flush).
+org/lwjgl/opengl/GL11	glNormal3f	(FFF)V	glNormal3f	dev/xavier/stein/gfx/SteinLazyGl	solo	bhj.a(Laln;DDDFI)V
+org/lwjgl/opengl/GL11	glNormal3f	(FFF)V	glNormal3f	dev/xavier/stein/gfx/SteinLazyGl	solo	bih.a(Lwq;DDDFF)V
+org/lwjgl/opengl/GL11	glNormal3f	(FFF)V	glNormal3f	dev/xavier/stein/gfx/SteinLazyGl	solo	biv.a(Lpk;Ljava/lang/String;DDDI)V
+org/lwjgl/opengl/GL11	glNormal3f	(FFF)V	glNormal3f	dev/xavier/stein/gfx/SteinLazyGl	solo	bjl.b(Lpr;DDD)V
+org/lwjgl/opengl/GL11	glNormal3f	(FFF)V	glNormal3f	dev/xavier/stein/gfx/SteinLazyGl	solo	bjg.a(Luo;DDD)V
+# Lights redone in the middle of the pass (RenderHelper.enableStandardItemLighting ends in glLightModel; the item frame's glPopAttrib
+# restores the earlier ones): the pending draw goes out with the lights from when it was recorded.
+org/lwjgl/opengl/GL11	glLightModel	(ILjava/nio/FloatBuffer;)V	lightsChanged	dev/xavier/stein/gfx/SteinEntityDeferred	after
+org/lwjgl/opengl/GL11	glPopAttrib	()V	lightsChanged	dev/xavier/stein/gfx/SteinEntityDeferred	after
+# Enchanted leather: the glint re-emits only the first draw of each piece (the base), not the leather overlay.
+bbo	a	(Lpk;FFFFFF)V	baseDrawn	dev/xavier/stein/bridge/engine/ArmorGlint	after	bkn.a(Lpr;FFFFFFFI)V
+# New renderer: the round shadow's draw (Render.renderShadow) marked — black texture, light irrelevant, recordable.
+bfx	b	()V	shadowBegin	dev/xavier/stein/gfx/SteinTessCapture	before	biv.c(Lpk;DDDFF)V
+bfx	b	()V	shadowEnd	dev/xavier/stein/gfx/SteinTessCapture	after	biv.c(Lpk;DDDFF)V
+# DataWatcher: the watched objects of each entity in an array by id (DataWatchers), instead of the HashMap on each read.
+pz	sbWatched	[Ljava/lang/Object;	-	-	field
+# Entity.getFlag (pk.g; isSneaking, isInvisible, isBurning...): the flags byte (id 0) mirrored in an int on the entity
+# (EntityFlags), without the three dependent loads entity -> DataWatcher -> array -> WatchableObject on each read. The
+# DataWatcher's numeric getters (byte, short, int, float: health, skin parts...) read a long by id in the DataWatcher itself
+# (DataWatchers, pz.sbM0..31): one cache miss instead of three or four. The mirrors follow
+# WatchableObject.setObject (pz$a.a), the only one that writes the value after the constructor; the object's owner (the
+# DataWatcher) is marked when it enters the array by id.
+pk	sbFlags	I	-	-	field
+pz$a	sbOwner	Ljava/lang/Object;	-	-	field
+pk	g	(I)Z	getFlag	dev/xavier/stein/bridge/engine/EntityFlags	body
+pz$a	a	(Ljava/lang/Object;)V	setObject	dev/xavier/stein/bridge/engine/DataWatchers	body
+pz	a	(I)B	getByte	dev/xavier/stein/bridge/engine/DataWatchers	body
+pz	b	(I)S	getShort	dev/xavier/stein/bridge/engine/DataWatchers	body
+pz	c	(I)I	getInt	dev/xavier/stein/bridge/engine/DataWatchers	body
+pz	d	(I)F	getFloat	dev/xavier/stein/bridge/engine/DataWatchers	body
+pz	sbM0	J	-	-	field
+pz	sbM1	J	-	-	field
+pz	sbM2	J	-	-	field
+pz	sbM3	J	-	-	field
+pz	sbM4	J	-	-	field
+pz	sbM5	J	-	-	field
+pz	sbM6	J	-	-	field
+pz	sbM7	J	-	-	field
+pz	sbM8	J	-	-	field
+pz	sbM9	J	-	-	field
+pz	sbM10	J	-	-	field
+pz	sbM11	J	-	-	field
+pz	sbM12	J	-	-	field
+pz	sbM13	J	-	-	field
+pz	sbM14	J	-	-	field
+pz	sbM15	J	-	-	field
+pz	sbM16	J	-	-	field
+pz	sbM17	J	-	-	field
+pz	sbM18	J	-	-	field
+pz	sbM19	J	-	-	field
+pz	sbM20	J	-	-	field
+pz	sbM21	J	-	-	field
+pz	sbM22	J	-	-	field
+pz	sbM23	J	-	-	field
+pz	sbM24	J	-	-	field
+pz	sbM25	J	-	-	field
+pz	sbM26	J	-	-	field
+pz	sbM27	J	-	-	field
+pz	sbM28	J	-	-	field
+pz	sbM29	J	-	-	field
+pz	sbM30	J	-	-	field
+pz	sbM31	J	-	-	field
+# New renderer: cached text (dev.xavier.stein.gfx.SteinTextCache; only in the deferred pass, with -Dsteinbridge.gfx=true).
+# The renderStringAtPos called by renderString builds each text once and then repeats the stored batches; the width
+# requested by the name (renderLivingLabel) and by the sign (TileEntitySignRenderer) comes from a cache alongside. A resource
+# reload clears both.
+avn	a	(Ljava/lang/String;Z)V	renderStringAtPos	dev/xavier/stein/gfx/SteinTextCache	static	avn.b(Ljava/lang/String;FFIZ)I
+avn	a	(Ljava/lang/String;)I	stringWidth	dev/xavier/stein/gfx/SteinTextCache	static	biv.a(Lpk;Ljava/lang/String;DDDI)V
+avn	a	(Ljava/lang/String;)I	stringWidth	dev/xavier/stein/gfx/SteinTextCache	static	bhj.a(Laln;DDDFI)V
+bnj	a	(Lbni;)V	clear	dev/xavier/stein/gfx/SteinTextCache	after
+# New renderer, recorded texture coordinate generation (gfx/SteinTexGen): the glTexGen plane, which GlStateManager
+# does not store (the eye one through the inverse of the modelview from when it was given). The End portal uses it.
+org/lwjgl/opengl/GL11	glTexGen	(IILjava/nio/FloatBuffer;)V	glTexGenfv	dev/xavier/stein/gfx/SteinGlTrack		bfl.a(Lbfl$o;ILjava/nio/FloatBuffer;)V
+
+# New renderer, step 7: the game's fixed-function pipeline goes through gfx/SteinCoreGl (in the usual context it goes to the driver
+# as before; with -Dsteinbridge.gfx.core=true, a core context, it does not reach the driver or is tracked in Java).
+org/lwjgl/opengl/ARBMultitexture	glClientActiveTextureARB	(I)V	glClientActiveTextureARB	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/ARBMultitexture	glMultiTexCoord2fARB	(IFF)V	glMultiTexCoord2fARB	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glCallList	(I)V	glCallList	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glColorPointer	(IIIJ)V	glColorPointer	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glColorPointer	(IIILjava/nio/ByteBuffer;)V	glColorPointer	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glDeleteLists	(II)V	glDeleteLists	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glDisableClientState	(I)V	glDisableClientState	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glEnableClientState	(I)V	glEnableClientState	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glEndList	()V	glEndList	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glFogf	(IF)V	glFogf	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glFog	(ILjava/nio/FloatBuffer;)V	glFogfv	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glFogi	(II)V	glFogi	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glGenLists	(I)I	glGenLists	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glLightModel	(ILjava/nio/FloatBuffer;)V	glLightModelfv	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glLight	(IILjava/nio/FloatBuffer;)V	glLightfv	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glLoadIdentity	()V	glLoadIdentity	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glMatrixMode	(I)V	glMatrixMode	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glMultMatrix	(Ljava/nio/FloatBuffer;)V	glMultMatrixf	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glNewList	(II)V	glNewList	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glNormalPointer	(IILjava/nio/ByteBuffer;)V	glNormalPointer	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glOrtho	(DDDDDD)V	glOrtho	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glPopAttrib	()V	glPopAttrib	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glPopMatrix	()V	glPopMatrix	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glPushAttrib	(I)V	glPushAttrib	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glPushMatrix	()V	glPushMatrix	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glRotatef	(FFFF)V	glRotatef	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glScaled	(DDD)V	glScaled	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glScalef	(FFF)V	glScalef	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glTexCoordPointer	(IIIJ)V	glTexCoordPointer	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glTexCoordPointer	(IIILjava/nio/ByteBuffer;)V	glTexCoordPointer	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glTexEnv	(IILjava/nio/FloatBuffer;)V	glTexEnvfv	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glTexEnvi	(III)V	glTexEnvi	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glTexGeni	(III)V	glTexGeni	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glTranslated	(DDD)V	glTranslated	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glTranslatef	(FFF)V	glTranslatef	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glVertexPointer	(IIIJ)V	glVertexPointer	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glVertexPointer	(IIILjava/nio/ByteBuffer;)V	glVertexPointer	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL13	glClientActiveTexture	(I)V	glClientActiveTexture	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL13	glMultiTexCoord2f	(IFF)V	glMultiTexCoord2f	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glTexParameteri	(III)V	glTexParameteri	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glTexParameterf	(IIF)V	glTexParameterf	dev/xavier/stein/gfx/gl/SteinCoreGl
+org/lwjgl/opengl/GL11	glGetFloat	(ILjava/nio/FloatBuffer;)V	glGetFloatv	dev/xavier/stein/gfx/gl/SteinCoreGl
+bml	a	(I)V	reallocTexture	dev/xavier/stein/gfx/gl/SteinCoreGl	static	bml.a(IIII)V
+# Viewport change and screen copy in the middle of a recorded pass (the menu panorama draws at 256x256, copies and
+# blurs): what was recorded goes out first, at the viewport and screen of the moment. Through SteinGlTrack, which notes the viewport for the Stein pass
+# (gl.SteinGlBindings) and continues to SteinEntityDeferred.glViewport.
+org/lwjgl/opengl/GL11	glViewport	(IIII)V	glViewport	dev/xavier/stein/gfx/SteinGlTrack
+org/lwjgl/opengl/GL11	glCopyTexSubImage2D	(IIIIIIII)V	barrier	dev/xavier/stein/gfx/SteinEntityDeferred	before
+# Framebuffer and program bound by the game (OpenGlHelper: GL 3.0, ARB and EXT paths) and by mods: the same call, and the
+# value noted (gl.SteinGlBindings) so the Stein pass can open and close without asking the driver. Deleting the
+# bound framebuffer returns the binding to 0.
+org/lwjgl/opengl/GL30	glBindFramebuffer	(II)V	glBindFramebuffer	dev/xavier/stein/gfx/SteinGlTrack
+org/lwjgl/opengl/ARBFramebufferObject	glBindFramebuffer	(II)V	glBindFramebufferARB	dev/xavier/stein/gfx/SteinGlTrack
+org/lwjgl/opengl/EXTFramebufferObject	glBindFramebufferEXT	(II)V	glBindFramebufferEXT	dev/xavier/stein/gfx/SteinGlTrack
+org/lwjgl/opengl/GL30	glDeleteFramebuffers	(I)V	glDeleteFramebuffers	dev/xavier/stein/gfx/SteinGlTrack
+org/lwjgl/opengl/ARBFramebufferObject	glDeleteFramebuffers	(I)V	glDeleteFramebuffersARB	dev/xavier/stein/gfx/SteinGlTrack
+org/lwjgl/opengl/EXTFramebufferObject	glDeleteFramebuffersEXT	(I)V	glDeleteFramebuffersEXT	dev/xavier/stein/gfx/SteinGlTrack
+org/lwjgl/opengl/GL20	glUseProgram	(I)V	glUseProgram	dev/xavier/stein/gfx/SteinGlTrack
+org/lwjgl/opengl/ARBShaderObjects	glUseProgramObjectARB	(I)V	glUseProgramObjectARB	dev/xavier/stein/gfx/SteinGlTrack
+# Recorded frame (gl.SteinGlFrame; only active with the renderer in core): the game's glClear enters the list with the state of the moment
+# (depth cleared before the hand) and marks that the jar has these rules; the clear color and depth are noted
+# for that. Uploading, copying, reading or deleting a game texture is a sync point (the list goes to the driver first). With the
+# renderer off, the same call as always.
+org/lwjgl/opengl/GL11	glClear	(I)V	glClear	dev/xavier/stein/gfx/SteinGlTrack
+org/lwjgl/opengl/GL11	glClearColor	(FFFF)V	glClearColor	dev/xavier/stein/gfx/SteinGlTrack
+org/lwjgl/opengl/GL11	glClearDepth	(D)V	glClearDepth	dev/xavier/stein/gfx/SteinGlTrack
+org/lwjgl/opengl/GL11	glLineWidth	(F)V	glLineWidth	dev/xavier/stein/gfx/SteinGlTrack
+org/lwjgl/opengl/GL11	glTexImage2D	(IIIIIIIILjava/nio/ByteBuffer;)V	beforeTexImage	dev/xavier/stein/gfx/SteinGlTrack	before
+org/lwjgl/opengl/GL11	glTexImage2D	(IIIIIIIILjava/nio/IntBuffer;)V	beforeTexImage	dev/xavier/stein/gfx/SteinGlTrack	before
+org/lwjgl/opengl/GL11	glTexSubImage2D	(IIIIIIIILjava/nio/IntBuffer;)V	beforeTexImage	dev/xavier/stein/gfx/SteinGlTrack	before
+org/lwjgl/opengl/GL11	glCopyTexSubImage2D	(IIIIIIII)V	beforeCopyScreen	dev/xavier/stein/gfx/SteinGlTrack	before
+org/lwjgl/opengl/GL11	glReadPixels	(IIIIIILjava/nio/IntBuffer;)V	beforeReadPixels	dev/xavier/stein/gfx/SteinGlTrack	before
+org/lwjgl/opengl/GL11	glDeleteTextures	(I)V	beforeDeleteTexture	dev/xavier/stein/gfx/SteinGlTrack	before
+org/lwjgl/opengl/GL11	glGetTexImage	(IIIILjava/nio/IntBuffer;)V	beforeGetTexImage	dev/xavier/stein/gfx/SteinGlTrack	before
+org/lwjgl/opengl/GL11	glDrawArrays	(III)V	beforeGameDraw	dev/xavier/stein/gfx/SteinGlTrack	before

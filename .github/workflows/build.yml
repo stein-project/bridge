@@ -1,0 +1,34 @@
+# Builds the Bridge and runs every check that does not need a graphics card: formatting, the options list, the
+# coverage of the patched game and the compatibility math. The preflight needs OpenGL and is skipped on the runner.
+# Minecraft 1.8.9 comes from Mojang's CDN (./gradlew fetchMinecraft, sha1-checked) and is never published.
+name: build
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: bridge
+      # The readable-name tools come from the SDK, next to this repository.
+      - uses: actions/checkout@v4
+        with:
+          repository: Stein-Project/sdk
+          path: sdk
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      # Also checks that gradle-wrapper.jar is the official one.
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Minecraft 1.8.9
+        working-directory: bridge
+        run: ./gradlew fetchMinecraft
+      - name: Build and check
+        working-directory: bridge
+        run: ./gradlew build -Pstein.mcDir=build/mc

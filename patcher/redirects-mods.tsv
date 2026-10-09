@@ -1,0 +1,259 @@
+# Events for mods (dev.xavier.stein.bridge.hooks.GameHooks, which hand them to the Stein Loader), at the points where Forge 1.8.9
+# fires the equivalents. With no mod on the classpath, each hook checks an empty list
+# and carries on.
+# class	name2	descriptor	name3	newOwner	mode	scope
+# Minecraft.run (a): startGame (am) — before (resource packs) and after (FMLInitializationEvent).
+ave	am	()V	beforeStartGame	dev/xavier/stein/bridge/hooks/GameHooks	before	ave.a
+ave	am	()V	afterStartGame	dev/xavier/stein/bridge/hooks/GameHooks	after	ave.a
+# runGameLoop (av): after each runTick (s) — ClientTickEvent END.
+ave	s	()V	tickEnd	dev/xavier/stein/bridge/hooks/GameHooks	after	ave.av
+# Keyboard and mouse loops of runTick: each iteration's next() announces the previous event.
+org/lwjgl/input/Keyboard	next	()Z	keyboardNext	dev/xavier/stein/bridge/hooks/GameHooks		ave.s
+org/lwjgl/input/Mouse	next	()Z	mouseNext	dev/xavier/stein/bridge/hooks/GameHooks		ave.s
+# EntityRenderer.updateCameraAndRender (bfk.a(FJ)V): HUD and open screen.
+avo	a	(F)V	overlay	dev/xavier/stein/bridge/hooks/GameHooks	after	bfk.a(FJ)V
+# New renderer (step 6): HUD and screens recorded. The end of the HUD session comes AFTER the mods' overlay (same key,
+# the order of the rules is the order of the hooks), so the mods' HUD is recorded too.
+avo	a	(F)V	hudBegin	dev/xavier/stein/gfx/SteinEntityDeferred	before	bfk.a(FJ)V
+avo	a	(F)V	hudEnd	dev/xavier/stein/gfx/SteinEntityDeferred	after	bfk.a(FJ)V
+# A hidden HUD (GameHooks.hideHud, the Loader's Hud.setHidden: the replay) skips the whole renderGameOverlay.
+avo	a	(F)V	gameOverlay	dev/xavier/stein/bridge/hooks/GameHooks	static	bfk.a(FJ)V
+axu	a	(IIF)V	screenBegin	dev/xavier/stein/gfx/SteinEntityDeferred	before	bfk.a(FJ)V
+axu	a	(IIF)V	screenEnd	dev/xavier/stein/gfx/SteinEntityDeferred	after	bfk.a(FJ)V
+axu	a	(IIF)V	drawScreen	dev/xavier/stein/bridge/hooks/GameHooks	static	bfk.a(FJ)V
+# GuiScreen.handleInput (p): each mouse event of an open screen.
+axu	k	()V	handleMouseInput	dev/xavier/stein/bridge/hooks/GameHooks	static	axu.p
+# NetHandlerPlayClient.handleChat (bcy.a(Lfy;)V): chat message before the chat.
+avt	a	(Leu;)V	printChat	dev/xavier/stein/bridge/hooks/GameHooks	static	bcy.a(Lfy;)V
+# S01PacketJoinGame.processPacket: server join completed, on the game thread.
+fj	a	(Lgt;)V	joinGame	dev/xavier/stein/bridge/hooks/GameHooks	after	gt.a(Lfj;)V
+# InventoryEffectRenderer.updateActivePotionEffects (ayw.a): a mod can remove the
+# effect list from the inventory (the screen stops shifting sideways).
+bew	bl	()Ljava/util/Collection;	inventoryEffects	dev/xavier/stein/bridge/hooks/GameHooks	static	ayw.a()V
+# GuiMainMenu.drawScreen (aya.a(IIF)V): the "Minecraft 1.8.9" line becomes the version block
+# in the bottom-left corner (game, SteinBridge, Loader), like Forge's.
+aya	c	(Lavn;Ljava/lang/String;III)V	mainMenuString	dev/xavier/stein/bridge/hooks/GameHooks	static	aya.a(IIF)V
+# GuiScreen.setWorldAndResolution (axu.a(Lave;II)V): after initGui, mods add
+# buttons to the screen (Forge's InitGuiEvent.Post).
+axu	b	()V	initGui	dev/xavier/stein/bridge/hooks/GameHooks	static	axu.a(Lave;II)V
+# GuiScreen.mouseClicked (axu.a(III)V): a button click goes through the mods before the
+# screen's actionPerformed (Forge's ActionPerformedEvent.Pre).
+axu	a	(Lavs;)V	actionPerformed	dev/xavier/stein/bridge/hooks/GameHooks	static	axu.a(III)V
+# EntityRenderer.getFOVModifier (bfk.a(FZ)F, private; 6 calls inside EntityRenderer itself):
+# the frame's field of view goes through the mods (Forge's EntityViewRenderEvent.FOVModifier).
+bfk	a	(FZ)F	fov	dev/xavier/stein/bridge/hooks/GameHooks	static
+# EntityRenderer.updateFovModifierHand (bfk.l): the player's FOV factor (speed, bow)
+# goes through the mods before smoothing (Forge's FOVUpdateEvent).
+bet	o	()F	fovModifier	dev/xavier/stein/bridge/hooks/GameHooks	static	bfk.l()V
+# TextureMap (bmh): before the atlas is built (loadTextureAtlas, in loadSprites), mods register
+# textures (Forge's TextureStitchEvent.Pre); when stitching, a texture with a path under mcpatcher/ or
+# optifine/ is read from assets/<domain>/<path>.png, the way resource packs lay out custom item textures (CIT).
+bmh	b	(Lbni;)V	loadTextureAtlas	dev/xavier/stein/bridge/hooks/GameHooks	static	bmh.a(Lbni;Lbmb;)V
+bmh	a	(Ljy;I)Ljy;	spriteLocation	dev/xavier/stein/bridge/hooks/GameHooks	static	bmh.b(Lbni;)V
+# ModelManager.onResourceManagerReload (bou.a): after reloadModels, models and atlas are ready.
+bgc	c	()V	modelsReloaded	dev/xavier/stein/bridge/hooks/GameHooks	after	bou.a(Lbni;)V
+# ItemModelMesher.getItemModel (bfo.a): the model of each drawn item goes through the mods.
+bfo	a	(Lzx;)Lboq;	itemModel	dev/xavier/stein/bridge/hooks/GameHooks	static
+# A slot on each ItemStack for mods to keep what they computed about it (Game.itemData).
+zx	sbModData	Ljava/lang/Object;	-	-	field
+# LayerArmorBase.renderLayer (bkn.a(Lpr;FFFFFFFI)V): the piece (getCurrentArmor) and its texture
+# (getArmorResource, with and without overlay) go through the mods (ForgeHooksClient.getArmorTexture).
+bkn	a	(Lpr;I)Lzx;	armorStack	dev/xavier/stein/bridge/hooks/GameHooks	static	bkn.a(Lpr;FFFFFFFI)V
+bkn	a	(Lyj;Z)Ljy;	armorTexture	dev/xavier/stein/bridge/hooks/GameHooks	static	bkn.a(Lpr;FFFFFFFI)V
+bkn	a	(Lyj;ZLjava/lang/String;)Ljy;	armorTextureOverlay	dev/xavier/stein/bridge/hooks/GameHooks	static	bkn.a(Lpr;FFFFFFFI)V
+# GuiOverlayDebug.renderDebugInfoRight (avv.b): SteinBridge and Loader lines in F3.
+avv	c	()Ljava/util/List;	debugInfoRight	dev/xavier/stein/bridge/hooks/GameHooks	static	avv.b(Lavr;)V
+# Visual options (engine/Visuals, via the Loader API). RenderManager.doRenderEntity (biu.a):
+# the Render receives the entity's position relative to the camera — distance for glow and nametags.
+biv	a	(Lpk;DDDFF)V	doRender	dev/xavier/stein/bridge/engine/Visuals	static	biu.a(Lpk;DDDFFZ)Z
+# RenderItem.renderItem (bjh.a(Lzx;Lboq;)V): item glow.
+bjh	a	(Lboq;)V	renderEffect	dev/xavier/stein/bridge/engine/Visuals	static	bjh.a(Lzx;Lboq;)V
+# HUD grid (Stein Loader, API 9; hooks/VanillaHud): parts of the game's own HUD that the Loader takes over to move,
+# reshape or turn off — the action bar (the body of GuiIngame.setRecordPlaying: the IChatComponent one; the record one and
+# mods go through it), the boss bar (renderBossHealth in renderGameOverlay) and the sidebar scoreboard (renderScoreboard).
+avo	a	(Ljava/lang/String;Z)V	setRecordPlaying	dev/xavier/stein/bridge/hooks/VanillaHud	body
+avo	j	()V	boss	dev/xavier/stein/bridge/hooks/VanillaHud	static	avo.a(F)V
+avo	a	(Lauk;Lavr;)V	scoreboard	dev/xavier/stein/bridge/hooks/VanillaHud	static	avo.a(F)V
+# ... and the dark box behind the chat lines ("Background" option): the three Gui.drawRect calls inside
+# GuiNewChat.drawChat go through the Bridge (the owner at the call site is GuiNewChat itself, which inherits drawRect from Gui), which skips the line's one (alpha only) and keeps the two of the scroll bar (with color).
+avt	a	(IIIII)V	chatBackground	dev/xavier/stein/bridge/hooks/VanillaHud	static	avt.a(I)V
+# Stein Combat (API 8): the click's hit (PlayerControllerMP.attackEntity in Minecraft.clickMouse) goes through the mods,
+# which can cancel it (allies); the name in the Tab list (GuiPlayerTabOverlay.getPlayerName in renderPlayerlist) and the name above
+# the head (getDisplayName in RendererLivingEntity.renderName) too; and, before the super.onLivingUpdate of
+# EntityPlayerSP (which moves the player), sprinting in all directions (engine/Sprint).
+bda	a	(Lwn;Lpk;)V	attackEntity	dev/xavier/stein/bridge/hooks/GameHooks	static	ave.aw()V
+# API 0.1.15 (Inventory, Targeting): the entity interaction of rightClickMouse (both calls), which mods can
+# cancel; every PlayerControllerMP.windowClick in the game (no scope: it is the path of every slot click), which mods
+# see and can cancel; and, in handleSetSlot (S2F) and handleWindowItems (S30), the slot or window already applied.
+bda	a	(Lwn;Lpk;Lauh;)Z	rightClickEntityAt	dev/xavier/stein/bridge/hooks/GameHooks	static	ave.ax()V
+bda	b	(Lwn;Lpk;)Z	interactEntity	dev/xavier/stein/bridge/hooks/GameHooks	static	ave.ax()V
+bda	a	(IIIILwn;)Lzx;	windowClick	dev/xavier/stein/bridge/hooks/GameHooks	static
+xi	a	(ILzx;)V	setSlot	dev/xavier/stein/bridge/hooks/GameHooks	static	bcy.a(Lgf;)V
+wm	b	(Lzx;)V	setCursor	dev/xavier/stein/bridge/hooks/GameHooks	static	bcy.a(Lgf;)V
+xi	a	([Lzx;)V	setWindowItems	dev/xavier/stein/bridge/hooks/GameHooks	static	bcy.a(Lgd;)V
+# API 0.1.15 (damage): in handleEntityStatus (S19) the entity status goes through the mods (2 = damage, which they can remove
+# from the client; 3 = death); in handleEntityMetadata (S1C) and handleUpdateHealth (S06), health and absorption before and
+# after, for whoever displays the damage.
+pk	a	(B)V	entityStatus	dev/xavier/stein/bridge/hooks/GameHooks	static	bcy.a(Lgi;)V
+pz	a	(Ljava/util/List;)V	entityMetadata	dev/xavier/stein/bridge/hooks/GameHooks	static	bcy.a(Lhk;)V
+bew	n	(F)V	playerHealth	dev/xavier/stein/bridge/hooks/GameHooks	static	bcy.a(Lhp;)V
+# ... and the miss penalty (API 14): missing a click sets ten ticks (half a second) during which clickMouse returns at the
+# first line, so aiming at someone in the middle of an autoclick does not hit. The condition that sets it (isNotCreative) goes
+# through the Bridge, which answers as creative when the mod turns the penalty off; only inside clickMouse.
+bda	g	()Z	armMissPenalty	dev/xavier/stein/bridge/hooks/GameHooks	static	ave.aw()V
+awh	a	(Lbdc;)Ljava/lang/String;	playerListName	dev/xavier/stein/bridge/hooks/GameHooks	static	awh.a(ILauo;Lauk;)V
+pr	f_	()Leu;	nametag	dev/xavier/stein/bridge/hooks/GameHooks	static	bjl.b(Lpr;DDD)V
+bet	m	()V	beforeLivingUpdate	dev/xavier/stein/bridge/engine/Sprint	before	bew.m()V
+# RendererLivingEntity.renderName (bjl.b): nametag up to the chosen distance. Only this call site: the
+# other is RenderLiving's super.canRenderName (bjo, invokespecial), and if it were redirected the virtual dispatch
+# would come back to bjo in recursion.
+bjl	a	(Lpr;)Z	canRenderName	dev/xavier/stein/bridge/engine/Visuals	static	bjl.b(Lpr;DDD)V
+# LayerArmorBase.doRenderLayer (bkn.a(Lpr;FFFFFFF)V): each worn piece (hidden armor).
+bkn	a	(Lpr;FFFFFFFI)V	renderArmorPiece	dev/xavier/stein/bridge/engine/Visuals	static	bkn.a(Lpr;FFFFFFF)V
+# MathHelper.sin/cos (ns.a, ns.b): the game's own table, or the compact one with the "compact angles" option.
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	body
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	body
+# EntityRenderer.setupFog (bfk.a(IF)V): start and end recorded (setFogStart/End, bfl.b/c) and, after
+# enableFog (bfl.m), the terrain fog from the option. getRenderViewEntity (ave.ac) is the first call.
+ave	ac	()Lpk;	fogBegin	dev/xavier/stein/bridge/engine/Visuals	before	bfk.a(IF)V
+bfl	b	(F)V	fogStart	dev/xavier/stein/bridge/engine/Visuals	static	bfk.a(IF)V
+bfl	c	(F)V	fogEnd	dev/xavier/stein/bridge/engine/Visuals	static	bfk.a(IF)V
+bfl	m	()V	fogDone	dev/xavier/stein/bridge/engine/Visuals	after	bfk.a(IF)V
+# RenderGlobal.renderClouds / renderCloudsFancy (bfr.b(FI)V, bfr.c(FI)V): cloud height from the option.
+anm	f	()F	cloudHeight	dev/xavier/stein/bridge/engine/Visuals	static	bfr.b(FI)V
+anm	f	()F	cloudHeight	dev/xavier/stein/bridge/engine/Visuals	static	bfr.c(FI)V
+# Direct drawing (engine/DirectRender): the isFramebufferEnabled that Framebuffer, ScreenShotHelper and
+# LoadingScreenRenderer query; post-processing shaders and spectator outline (they need
+# the framebuffer); F2 deferred to before the buffer swap (dispatchKeypresses, ave.Z).
+bqs	i	()Z	framebufferEnabled	dev/xavier/stein/bridge/engine/DirectRender	static
+bfk	a	(Ljy;)V	loadShader	dev/xavier/stein/bridge/engine/DirectRender	static
+bfr	d	()Z	entityOutlines	dev/xavier/stein/bridge/engine/DirectRender	static
+avj	a	(Ljava/io/File;IILbfw;)Leu;	screenshot	dev/xavier/stein/bridge/engine/DirectRender	static	ave.Z()V
+avt	a	(Leu;)V	printScreenshot	dev/xavier/stein/bridge/engine/DirectRender	static	ave.Z()V
+# Chunk building pace (engine/ChunkPace, options): submissions per frame and waiting for neighbors in
+# updateChunks (bfr.a(J)V); those adjacent to the player go through ChunkSync.buildNear.
+bho	a	(J)Z	uploads	dev/xavier/stein/bridge/engine/ChunkPace	static	bfr.a(J)V
+bho	a	(Lbht;)Z	buildLater	dev/xavier/stein/bridge/engine/ChunkPace	static	bfr.a(J)V
+# Model of each block built into the chunk (BlockRendererDispatcher.renderBlock -> BlockModelRenderer.renderModel,
+# on the building threads): only the blocks marked by a mod (the Block's sbModelHook field, Game.watchBlockModel)
+# go through it — Stein Lens's connected blocks; the others only pay for reading the field.
+afh	sbModelHook	Z	-	-	field
+bgf	a	(Ladq;Lboq;Lalz;Lcj;Lbfd;)Z	blockModel	dev/xavier/stein/bridge/hooks/GameHooks	static	bgd.a(Lalz;Lcj;Ladq;Lbfd;)Z
+# Extended distance (engine/ChunkKeep, option): the doPreChunk of the chunk handlers (S21 and S26) — a server
+# discard becomes a stored column; before each Minecraft.loadWorld (join, respawn, leave), the disk saves the
+# world that is going away. The frame() comes from ChunkPace.uploads.
+bdb	b	(IIZ)V	preChunk	dev/xavier/stein/bridge/engine/ChunkKeep	static	bcy.a(Lgo;)V
+bdb	b	(IIZ)V	preChunk	dev/xavier/stein/bridge/engine/ChunkKeep	static	bcy.a(Lgp;)V
+ave	a	(Lbdb;)V	worldChanging	dev/xavier/stein/bridge/engine/ChunkKeep	before
+# No rain (engine/Rain, "Rain" option off): WorldClient.getRainStrength returns 0 for the three places in the
+# client that draw rain — renderRainSnow (drop and flake), addRainParticles (splash and sound) and renderSky (overcast
+# sky). The server and the rest of the game keep the real rain (World.getRainStrength does not change).
+bdb	j	(F)F	rainStrength	dev/xavier/stein/bridge/engine/Rain	static
+# Tab list (Stein HUD draws its own): in place of GuiPlayerTabOverlay.renderPlayerlist inside
+# GuiIngame.renderGameOverlay. With no one listening, the game's own runs as usual.
+awh	a	(ILauo;Lauk;)V	playerList	dev/xavier/stein/bridge/hooks/GameHooks	static	avo.a(F)V
+# Where the connection goes out (engine/Net, for a mod that talks through a proxy): in NetworkManager.createNetworkManagerAndConnect,
+# the channel initializer and the destination address go through whoever is listening. Scoped to that single function: the server
+# list ping and the rest of the game do not change. With no one registered, both go straight through.
+io/netty/bootstrap/Bootstrap	handler	(Lio/netty/channel/ChannelHandler;)Lio/netty/bootstrap/AbstractBootstrap;	handler	dev/xavier/stein/bridge/engine/Net	static	ek.a(Ljava/net/InetAddress;IZ)Lek;
+io/netty/bootstrap/Bootstrap	connect	(Ljava/net/InetAddress;I)Lio/netty/channel/ChannelFuture;	connect	dev/xavier/stein/bridge/engine/Net	static	ek.a(Ljava/net/InetAddress;IZ)Lek;
+# ... and the network thread group (LazyLoadBase.getValue, with no lock in the game) goes out through engine/Net.lazy, one thread at a
+# time: the --server connection in startGame raced with the Loader creating the group and got null ("group").
+no	c	()Ljava/lang/Object;	lazy	dev/xavier/stein/bridge/engine/Net	static	ek.a(Ljava/net/InetAddress;IZ)Lek;
+# Client settings (engine/ClientSettings): GameSettings.sendSettingsToServer (avh.c) only sends the
+# C15PacketClientSettings when something it carries changes or the connection is new — the volume screen saves the options on
+# every frame while a control is dragged, and each time it sent the same packet (hundreds per second with the
+# Stein FPS: a server with a packet limit disconnected). And options.txt is written there at most every 250 ms.
+avh	c	()V	sendSettings	dev/xavier/stein/bridge/engine/ClientSettings	static
+avh	b	()V	saveWhileDragging	dev/xavier/stein/bridge/engine/ClientSettings	static	axz$a.b(Lave;II)V
+# Sound (engine/SoundGuard): reloadSoundSystem's unloadSoundSystem waits for the sound system that is still starting on the
+# "Sound Library Loader" thread — a resource reload during startup (a mod that reloads twice in a row does this) skipped the
+# shutdown and left two systems alive: duplicated or mistimed sound.
+bpx	b	()V	unload	dev/xavier/stein/bridge/engine/SoundGuard	static	bpx.a()V
+# HUD grid (Stein Loader): hotbar, health and hunger, experience, item name and chat, which the Loader draws wherever the player placed them.
+avo	a	(Lavr;F)V	hotbar	dev/xavier/stein/bridge/hooks/VanillaHud	static	avo.a(F)V
+avo	d	(Lavr;)V	playerStats	dev/xavier/stein/bridge/hooks/VanillaHud	static	avo.a(F)V
+avo	a	(Lavr;I)V	horseJumpBar	dev/xavier/stein/bridge/hooks/VanillaHud	static	avo.a(F)V
+avo	b	(Lavr;I)V	expBar	dev/xavier/stein/bridge/hooks/VanillaHud	static	avo.a(F)V
+avo	a	(Lavr;)V	selectedItem	dev/xavier/stein/bridge/hooks/VanillaHud	static	avo.a(F)V
+avt	a	(I)V	chat	dev/xavier/stein/bridge/hooks/VanillaHud	static	avo.a(F)V
+# Click and mouse hover on the moved chat (GuiChat).
+avt	a	(II)Leu;	chatComponent	dev/xavier/stein/bridge/hooks/VanillaHud	static
+# Freeze watchdog (engine/Watchdog): counts what arrives from the server (Packet.processPacket inside
+# NetworkManager.channelRead0), what goes out, and the game ticks. When the player is in a world and all of this stops, the
+# watchdog dumps the threads to the log — it is the only way to see a bottlenecked thread. What goes out passes through two
+# writeAndFlush calls: the one in dispatchPacket, when already on the network thread, and the one in the deferred Runnable (ek$4.run), through
+# which almost everything goes — the game sends packets from the game thread. The first alone would give 9 packets in half a minute.
+ff	a	(Lep;)V	in	dev/xavier/stein/bridge/engine/PacketLog	static	ek.a(Lio/netty/channel/ChannelHandlerContext;Lff;)V
+io/netty/channel/Channel	writeAndFlush	(Ljava/lang/Object;)Lio/netty/channel/ChannelFuture;	out	dev/xavier/stein/bridge/engine/PacketLog	static	ek.a(Lff;[Lio/netty/util/concurrent/GenericFutureListener;)V
+ave	s	()V	tick	dev/xavier/stein/bridge/engine/Watchdog	after	ave.av
+io/netty/channel/Channel	writeAndFlush	(Ljava/lang/Object;)Lio/netty/channel/ChannelFuture;	out	dev/xavier/stein/bridge/engine/PacketLog	static	ek$4.run()V
+# RenderGlobal.renderEntities (bfr.a(Lpk;Lbia;F)V): each entity draw of the RenderManager — renderEntitySimple
+# (biu.a) and the second pass renderMultipass (biu.b) — goes through the mods, which can refuse to let the entity be
+# drawn. Body, armor, name and shadow disappear together; it is not the game's invisibility.
+biu	a	(Lpk;F)Z	renderEntity	dev/xavier/stein/bridge/hooks/GameHooks	static	bfr.a(Lpk;Lbia;F)V
+biu	b	(Lpk;F)V	renderMultipass	dev/xavier/stein/bridge/hooks/GameHooks	static	bfr.a(Lpk;Lbia;F)V
+# Sprint that survives a hit (engine/Sprint, Combat option, off by default): the
+# EntityPlayer.attackTargetEntityWithCurrentItem drops sprinting right after the knockback
+# (setSprinting(false), the 1.8 "sprint reset"). Only this call, and only inside the hit:
+# outside it the game keeps toggling sprint as usual.
+wn	d	(Z)V	sprintOnHit	dev/xavier/stein/bridge/engine/Sprint	static	wn.f(Lpk;)V
+# Ghost ally (Stein Combat, with the hide key on): RendererLivingEntity.renderModel
+# (bjl.a(Lpr;FFFFFF)V) already chooses between drawing normally, not drawing, and drawing at 15% without writing
+# depth — the ghost the game makes of someone who is invisible and on your team. The two questions that
+# lead to that choice go through the mods, and only inside that method: isInvisible() and
+# isInvisibleToPlayer(player). That way the ghost is the game's own, with its code.
+pr	ax	()Z	ghostInvisible	dev/xavier/stein/bridge/hooks/GameHooks	static	bjl.a(Lpr;FFFFFF)V
+pr	f	(Lwn;)Z	ghostInvisibleToPlayer	dev/xavier/stein/bridge/hooks/GameHooks	static	bjl.a(Lpr;FFFFFF)V
+# And the layers (armor, held item, cape) do not come out on the ghost: the game draws them outside
+# invisibility — which is why an invisible player in armor becomes "walking armor" —, and a 15% silhouette
+# with solid armor on top would show nothing of what is behind it.
+bjl	a	(Lpr;FFFFFFF)V	ghostLayers	dev/xavier/stein/bridge/hooks/GameHooks	static	bjl.a(Lpr;DDDFF)V
+# The ghost does not burn on screen (Render.doRenderShadowAndFire, biv.b(Lpk;DDDFF)V): the flames are drawn
+# outside the model, like the armor, and a 15% silhouette inside a solid fire is the opposite of what the
+# ghost does. It keeps burning for the server and everything else.
+pk	aJ	()Z	ghostFire	dev/xavier/stein/bridge/hooks/GameHooks	static	biv.b(Lpk;DDDFF)V
+# And it does not emit potion particles (EntityLivingBase.updatePotionEffects, pr.bi()V): without the potion color the game
+# emits none. The game already emits fewer for someone invisible — one in fifteen —, but "fewer" still marks
+# where the person is.
+pz	c	(I)I	ghostPotionColor	dev/xavier/stein/bridge/hooks/GameHooks	static	pr.bi()V
+# The ghost does not flash red when taking damage (RendererLivingEntity.doRender, bjl.a(Lpr;DDDFF)V): the
+# setDoRenderBrightness paints the whole model before drawing — red from the hit, white from the creeper, dark
+# from death — and the game unpaints afterwards. Answering that nothing was painted leaves nothing to unpaint.
+bjl	c	(Lpr;F)Z	ghostHurt	dev/xavier/stein/bridge/hooks/GameHooks	static	bjl.a(Lpr;DDDFF)V
+# Stein Loader 0.1.14: the end of the drawn world, plugin channel packet, sent chat and sound — the four that a Forge mod
+# missed the most.
+# EntityRenderer.renderWorldPass (bfk.a(IFJ)V): after the only disableFog (bfl.n), the one that closes the translucent layer,
+# before the upper clouds and the hand — the place of Forge's RenderWorldLastEvent.
+bfl	n	()V	renderWorld	dev/xavier/stein/bridge/hooks/GameHooks	after	bfk.a(IFJ)V
+# NetHandlerPlayClient.handleCustomPayload (bcy.a(Lgg;)V): PacketThreadUtil.checkThreadAndEnqueue (fh.a) goes through the
+# Bridge, which calls it and hands the channel and the bytes to the mods already on the game thread.
+fh	a	(Lff;Lep;Lod;)V	customPayload	dev/xavier/stein/bridge/hooks/GameHooks	static	bcy.a(Lgg;)V
+# GuiScreen.sendChatMessage(String, boolean) (axu.b): EntityPlayerSP.sendChatMessage (bew.e) goes through the mods — chat
+# and command, before going to the server (Forge's ClientChatEvent; client-only commands).
+bew	e	(Ljava/lang/String;)V	sendChat	dev/xavier/stein/bridge/hooks/GameHooks	static	axu.b(Ljava/lang/String;Z)V
+# SoundHandler.playSound (bpz.a(Lbpj;)V): SoundManager.playSound (bpx.c) goes through the mods — swap or silence the sound
+# (Forge's PlaySoundEvent).
+bpx	c	(Lbpj;)V	playSound	dev/xavier/stein/bridge/hooks/GameHooks	static	bpz.a(Lbpj;)V
+# Virtual container (Combat's Auto Refill): the chest the server opens can become just the container, with no screen
+# (EntityPlayerSP.displayGUIChest -> Minecraft.displayGuiScreen).
+ave	a	(Laxu;)V	openChestScreen	dev/xavier/stein/bridge/hooks/GameHooks	static	bew.a(Log;)V
+# 1.7 animations (engine/OldAnimations, Lens option; visual only). First person, in
+# ItemRenderer.renderItemInFirstPerson (bfn.a(F)V): the frame's swing (getSwingProgress) is kept and goes to
+# transformFirstPersonItem (bfn.b, private) along with the item in use (the swing while blocking); and the held item's renderItem
+# marks the 1.7 position for the model transform.
+bet	l	(F)F	swingProgress	dev/xavier/stein/bridge/engine/OldAnimations	static	bfn.a(F)V
+bfn	b	(FF)V	transformItem	dev/xavier/stein/bridge/engine/OldAnimations	static	bfn.a(F)V
+bfn	a	(Lpr;Lzx;Lbgr$b;)V	firstPersonItem	dev/xavier/stein/bridge/engine/OldAnimations	static	bfn.a(F)V
+# ... the sword blocking in third person (the renderItem of LayerHeldItem.doRenderLayer) ...
+bfn	a	(Lpr;Lzx;Lbgr$b;)V	heldItem	dev/xavier/stein/bridge/engine/OldAnimations	static	bky.a(Lpr;FFFFFFF)V
+# ... and, in RenderItem.renderItemModelTransform, the model's applyTransform: for the marked item, the 1.7 calculation applies.
+bgr	a	(Lbgr$b;)V	cameraTransform	dev/xavier/stein/bridge/engine/OldAnimations	static	bjh.a(Lzx;Lboq;Lbgr$b;)V
+# ModelBiped.render (bbj.a(Lpk;FFFFFF)V): setRotationAngles (virtual, ModelPlayer's too) is fixed afterwards —
+# the blocking arm without the 1.8 y rotation, on the player and on the armor.
+bbj	a	(FFFFFFLpk;)V	bipedAngles	dev/xavier/stein/bridge/engine/OldAnimations	static	bbj.a(Lpk;FFFFFF)V
+# RendererLivingEntity.renderLayers: each layer's shouldCombineTextures — the armor layer accepts the damage color.
+blb	b	()Z	combineTextures	dev/xavier/stein/bridge/engine/OldAnimations	static	bjl.a(Lpr;FFFFFFF)V
+# Minecraft.sendClickBlockToController (ave.b(Z)V): the isUsingItem that makes it return without mining; while using an item with attack
+# held on a block, the hand swings on screen only (no mining and no packet).
+bew	bS	()Z	usingItem	dev/xavier/stein/bridge/engine/OldAnimations	static	ave.b(Z)V

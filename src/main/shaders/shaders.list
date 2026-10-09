@@ -1,0 +1,17 @@
+# Shaders of the Stein graphics API: one source (Vulkan-style GLSL) -> SPIR-V -> OpenGL GLSL (tools/ShaderBuild.java).
+# output            stage    source                 definitions
+entity.vert         vert     entity.vert
+entity.frag         frag     entity.frag
+entity_gametex.frag frag     entity.frag           GAME_TEX
+entity_dynamic.vert vert     entity_dynamic.vert
+entity_dynamic.frag frag     entity_dynamic.frag
+entity_text.vert    vert     entity_dynamic.vert   TEXT
+terrain.vert        vert     terrain.vert
+terrain.frag        frag     terrain.frag
+terrain_alpha.frag  frag     terrain.frag          ALPHA_TEST
+pose.comp           comp     pose.comp
+selftest.vert       vert     selftest.vert
+selftest.frag       frag     selftest.frag
+selftest.comp       comp     selftest.comp
+blue.vert           vert     fullscreen_blue.vert
+blue.frag           frag     fullscreen_blue.frag

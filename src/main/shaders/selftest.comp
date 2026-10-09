@@ -1,0 +1,23 @@
+#version 450
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+//
+// Copyright (c) 2026 Breno Xavier
+// API test (SteinGfxApiTest, case 9): a compute shader writes the instance and the indirect command that the following draw
+// of the same pass reads (what the pose on the GPU does). Catches a missing barrier between the dispatch and the draw.
+layout(local_size_x = 1) in;
+layout(std430, set = 0, binding = 0) buffer TestInstances {
+    vec4 inst[];
+};
+layout(std430, set = 0, binding = 1) buffer TestCommands {
+    uint cmd[];
+};
+void main() {
+    inst[1] = vec4(-0.5, 0.5, 2.0, 0.5);   // blue square at the top left (offset, layer 2, z)
+    // 6 vertices starting at 6 (the square), 1 instance, base instance 1
+    cmd[4] = 6u;
+    cmd[5] = 1u;
+    cmd[6] = 6u;
+    cmd[7] = 1u;
+}
