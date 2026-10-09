@@ -1,9 +1,6 @@
 #!/usr/bin/env bash
-# This Source Code Form is subject to the terms of the Mozilla Public
-# License, v. 2.0. If a copy of the MPL was not distributed with this
-# file, You can obtain one at https://mozilla.org/MPL/2.0/.
-#
-# Copyright (c) 2026 Breno Xavier
+# Copyright (c) 2026 Breno Xavier. All rights reserved.
+# Proprietary software: see the LICENSE file at the root of this repository.
 #
 # Regenerates org/lwjgl/opengl/ContextCapabilities.java from the fields that
 # Minecraft reads (scan/lwjgl-fields.txt) crossed with those of LWJGL 3's

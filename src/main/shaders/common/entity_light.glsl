@@ -1,8 +1,5 @@
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at https://mozilla.org/MPL/2.0/.
-//
-// Copyright (c) 2026 Breno Xavier
+// Copyright (c) 2026 Breno Xavier. All rights reserved.
+// Proprietary software: see the LICENSE file at the root of this repository.
 // The eye-space normal and the entities' light like the fixed-function pipeline: m is the normal through the instance matrix (rows,
 // = scale * rotation). The inverse transpose that OpenGL uses is m / scale^2; with GL_RESCALE_NORMAL it removes the scale
 // (m / scale, the length of the input normal stays); with GL_NORMALIZE, it normalizes. The scale comes from the length of the first

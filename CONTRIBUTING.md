@@ -1,7 +1,7 @@
 # Contributing to Stein Bridge
 
 Read the [Stein contributing guide](https://github.com/Stein-Project/.github/blob/main/CONTRIBUTING.md) first: it
-covers the rules, code style, commits and the CLA. This page is what is specific to the Bridge.
+covers the rules, code style and commits. This page is what is specific to the Bridge.
 
 ## Build and check
 

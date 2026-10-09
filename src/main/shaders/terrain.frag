@@ -1,9 +1,6 @@
 #version 450
-// This Source Code Form is subject to the terms of the Mozilla Public
-// License, v. 2.0. If a copy of the MPL was not distributed with this
-// file, You can obtain one at https://mozilla.org/MPL/2.0/.
-//
-// Copyright (c) 2026 Breno Xavier
+// Copyright (c) 2026 Breno Xavier. All rights reserved.
+// Proprietary software: see the LICENSE file at the root of this repository.
 // The terrain pixel. ALPHA_TEST: the variant with discard (only on the cutout layers: discard turns off the GPU's
 // early depth test).
 #include "common/terrain_frame.glsl"
