@@ -20,6 +20,7 @@ jobs:
         with:
           repository: Stein-Project/sdk
           path: sdk
+          ssh-key: ${{ secrets.SDK_DEPLOY_KEY }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

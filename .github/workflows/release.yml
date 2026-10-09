@@ -1,0 +1,62 @@
+# Publishes a Bridge release when a v<version> tag is pushed; the tag must match SteinBridge.VERSION. Run by hand
+# (Actions > release > Run workflow) it only builds and keeps the files as a workflow artifact, publishing nothing.
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: bridge
+      # The readable-name tools come from the SDK, next to this repository.
+      - uses: actions/checkout@v4
+        with:
+          repository: Stein-Project/sdk
+          path: sdk
+          ssh-key: ${{ secrets.SDK_DEPLOY_KEY }}
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Version
+        id: version
+        working-directory: bridge
+        run: |
+          v=$(sed -n 's/.*String VERSION = "\([^"]*\)".*/\1/p' src/main/java/dev/xavier/stein/bridge/SteinBridge.java)
+          if [[ "$GITHUB_REF" == refs/tags/* && "$GITHUB_REF_NAME" != "v$v" ]]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match SteinBridge.VERSION $v"; exit 1
+          fi
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+      - name: Minecraft 1.8.9
+        working-directory: bridge
+        run: ./gradlew fetchMinecraft
+      - name: Build and check
+        working-directory: bridge
+        run: ./gradlew build -Pstein.mcDir=build/mc
+      - name: Files
+        run: |
+          mkdir dist
+          cp bridge/build/libs/steinbridge.jar dist/
+          (cd dist && sha256sum * > SHA256SUMS)
+      - uses: actions/upload-artifact@v4
+        with:
+          name: stein-bridge-${{ steps.version.outputs.version }}
+          path: dist/
+      - name: Publish
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pre=; [[ "$GITHUB_REF_NAME" == *-* ]] && pre=--prerelease
+          gh release create "$GITHUB_REF_NAME" dist/* -R "$GITHUB_REPOSITORY" $pre \
+            --title "Stein Bridge ${{ steps.version.outputs.version }}" --generate-notes
