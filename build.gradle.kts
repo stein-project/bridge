@@ -73,15 +73,17 @@ val gameJson = mcDir.resolve("versions/$mcVersion/$mcVersion.json")
 
 /**
  * The game's libraries (Gson, Guava, Netty...) from its version manifest, without LWJGL 2: the files as the launcher
- * stores them. A library the Bridge patched (build/patched/<name>-steinbridge.jar) replaces the original.
+ * stores them. A library the Bridge patched (build/patched/<name>-steinbridge.jar; with dist, the copy patched with the
+ * obfuscated build's rules, build/dist-work/patched/<name>-dist.jar) replaces the original.
  */
-fun gameLibraries(patched: Boolean): List<File> {
+fun gameLibraries(patched: Boolean, dist: Boolean = false): List<File> {
     if (!gameJson.isFile) return emptyList()
     val names = Regex(""""name": *"([^"]+)"""").findAll(gameJson.readText()).map { it.groupValues[1] }.toSortedSet()
     // "name" is also an OS name inside the library rules ("osx"): only Maven coordinates count.
     return names.filter { it.count { c -> c == ':' } == 2 && !it.startsWith("org.lwjgl") }.mapNotNull { coord ->
         val (g, a, v) = coord.split(":")
-        val replaced = layout.buildDirectory.file("patched/$a-steinbridge.jar").get().asFile
+        val replaced = if (dist) layout.buildDirectory.file("dist-work/patched/$a-dist.jar").get().asFile
+            else layout.buildDirectory.file("patched/$a-steinbridge.jar").get().asFile
         val original = mcDir.resolve("libraries/${g.replace('.', '/')}/$a/$v/$a-$v.jar")
         when {
             patched && replaced.isFile -> replaced
@@ -609,6 +611,255 @@ tasks.register<JavaExec>("runClient") {
         val log = runLog.outputStream()
         standardOutput = Tee(System.out, log)
         errorOutput = Tee(System.err, log)
+    }
+}
+
+// ---- the obfuscated build: what reaches players ----
+//
+// The Bridge is proprietary and reaches players only as a jar, through the installer: that jar is obfuscated.
+//   ./gradlew dist   build/dist/steinbridge.jar   the Bridge renamed by ProGuard (rename only: no shrinking, no
+//                                                 optimization) with the -Dsteinbridge.* names as codes
+//                    build/dist/rules/            the patcher rules with the obfuscated names and no comments, for
+//                                                 the installer (and, inside the Loader, for ModPatch)
+//                    build/dist-mapping/          the ProGuard mapping (steinbridge.txt), the option-name codes
+//                                                 (codes.txt) and the ProGuard configuration. NEVER distributed: it
+//                                                 is what turns a player's stack trace back into names (retrace).
+//                    build/dist-work/             the game patched with the obfuscated rules and its classpath
+//                                                 (run/game.properties), for the Loader's runClient/verify -Pstein.dist
+// The Loader's dist obfuscates the Loader on top of this mapping (-applymapping), so the two jars go together.
+
+val proguard: Configuration = configurations.create("proguard")
+dependencies { proguard(libs.proguard) }
+
+val distDir = layout.buildDirectory.dir("dist")
+val distMapping = layout.buildDirectory.dir("dist-mapping")
+val distWork = layout.buildDirectory.dir("dist-work")
+
+/**
+ * The options of every ProGuard run of the Bridge and the Loader. Rename only: the MethodHandle.invokeExact calls depend
+ * on the exact descriptors, and code only the game calls (through the patcher rules) would look dead to the shrinker.
+ */
+val proguardCommon = """
+    -dontshrink
+    -dontoptimize
+    -dontnote
+    # No a.class and A.class in the same package: the jar would still be valid for the JVM, but unpacked on a
+    # case-insensitive file system (Windows, macOS) half of the classes would be lost.
+    -dontusemixedcaseclassnames
+    # invokeExact has a polymorphic signature: the descriptor of each call does not exist in the JDK.
+    -dontwarn java.lang.invoke.MethodHandle
+    -dontwarn java.lang.invoke.VarHandle
+    # The game's classes (obfuscated names, one to three letters, no package) with fields, parameters or a superclass of
+    # the org.lwjgl compatibility layer (Vector3f, Matrix4f): ProGuard warns that a library depends on a program class,
+    # harmless here because the whole layer keeps its names.
+    -dontwarn ?,??,???,?${'$'}*,??${'$'}*,???${'$'}*
+    # NestHost/NestMembers: since Java 11 javac writes no bridge for private members between a class and its nested
+    # classes; without the attributes, that access becomes IllegalAccessError. SourceFile and LineNumberTable keep the
+    # line numbers of a stack trace (retrace).
+    -keepattributes Signature,InnerClasses,EnclosingMethod,NestHost,NestMembers,*Annotation*,Exceptions,SourceFile,LineNumberTable
+    -renamesourcefileattribute SourceFile
+    -keepclassmembers enum * { public static **[] values(); public static ** valueOf(java.lang.String); }
+    # ServiceLoader (HookSink, Host): the contents follow the renamed implementations; the file names are the
+    # interfaces', which keep their names.
+    -adaptresourcefilecontents META-INF/services/**
+""".trimIndent()
+
+/**
+ * What keeps its name in the Bridge: what is called by a name written outside this jar (the game's launcher profile,
+ * the jars of mods, the Loader's diagnostics). Everything else (the engine, Stein GFX, the options) becomes a, b, c...;
+ * the patcher rules the installer applies are translated through the mapping (tools/MapRules.java).
+ */
+val bridgeKeeps = """
+    # The LWJGL 2 compatibility layer: the game calls the LWJGL 2 API by name.
+    -keep class org.lwjgl.** { *; }
+    # The game's entry point, in the launcher profile the installer writes.
+    -keep class dev.xavier.stein.bridge.launch.Main { public static void main(java.lang.String[]); }
+    # Found through ServiceLoader by its name (the Loader and the visual options implement it).
+    -keepnames interface dev.xavier.stein.bridge.hooks.HookSink
+    # Called by name from the bytecode of mods: the batch hooks (ModelBatch) and the matrix stack (GLMatrix) were written
+    # into published mods at build time.
+    -keep class dev.xavier.stein.bridge.engine.ModelBatch { public static *; }
+    -keep class dev.xavier.stein.bridge.engine.GLMatrix { public static *; }
+    # Implemented by a lambda in the Loader (InventoryOps): ProGuard keeps the method name of an interface a lambda
+    # implements, so the Loader's run (on top of this mapping) needs the same name here. A new case shows up in the
+    # Loader's dist as "is not being kept as ..., but remapped": add the interface here.
+    -keepclassmembernames interface dev.xavier.stein.bridge.hooks.GameHooks${'$'}ChestScreenFilter { <methods>; }
+    # Stack frames recognised by class name in the GL statistics and audit (gfx/gl/SteinGlFrameStats, SteinGlAudit).
+    -keepnames class dev.xavier.stein.gfx.SteinGlTrack*
+    -keepnames class dev.xavier.stein.gfx.SteinLazyGl*
+    -keepnames class dev.xavier.stein.gfx.gl.SteinGlAudit*
+    -keepnames class dev.xavier.stein.gfx.gl.SteinCoreGl*
+""".trimIndent()
+
+/** A path for a ProGuard configuration file: forward slashes, quoted. */
+fun proguardPath(f: File) = "'" + f.absolutePath.replace('\\', '/') + "'"
+
+/** The libraries the Bridge is obfuscated against: the patched game, its libraries and LWJGL 3 (and the JDK). */
+fun distLibraries(): FileCollection = files(patchGame, provider { gameLibraries(patched = true) }, lwjgl)
+
+// The JDK as ProGuard reads it: not every JDK 25 ships jmods (JEP 493), so the classes come from the runtime image.
+val jdkClasses = tasks.register<JavaExec>("jdkClasses") {
+    description = "Writes the classes of the JDK 25 into build/dist-work/jdk-classes.jar, for ProGuard."
+    val out = distWork.map { it.file("jdk-classes.jar") }
+    inputs.property("jdk", javaLauncher.map { it.metadata.javaRuntimeVersion })
+    outputs.file(out)
+    classpath = toolsSet.runtimeClasspath
+    mainClass = "JdkClasses"
+    argumentProviders.add { listOf(out.get().asFile.path) }
+}
+
+val distProguard = tasks.register<JavaExec>("distProguard") {
+    description = "Renames the Bridge jar with ProGuard (build/dist-work/proguard, mapping in build/dist-mapping)."
+    dependsOn(patchSound)
+    val input = bridgeJar.flatMap { it.archiveFile }
+    val out = distWork.map { it.file("proguard/steinbridge.jar") }
+    val mapping = distMapping.map { it.file("steinbridge.txt") }
+    val config = distMapping.map { it.file("steinbridge.pro") }
+    val keep = distMapping.map { it.file("steinbridge-keep.pro") }
+    val libraries = distLibraries()
+    inputs.file(input)
+    inputs.files(jdkClasses, libraries)
+    inputs.property("rules", proguardCommon + bridgeKeeps)
+    outputs.files(out, mapping, config, keep)
+    classpath = proguard
+    mainClass = "proguard.ProGuard"
+    argumentProviders.add { listOf("@" + config.get().asFile.path) }
+    doFirst {
+        out.get().asFile.delete()
+        // The Bridge's options, also read by the Loader's run (-include): the same keeps over the same mapping.
+        keep.get().asFile.apply { parentFile.mkdirs() }.writeText(proguardCommon + "\n" + bridgeKeeps + "\n")
+        config.get().asFile.writeText((listOf(
+            "-injars ${proguardPath(input.get().asFile)}",
+            "-outjars ${proguardPath(out.get().asFile)}",
+            "-libraryjars ${proguardPath(jdkClasses.get().outputs.files.singleFile)}",
+        ) + libraries.files.map { "-libraryjars ${proguardPath(it)}" } + listOf(
+            "-include ${proguardPath(keep.get().asFile)}",
+            "-printmapping ${proguardPath(mapping.get().asFile)}",
+        )).joinToString("\n", postfix = "\n"))
+    }
+}
+
+// The -Dsteinbridge.* names become codes (tools/Codes.java); the table goes to build/dist-mapping/codes.txt.
+val distJar = tasks.register<JavaExec>("distJar") {
+    group = "distribution"
+    description = "Builds build/dist/steinbridge.jar: the obfuscated Bridge, with the option names as codes."
+    val input = distWork.map { it.file("proguard/steinbridge.jar") }
+    val out = distDir.map { it.file("steinbridge.jar") }
+    val codes = distMapping.map { it.file("codes.txt") }
+    inputs.files(distProguard)
+    outputs.files(out, codes)
+    classpath = toolsSet.runtimeClasspath
+    mainClass = "Codes"
+    argumentProviders.add { listOf(codes.get().asFile.path, out.get().asFile.path) }
+    doFirst { input.get().asFile.copyTo(out.get().asFile, overwrite = true) }
+}
+
+// The patcher rules with the obfuscated names and no comments (tools/MapRules.java): what the installer takes to the
+// player's machine, and what the Loader's dist puts inside the Loader for ModPatch.
+val distRules = tasks.register<JavaExec>("distRules") {
+    group = "distribution"
+    description = "Writes build/dist/rules: the patcher rules with the obfuscated names, without comments."
+    val out = distDir.map { it.dir("rules") }
+    val mapping = distMapping.map { it.file("steinbridge.txt") }
+    val tables = fileTree("patcher") { include("*.tsv") }
+    inputs.files(distProguard, tables, "scan/name-mapping.txt")
+    outputs.dir(out)
+    classpath = toolsSet.runtimeClasspath
+    mainClass = "MapRules"
+    argumentProviders.add {
+        listOf(mapping.get().asFile.path, out.get().asFile.path) + tables.files.sortedBy { it.name }.map { it.path }
+    }
+    doFirst { fileOps.delete { delete(out) } }
+    // The LWJGL 2 -> 3 renames: public, and they say nothing about the engine.
+    doLast { file("scan/name-mapping.txt").copyTo(out.get().asFile.resolve("name-mapping.txt"), overwrite = true) }
+}
+
+/** The game patched with the obfuscated rules, as the installer patches it on the player's machine. */
+fun distPatch(name: String, input: File, output: String, vararg rules: String) = tasks.register<JavaExec>(name) {
+    description = "Patches ${input.name} with the obfuscated build's rules (build/dist-work/patched/$output)."
+    val out = distWork.map { it.file("patched/$output") }
+    inputs.file(input)
+    inputs.files(distRules)
+    outputs.file(out)
+    onlyIf("${input.name} is installed") { input.isFile }
+    classpath = patcherSet.runtimeClasspath
+    mainClass = "Patcher"
+    argumentProviders.add {
+        listOf(input.path, out.get().asFile.path) + rules.map { distDir.get().file("rules/$it").asFile.path }
+    }
+    doFirst { requireGame() }
+}
+val distPatchGame = distPatch("distPatchGame", gameJar, "$mcVersion-dist.jar", "name-mapping.txt",
+    "redirects-mc.tsv", "redirects-opt.tsv", "redirects-batch.tsv", "redirects-mods.tsv")
+val distPatchSound = distPatch("distPatchSound", paulscode, "librarylwjglopenal-dist.jar", "redirects-al.tsv")
+
+val distClasses = tasks.register<Sync>("distClasses") {
+    description = "The obfuscated Bridge jar as a folder (for the coverage check)."
+    from(distJar.map { zipTree(it.outputs.files.first { f -> f.name == "steinbridge.jar" }) })
+    into(distWork.map { it.dir("classes") })
+}
+
+// Every detoured call of the game patched with the translated rules must exist, with the exact descriptor, in the
+// obfuscated Bridge or in LWJGL 3: the same check as coverage, on what the player's machine will run.
+val distCoverage = tasks.register<JavaExec>("distCoverage") {
+    group = "verification"
+    description = "Checks that every LWJGL/Stein reference of the game patched with the obfuscated rules is served."
+    inputs.files(distPatchGame, distClasses)
+    outputs.upToDateWhen { true }
+    classpath = toolsSet.runtimeClasspath
+    mainClass = "CoverageCheck"
+    argumentProviders.add {
+        listOf(distWork.get().file("patched/$mcVersion-dist.jar").asFile.path, file("scan/lwjgl3-index.txt").path,
+            distClasses.get().destinationDir.path)
+    }
+}
+
+// Every reference from our classes to our classes (and member) resolves in the obfuscated jar (tools/DistCheck.java).
+val distCheck = tasks.register<JavaExec>("distCheck") {
+    group = "verification"
+    description = "Checks that every reference of the obfuscated Bridge to its own classes and members resolves."
+    inputs.files(distJar)
+    outputs.upToDateWhen { true }
+    classpath = toolsSet.runtimeClasspath
+    mainClass = "DistCheck"
+    argumentProviders.add { listOf(distDir.get().file("steinbridge.jar").asFile.path) }
+}
+
+/** The classpath the obfuscated game runs with: the obfuscated Bridge, the game patched with its rules, LWJGL 3. */
+fun distGameClasspath(): FileCollection = files(
+    distDir.map { it.file("steinbridge.jar") },
+    distWork.map { it.file("patched/$mcVersion-dist.jar") },
+    provider { gameLibraries(patched = true, dist = true) },
+    lwjgl,
+    lwjglNatives,
+)
+
+// build/dist-work/run/game.properties: like gameRuntime, for the obfuscated game (the Loader's -Pstein.dist).
+val distRuntime = tasks.register("distRuntime") {
+    description = "Writes build/dist-work/run/game.properties, the obfuscated game's classpath, for the loader build."
+    dependsOn(natives, distJar, distPatchGame, distPatchSound)
+    val out = distWork.map { it.file("run/game.properties") }
+    outputs.file(out)
+    outputs.upToDateWhen { false }
+    doLast {
+        val p = Properties()
+        p["mcDir"] = mcDir.path
+        p["gameJar"] = gameJar.path
+        p["assets"] = mcDir.resolve("assets").path
+        p["natives"] = natives.get().destinationDir.path
+        p["classpath"] = distGameClasspath().files.joinToString(File.pathSeparator) { it.path }
+        out.get().asFile.apply { parentFile.mkdirs() }.writer().use {
+            p.store(it, "Stein Bridge: the obfuscated game (written by ./gradlew dist)")
+        }
+    }
+}
+
+tasks.register("dist") {
+    group = "distribution"
+    description = "The obfuscated Bridge for the installer: build/dist (jar and rules), mapping in build/dist-mapping."
+    dependsOn(distJar, distRules, distCheck, distCoverage, distRuntime)
+    doLast {
+        logger.lifecycle("ok: build/dist/steinbridge.jar and build/dist/rules (mapping in build/dist-mapping: never distribute it)")
     }
 }
 

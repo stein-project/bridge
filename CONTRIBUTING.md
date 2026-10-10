@@ -100,3 +100,38 @@ in `./gradlew build` fails if any rule points at something that does not exist.
 
 `gfx/vk` is experimental and not used by the game yet. Changes there are welcome but must not affect the OpenGL
 path.
+
+## The obfuscated build (what reaches players)
+
+The Bridge reaches players only inside the installer, and that copy is obfuscated:
+
+```sh
+./gradlew dist    # build/dist/steinbridge.jar and build/dist/rules, mapping in build/dist-mapping
+```
+
+- ProGuard 7.10.0 (a Gradle dependency, `libs.proguard`) only renames: no shrinking, no optimization. What keeps its
+  name is in `bridgeKeeps` in `build.gradle.kts`: the `org.lwjgl` compatibility layer, `launch.Main`, `HookSink`,
+  what mods call by name (`ModelBatch`, `GLMatrix`) and a few classes recognised by name in stack frames.
+- The `-Dsteinbridge.<area>.<name>` options become codes (`tools/Codes.java`, table in `build/dist-mapping/codes.txt`);
+  the patcher rules are translated to the obfuscated names and lose their comments (`tools/MapRules.java`,
+  `build/dist/rules`). `dist` then patches the game with those rules and runs the coverage check and
+  `tools/DistCheck.java` (every reference between our classes resolves) on the result.
+- Never put anything of `build/dist-mapping` in a release or a commit (`build/` is ignored).
+- Code that reaches one of our classes or members **by name** (reflection, `MethodHandles`, a string, a lambda the
+  Loader writes for a Bridge interface) needs a keep in `bridgeKeeps`, or the obfuscated game breaks where the plain
+  one works. A `VarHandle`/`invokeExact` descriptor must use only `Object` and primitives for our types.
+- Test it in the game: in `../loader`, `./gradlew verify -Pstein.world=<world> -Pstein.dist` and
+  `./gradlew runClient -Pstein.dist` (the `-D` names are translated through the codes table).
+
+### Reading a player's stack trace
+
+A stack trace from the obfuscated build names `dev.xavier.stein.bridge.d.d.a(SourceFile:123)`. Translate it with the
+mapping of the same build (keep `build/dist-mapping` of every release you ship) and ProGuard's retrace, from the
+ProGuard release zip (`bin/retrace.sh` / `bin/retrace.bat`) or the `com.guardsquare:proguard-retrace` artifact:
+
+```sh
+retrace build/dist-mapping/steinbridge.txt stacktrace.txt
+```
+
+With the Loader in the trace, use `../loader/build/dist-mapping/steinloader.txt`: it has both. An option code from a
+log (`-Ds1a2...`) is looked up in `build/dist-mapping/codes.txt`.
