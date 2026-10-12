@@ -46,8 +46,8 @@ machine, and must not be redistributed. The build downloads what it needs to com
 
 ## Building
 
-You need a **JDK 17 or newer** to start Gradle (`JAVA_HOME`). The Gradle daemon and the compiler run on **JDK 25**:
-Gradle uses an installed one or downloads it (`gradle/gradle-daemon-jvm.properties`, written by
+You need a **JDK 25 or newer** (`JAVA_HOME`). The Gradle daemon and the compiler run on JDK 25: Gradle uses an
+installed one or downloads it (`gradle/gradle-daemon-jvm.properties`, written by
 `./gradlew updateDaemonJvm --jvm-version=25`, and the foojay toolchain resolver). You also need a graphics card
 with **OpenGL 4.1** or newer (for Stein GFX; older ones run the fixed-function fallback) and Minecraft 1.8.9
 installed (or run `./gradlew fetchMinecraft`, which downloads it to `build/mc`; pass `-Pstein.mcDir=build/mc`
