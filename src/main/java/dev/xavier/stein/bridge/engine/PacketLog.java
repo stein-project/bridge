@@ -1,6 +1,9 @@
 /*
- * Copyright (c) 2026 Breno Xavier. All rights reserved.
- * Proprietary software: see the LICENSE file at the root of this repository.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ *
+ * Copyright (c) 2026 Breno Xavier
  */
 
 package dev.xavier.stein.bridge.engine;
@@ -59,8 +62,7 @@ public final class PacketLog {
 
     private static Map<String, String> names() {
         Map<String, String> names = new HashMap<>();
-        // At the jar root: this way the path does not change when the release build renames the
-        // packages of our classes.
+        // At the jar root (the build's packetNames task writes it from MCP).
         try (InputStream in = PacketLog.class.getResourceAsStream("/stein-packets.txt")) {
             if (in != null) {
                 BufferedReader r =

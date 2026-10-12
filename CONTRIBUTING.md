@@ -1,7 +1,8 @@
 # Contributing to Stein Bridge
 
 Read the [Stein contributing guide](https://github.com/Stein-Project/.github/blob/main/CONTRIBUTING.md) first: it
-covers the rules, code style and commits. This page is what is specific to the Bridge.
+covers the rules, code style, commits and the [CLA](https://github.com/Stein-Project/.github/blob/main/CLA.md) your first
+pull request asks you to sign. This page is what is specific to the Bridge.
 
 ## Build and check
 
@@ -85,53 +86,24 @@ SDK installed). Each exits with 0 when it passed.
 ## Continuous integration
 
 `.github/workflows/build.yml` runs `./gradlew build` on every pull request and push to `main`, with Minecraft downloaded from
-Mojang's servers (`./gradlew fetchMinecraft`, never published). The SDK is checked out next to the Bridge. With the
-`SDK_DEPLOY_KEY` secret (a deploy key of a private `sdk` repository) it is cloned over SSH; without it, as in a pull
-request from a fork, where secrets are empty, `actions/checkout` falls back to HTTPS with the workflow token, which
-works while the `sdk` repository is public. A fork does not need to set anything.
+Mojang's servers (`./gradlew fetchMinecraft`, never published). The public SDK is checked out next to the Bridge.
+A fork does not need to set anything.
 
 ## Patcher rules
 
 Each line of `patcher/redirects-*.tsv` points a call site of the game at a method here, by name and descriptor.
 When you rename or change the signature of such a method, change the rule in the same commit. The coverage check
-in `./gradlew build` fails if any rule points at something that does not exist.
+in `./gradlew build` fails if any rule points at something that does not exist. The Loader's ModPatch applies
+`redirects-mc`, `-opt` and `-modgl` to mods too: a change there changes what every mod runs.
 
 ## Vulkan
 
 `gfx/vk` is experimental and not used by the game yet. Changes there are welcome but must not affect the OpenGL
 path.
 
-## The obfuscated build (what reaches players)
+## What reaches players
 
-The Bridge reaches players only inside the installer, and that copy is obfuscated:
-
-```sh
-./gradlew dist    # build/dist/steinbridge.jar and build/dist/rules, mapping in build/dist-mapping
-```
-
-- ProGuard 7.10.0 (a Gradle dependency, `libs.proguard`) only renames: no shrinking, no optimization. What keeps its
-  name is in `bridgeKeeps` in `build.gradle.kts`: the `org.lwjgl` compatibility layer, `launch.Main`, `HookSink`,
-  what mods call by name (`ModelBatch`, `GLMatrix`) and a few classes recognised by name in stack frames.
-- The `-Dsteinbridge.<area>.<name>` options become codes (`tools/Codes.java`, table in `build/dist-mapping/codes.txt`);
-  the patcher rules are translated to the obfuscated names and lose their comments (`tools/MapRules.java`,
-  `build/dist/rules`). `dist` then patches the game with those rules and runs the coverage check and
-  `tools/DistCheck.java` (every reference between our classes resolves) on the result.
-- Never put anything of `build/dist-mapping` in a release or a commit (`build/` is ignored).
-- Code that reaches one of our classes or members **by name** (reflection, `MethodHandles`, a string, a lambda the
-  Loader writes for a Bridge interface) needs a keep in `bridgeKeeps`, or the obfuscated game breaks where the plain
-  one works. A `VarHandle`/`invokeExact` descriptor must use only `Object` and primitives for our types.
-- Test it in the game: in `../loader`, `./gradlew verify -Pstein.world=<world> -Pstein.dist` and
-  `./gradlew runClient -Pstein.dist` (the `-D` names are translated through the codes table).
-
-### Reading a player's stack trace
-
-A stack trace from the obfuscated build names `dev.xavier.stein.bridge.d.d.a(SourceFile:123)`. Translate it with the
-mapping of the same build (keep `build/dist-mapping` of every release you ship) and ProGuard's retrace, from the
-ProGuard release zip (`bin/retrace.sh` / `bin/retrace.bat`) or the `com.guardsquare:proguard-retrace` artifact:
-
-```sh
-retrace build/dist-mapping/steinbridge.txt stacktrace.txt
-```
-
-With the Loader in the trace, use `../loader/build/dist-mapping/steinloader.txt`: it has both. An option code from a
-log (`-Ds1a2...`) is looked up in `build/dist-mapping/codes.txt`.
+Players get `build/libs/steinbridge.jar` as it is built, inside the installer, together with the patcher rules (the
+installer patches the player's own game jar with them). The rules also travel inside the jar (`steinbridge/rules/`):
+the Loader's ModPatch reads them from there when it adapts a mod, so a Loader always applies the rules of the Bridge it
+runs on. The jar is reproducible: same sources, same bytes.

@@ -1,6 +1,9 @@
 #version 450
-// Copyright (c) 2026 Breno Xavier. All rights reserved.
-// Proprietary software: see the LICENSE file at the root of this repository.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+//
+// Copyright (c) 2026 Breno Xavier
 // The pixel of the model parts. With the damage red (the game's setBrightness, three units in GL_COMBINE): texture unit
 // 0 * color on rgb and ONLY the texture's alpha (REPLACE); unit 1 blends the constant color on top by its alpha
 // (INTERPOLATE), without the lightmap; unit 2 multiplies by the lightmap. That is: mix before the lightmap, and the alpha without the color.

@@ -1,6 +1,9 @@
 /*
- * Copyright (c) 2026 Breno Xavier. All rights reserved.
- * Proprietary software: see the LICENSE file at the root of this repository.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ *
+ * Copyright (c) 2026 Breno Xavier
  */
 
 package dev.xavier.stein.bridge.engine;
@@ -340,8 +343,7 @@ public final class ChunkArena {
     /** Releases the chunk buffer's current range (if any) to return after the fence. */
     private static void release(Object vb) {
         // (Object) before the cast: VarHandle.get has a polymorphic signature, and the cast type
-        // would go into the call descriptor — which the release build's obfuscator does not
-        // rewrite.
+        // would go into the call descriptor; with Object it names none of our classes.
         Object handle = (Object) SB_REGION.get(vb);
         if (state == MODE_STEIN_GFX) {
             if (handle != null) {

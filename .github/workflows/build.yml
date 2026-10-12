@@ -15,14 +15,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: bridge
-      # The readable-name tools come from the SDK, next to this repository. With the SDK_DEPLOY_KEY secret (a private
-      # sdk) it is cloned over SSH; without it (a fork's pull request, or a public sdk) ssh-key is empty and
-      # actions/checkout falls back to HTTPS with the workflow token, which reads a public repository.
+      # The readable-name tools come from the SDK (public), next to this repository.
       - uses: actions/checkout@v4
         with:
           repository: Stein-Project/sdk
           path: sdk
-          ssh-key: ${{ secrets.SDK_DEPLOY_KEY }}
       - uses: actions/setup-java@v4
         with:
           distribution: temurin

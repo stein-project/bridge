@@ -86,11 +86,14 @@ its `./gradlew runClient`.
 
 ## Development
 
-This repository is private. The development guide is [CONTRIBUTING.md](CONTRIBUTING.md).
+Bug reports, ideas and pull requests are welcome. Read the
+[contributing guide](https://github.com/Stein-Project/.github/blob/main/CONTRIBUTING.md) first; your first pull
+request asks you to sign the [CLA](https://github.com/Stein-Project/.github/blob/main/CLA.md). What is specific to the
+Bridge is in [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## Licence
 
-Stein Bridge is proprietary software, all rights reserved: see [LICENSE](LICENSE). Third-party notices are in
-[NOTICE](NOTICE). The Stein name and logo are trademarks: see the [trademark policy](https://github.com/Stein-Project/.github/blob/main/TRADEMARK.md).
+Stein Bridge is licensed under the [Mozilla Public License 2.0](LICENSE). Third-party notices are in
+[NOTICE](NOTICE). The Stein name and logo are not covered by the licence: see the [trademark policy](https://github.com/Stein-Project/.github/blob/main/TRADEMARK.md).
 
 Created by [Breno Xavier](https://github.com/brenoxavier).

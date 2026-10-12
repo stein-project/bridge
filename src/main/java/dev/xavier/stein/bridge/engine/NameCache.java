@@ -1,6 +1,9 @@
 /*
- * Copyright (c) 2026 Breno Xavier. All rights reserved.
- * Proprietary software: see the LICENSE file at the root of this repository.
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ *
+ * Copyright (c) 2026 Breno Xavier
  */
 
 package dev.xavier.stein.bridge.engine;
@@ -105,9 +108,8 @@ public final class NameCache {
         UUID id = ((Entity) entity).getUniqueID();
         String name = ((Entity) entity).getName();
         VarHandle field = SLOT;
-        // VarHandle with only Object in the descriptor: obfuscation renames Hover and does not
-        // rewrite the descriptor of a call with a polymorphic signature (in the obfuscated build,
-        // NoClassDefFoundError).
+        // VarHandle with only Object in the descriptor: a call with a polymorphic signature keeps
+        // the types it was compiled with, and Object names none of our classes.
         Hover h = (Hover) (Object) field.get(entity);
         if (h == null || h.type != entity.getClass() || !h.id.equals(id) || !h.name.equals(name)) {
             h = new Hover(entity.getClass(), id, name, ((Entity) entity).getHoverEvent());
