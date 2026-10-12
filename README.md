@@ -25,7 +25,7 @@ Game logic and physics stay identical to vanilla. Stein Bridge works on any vani
 ## How it fits together
 
 ```
-Mods            HUD, Combat, ...           .steinmod files in the game's mods folder
+Mods            HUD, Replay, ...           .steinmod files in the game's mods folder
 Stein Loader    mod API, loader, menus     github.com/Stein-Project/loader
 Stein Bridge    this repository            engine, renderer, hooks, patcher
 Minecraft       the player's own jar       never redistributed
