@@ -187,7 +187,7 @@ final class DiagInputScenes {
      * mods). A key posted from outside does not reach a background window; this tests a held key
      * (the visual options' zoom) without bringing the window to the front. A negative code is a
      * mouse button, as in the game's KeyBinding (-100 left, -99 right): the physical button goes
-     * down and the event enters the mouse queue (Combat's Autoclick follows the held button).
+     * down and the event enters the mouse queue.
      */
     private static int holdKeyStage;
 
@@ -295,8 +295,8 @@ final class DiagInputScenes {
     /**
      * {@code -Dsteinbridge.diag.attackAtSec=S1,S2...}: at S seconds, aims at the nearest player
      * (Minecraft.objectMouseOver) and calls Minecraft.clickMouse — the path of a real click, with
-     * the hit rule (Stein Combat), without needing to be within reach (the server ignores a hit
-     * from afar).
+     * the hit rule (a mod through the Loader API), without needing to be within reach (the server
+     * ignores a hit from afar).
      */
     private static int attackNext;
 

@@ -77,7 +77,7 @@ avo	a	(Lauk;Lavr;)V	scoreboard	dev/xavier/stein/bridge/hooks/VanillaHud	static	a
 # ... and the dark box behind the chat lines ("Background" option): the three Gui.drawRect calls inside
 # GuiNewChat.drawChat go through the Bridge (the owner at the call site is GuiNewChat itself, which inherits drawRect from Gui), which skips the line's one (alpha only) and keeps the two of the scroll bar (with color).
 avt	a	(IIIII)V	chatBackground	dev/xavier/stein/bridge/hooks/VanillaHud	static	avt.a(I)V
-# Stein Combat (API 8): the click's hit (PlayerControllerMP.attackEntity in Minecraft.clickMouse) goes through the mods,
+# API 8: the click's hit (PlayerControllerMP.attackEntity in Minecraft.clickMouse) goes through the mods,
 # which can cancel it (allies); the name in the Tab list (GuiPlayerTabOverlay.getPlayerName in renderPlayerlist) and the name above
 # the head (getDisplayName in RendererLivingEntity.renderName) too; and, before the super.onLivingUpdate of
 # EntityPlayerSP (which moves the player), sprinting in all directions (engine/Sprint).
@@ -193,12 +193,12 @@ io/netty/channel/Channel	writeAndFlush	(Ljava/lang/Object;)Lio/netty/channel/Cha
 # drawn. Body, armor, name and shadow disappear together; it is not the game's invisibility.
 biu	a	(Lpk;F)Z	renderEntity	dev/xavier/stein/bridge/hooks/GameHooks	static	bfr.a(Lpk;Lbia;F)V
 biu	b	(Lpk;F)V	renderMultipass	dev/xavier/stein/bridge/hooks/GameHooks	static	bfr.a(Lpk;Lbia;F)V
-# Sprint that survives a hit (engine/Sprint, Combat option, off by default): the
+# Sprint that survives a hit (engine/Sprint, a mod option, off by default): the
 # EntityPlayer.attackTargetEntityWithCurrentItem drops sprinting right after the knockback
 # (setSprinting(false), the 1.8 "sprint reset"). Only this call, and only inside the hit:
 # outside it the game keeps toggling sprint as usual.
 wn	d	(Z)V	sprintOnHit	dev/xavier/stein/bridge/engine/Sprint	static	wn.f(Lpk;)V
-# Ghost ally (Stein Combat, with the hide key on): RendererLivingEntity.renderModel
+# Ghost ally (a mod hiding players): RendererLivingEntity.renderModel
 # (bjl.a(Lpr;FFFFFF)V) already chooses between drawing normally, not drawing, and drawing at 15% without writing
 # depth — the ghost the game makes of someone who is invisible and on your team. The two questions that
 # lead to that choice go through the mods, and only inside that method: isInvisible() and
@@ -235,7 +235,7 @@ bew	e	(Ljava/lang/String;)V	sendChat	dev/xavier/stein/bridge/hooks/GameHooks	sta
 # SoundHandler.playSound (bpz.a(Lbpj;)V): SoundManager.playSound (bpx.c) goes through the mods — swap or silence the sound
 # (Forge's PlaySoundEvent).
 bpx	c	(Lbpj;)V	playSound	dev/xavier/stein/bridge/hooks/GameHooks	static	bpz.a(Lbpj;)V
-# Virtual container (Combat's Auto Refill): the chest the server opens can become just the container, with no screen
+# Virtual container (an auto-refill feature of a mod): the chest the server opens can become just the container, with no screen
 # (EntityPlayerSP.displayGUIChest -> Minecraft.displayGuiScreen).
 ave	a	(Laxu;)V	openChestScreen	dev/xavier/stein/bridge/hooks/GameHooks	static	bew.a(Log;)V
 # 1.7 animations (engine/OldAnimations, Lens option; visual only). First person, in

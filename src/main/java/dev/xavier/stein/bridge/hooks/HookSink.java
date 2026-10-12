@@ -212,8 +212,8 @@ public interface HookSink {
     /**
      * Should this entity not be drawn? Called in place of RenderGlobal.renderEntities'
      * renderEntityStatic (and in our own passes, such as the entity shadow): true means the whole
-     * draw does not happen — body, armor, name and shadow. It is Stein Combat's "hide your own
-     * clan".
+     * draw does not happen — body, armor, name and shadow. It is what a mod uses to hide players
+     * (its own clan, for example).
      */
     default boolean hideEntity(Object entity) {
         return false;

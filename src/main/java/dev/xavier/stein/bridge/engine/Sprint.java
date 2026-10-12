@@ -17,14 +17,13 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.MovementInput;
 
 /**
- * Sprinting in all directions (Stein Combat, through the Loader API {@code
- * Game.setSprintAllDirections}). The game only lets you sprint forwards: in
- * EntityPlayerSP.onLivingUpdate, sprinting drops when forward movement falls below 0.8. Before
- * super.onLivingUpdate (which moves the player; patcher rule), with the option on and the sprint
- * key pressed, sprinting comes back in any direction — with the game's other conditions: hunger
- * above 6 (or flight allowed), not using an item, no blindness, not sneaking and not hitting a wall
- * sideways. The server receives sprinting the usual way (it only changes state when sprinting
- * starts or stops).
+ * Sprinting in all directions (through the Loader API {@code Gameplay.setSprintAllDirections}). The
+ * game only lets you sprint forwards: in EntityPlayerSP.onLivingUpdate, sprinting drops when
+ * forward movement falls below 0.8. Before super.onLivingUpdate (which moves the player; patcher
+ * rule), with the option on and the sprint key pressed, sprinting comes back in any direction —
+ * with the game's other conditions: hunger above 6 (or flight allowed), not using an item, no
+ * blindness, not sneaking and not hitting a wall sideways. The server receives sprinting the usual
+ * way (it only changes state when sprinting starts or stops).
  */
 public final class Sprint {
 
@@ -38,7 +37,7 @@ public final class Sprint {
     private static volatile boolean allDirections;
     private static boolean broken;
 
-    /** Sprinting goes through the hit (Stein Combat, option off by default). */
+    /** Sprinting goes through the hit (off by default). */
     private static volatile boolean onHit;
 
     /** With {@link #onHit}: the hit does not brake either (the 0.6 of the speed). */
@@ -47,8 +46,7 @@ public final class Sprint {
     private Sprint() {}
 
     /**
-     * Sprinting survives the hit (Stein Combat, through the Loader API {@code
-     * Game.setSprintOnHit}).
+     * Sprinting survives the hit (through the Loader API {@code Gameplay.setSprintOnHit}).
      *
      * <p>1.8 drops sprinting on every hit that knocks back ({@code setSprinting(false)} at the end
      * of {@code attackTargetEntityWithCurrentItem}) — this is the "sprint reset", which makes the
@@ -100,7 +98,7 @@ public final class Sprint {
         ((EntityPlayer) player).setSprinting(value);
     }
 
-    /** Turns it on or off (Stein Combat, through the Loader API). */
+    /** Turns it on or off (through the Loader API {@code Gameplay}). */
     public static void setAllDirections(boolean on) {
         allDirections = on;
     }
@@ -158,7 +156,7 @@ public final class Sprint {
             p.setSprinting(true);
         } catch (Throwable t) {
             broken = true;
-            Log.info("combat", "sprinting in all directions off: " + t);
+            Log.info("sprint", "sprinting in all directions off: " + t);
         }
     }
 
