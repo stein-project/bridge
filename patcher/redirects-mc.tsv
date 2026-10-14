@@ -6,3 +6,9 @@ org/lwjgl/opengl/ARBShaderObjects	glShaderSourceARB	(ILjava/nio/ByteBuffer;)V	gl
 net/minecraft/client/ClientBrandRetriever	getClientModName	()Ljava/lang/String;	clientModName	dev/xavier/stein/bridge/core/Brand	body
 # The crash report reads the graphics card name on the thread that crashed; with no GL context there, LWJGL 3 aborts the JVM.
 org/lwjgl/opengl/GL11	glGetString	(I)Ljava/lang/String;	glGetString	dev/xavier/stein/bridge/compat/GLCompat
+# Server resource packs (core/ServerPacks): level:// only under saves/<world>/resources.zip (NetHandlerPlayClient.handleResourcePack),
+# the pack cache only for packs this account has used (ResourcePackRepository.downloadResourcePack) and no download to a
+# local address (HttpUtil's download task), so a server cannot probe the player's files, link accounts or reach the local network.
+java/lang/String	substring	(I)Ljava/lang/String;	levelPath	dev/xavier/stein/bridge/core/ServerPacks	static	bcy.a(Lhd;)V
+java/io/File	exists	()Z	cached	dev/xavier/stein/bridge/core/ServerPacks	static	bnm.a(Ljava/lang/String;Ljava/lang/String;)Lcom/google/common/util/concurrent/ListenableFuture;
+java/net/URL	openConnection	(Ljava/net/Proxy;)Ljava/net/URLConnection;	open	dev/xavier/stein/bridge/core/ServerPacks	static	nj$1.run()V
