@@ -31,6 +31,8 @@ public final class Main {
             refuse(feature);
             return;
         }
+        // Before the game's first log line: no ${...} lookups from what the server sends.
+        Class.forName("dev.xavier.stein.bridge.core.LogLookups").getMethod("install").invoke(null);
         Class<?> game = Class.forName("net.minecraft.client.main.Main");
         java.lang.reflect.Method main = game.getMethod("main", String[].class);
         try {
