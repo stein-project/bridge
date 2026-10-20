@@ -145,6 +145,11 @@ public final class OldAnimations {
         return on && (parts & part) != 0;
     }
 
+    /** The parts in effect (bits {@link #BLOCK_HIT} .. {@link #ARMOR_HURT}); zero when off. */
+    public static int activeParts() {
+        return on ? parts : 0;
+    }
+
     /**
      * For Stein GFX's own player pose (SteinPlayerPose.collect): does this player need the game's
      * path, which goes through the hooks here? Blocking (heldItemRight 3) with the 1.7 block, or
