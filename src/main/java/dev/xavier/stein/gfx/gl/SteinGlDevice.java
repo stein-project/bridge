@@ -345,6 +345,14 @@ public final class SteinGlDevice extends SteinDevice {
                 return GAME_COPY_NONE;
             }
             if (caps.copyImage && forced == null) {
+                if (SteinGlDebug.ENABLED) {
+                    // the debug output reports a refusal like any other error
+                    Log.info(
+                            "gl-debug",
+                            "testing glCopyImageSubData from a game texture: if the driver"
+                                    + " refuses it, the CopyImageSubData error right after this is"
+                                    + " expected (the \"game textures\" line says what was chosen)");
+                }
                 GL43.glCopyImageSubData(
                         game,
                         GL11.GL_TEXTURE_2D,
