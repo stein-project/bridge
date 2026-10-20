@@ -141,6 +141,7 @@ listed at the end.
 - `-Dsteinbridge.opt.vanillaHudBatch=true`: draws one draw call per status bar icon (default: batched).
 - `-Dsteinbridge.opt.checkHudBatch=true`: on each icon joined, checks that texture, color, blend, alpha and depth are still those of the first (default: off).
 - `-Dsteinbridge.opt.vanillaItemModel=true`: always takes the original item model path (default: cached).
+- `-Dsteinbridge.opt.vanillaItemEdges=true`: generated items get edges only around fully transparent pixels, as in the original (default: also around nearly transparent ones, see ItemEdges).
 - `-Dsteinbridge.opt.vanillaModelBatch=true`: draws each model part with its own glLoadMatrixf + glCallList in the fixed-function fallback (default: batched from a persistent buffer).
 - `-Dsteinbridge.opt.vanillaItemTint=true`: a tinted item always takes the original path (default: off).
 - `-Dsteinbridge.opt.checkItemModel=true`: takes the original path and compares the bytes that would be sent (default: off).
