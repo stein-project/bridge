@@ -74,6 +74,13 @@ final class SteinDeferredKeys {
     static final long KEY_NOALPHA = 1L << 61;
 
     /**
+     * Logical operation in place of the blend (glLogicOp: the text field's selection). The blend is
+     * off and its factor bits carry the operation (the ordinal of {@link SteinPipeline.LogicOp}, in
+     * the source colour factor's place).
+     */
+    static final long KEY_LOGIC = 1L << 59;
+
+    /**
      * Name text and background resident on the GPU ({@link SteinTextGpu}): another buffer, format
      * and vertex shader.
      */
@@ -93,7 +100,7 @@ final class SteinDeferredKeys {
     // factors (4 bits each); 21 depth test; 22..24 depth function; 25 depth write; 26 cull;
     // 27 culled face (0 = front, 1 = back). Bits 28..31: KEY_DYNAMIC, KEY_STATIC, KEY_LINES,
     // KEY_GAMETEX. Upper bits (a long): 32..35 the texture filter; 36..55 the game's texture;
-    // 56..57 polygon offset; 58 KEY_TEXT; 60 KEY_NOCOLOR; 61 KEY_NOALPHA.
+    // 56..57 polygon offset; 58 KEY_TEXT; 59 KEY_LOGIC; 60 KEY_NOCOLOR; 61 KEY_NOALPHA.
 
     static final int KEY_CLASS_MASK = 15;
     static final int KEY_BLEND_BIT = 1 << 4;

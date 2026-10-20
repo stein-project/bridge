@@ -75,6 +75,8 @@ public final class SteinGameState {
     private static final Object[] TEXGEN; // the bfl$p (mode in c)
     private static final MethodHandle TEXGEN_MODE;
     private static final Object LOGIC; // bfl$f.a
+    private static final Object LOGIC_STATE; // bfl$f: enable (a), operation (b)
+    private static final MethodHandle LOGIC_MODE;
     private static final Object[] TEXTURES; // bfl$r[]: bound 2D texture (a), name (b)
     private static final MethodHandle TEX_ON;
     private static final MethodHandle TEX_NAME;
@@ -162,9 +164,9 @@ public final class SteinGameState {
             TEXGEN_MODE = getter(l, gen, "c", int.class);
 
             Class<?> logic = Obf.cls("bfl$f");
-            LOGIC =
-                    getter(l, logic, "a", bool)
-                            .invoke(g.findStaticGetter(gsm, "j", logic).invoke());
+            LOGIC_STATE = g.findStaticGetter(gsm, "j", logic).invoke();
+            LOGIC = getter(l, logic, "a", bool).invoke(LOGIC_STATE);
+            LOGIC_MODE = getter(l, logic, "b", int.class);
 
             Class<?> tex = Obf.cls("bfl$r");
             Object arr = g.findStaticGetter(gsm, "p", tex.arrayType()).invoke();
@@ -454,6 +456,11 @@ public final class SteinGameState {
 
     public static boolean logicOp() {
         return readBoolean(BOOL, LOGIC);
+    }
+
+    /** glLogicOp's operation as the cache stores it (GL_COPY until the game sets another). */
+    public static int logicOpMode() {
+        return readInt(LOGIC_MODE, LOGIC_STATE);
     }
 
     /**

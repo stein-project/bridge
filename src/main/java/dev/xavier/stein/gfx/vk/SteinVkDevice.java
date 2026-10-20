@@ -208,6 +208,9 @@ public final class SteinVkDevice extends SteinDevice {
     final boolean pushDescriptors;
     final boolean depthClipControl;
 
+    /** Logical operations on the colour (SteinPipeline.LogicOp): an optional feature. */
+    final boolean logicOp;
+
     /** The VkFormat of {@link SteinFormat#DEPTH24} on this GPU. */
     final int depth24;
 
@@ -341,6 +344,7 @@ public final class SteinVkDevice extends SteinDevice {
                                 + " NDC depth (-1 to 1) is lost");
             }
             multiDrawIndirect = has.multiDrawIndirect();
+            logicOp = has.logicOp();
 
             // ---- device ----
             VkPhysicalDeviceDepthClipControlFeaturesEXT clipOn =
@@ -363,7 +367,8 @@ public final class SteinVkDevice extends SteinDevice {
                             .multiDrawIndirect(has.multiDrawIndirect())
                             .drawIndirectFirstInstance(has.drawIndirectFirstInstance())
                             .samplerAnisotropy(has.samplerAnisotropy())
-                            .depthClamp(has.depthClamp());
+                            .depthClamp(has.depthClamp())
+                            .logicOp(has.logicOp());
             PointerBuffer dext = stack.mallocPointer(8);
             if (!core13) {
                 dext.put(stack.UTF8(KHRDynamicRendering.VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME));
