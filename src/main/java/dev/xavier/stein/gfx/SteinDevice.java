@@ -73,6 +73,15 @@ public abstract class SteinDevice {
             SteinTexture src, int srcLayer, SteinTexture dst, int dstLayer, int w, int h);
 
     /**
+     * Whether {@link #copyTexture} can copy the game's textures (imported) into ours. False when
+     * the driver refuses every way of copying them: whoever uses them then draws with the game's
+     * texture itself.
+     */
+    public boolean copiesGameTextures() {
+        return true;
+    }
+
+    /**
      * Copies on the GPU {@code bytes} from {@code src} (starting at {@code srcOffset}) to {@code
      * dst} (starting at {@code dstOffset}). Outside a pass; what was requested of the GPU before
      * reads the earlier contents.

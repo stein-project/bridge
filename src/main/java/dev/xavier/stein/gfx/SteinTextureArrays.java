@@ -107,6 +107,10 @@ public final class SteinTextureArrays {
     }
 
     private static int copy(int tex) {
+        if (!SteinDevice.get().copiesGameTextures()) {
+            rejected[tex] = true;
+            return -1;
+        }
         int w;
         int h;
         int format;

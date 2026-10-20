@@ -8,11 +8,13 @@
 
 package dev.xavier.stein.gfx.gl;
 
+import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.gfx.SteinBuffer;
 import dev.xavier.stein.gfx.SteinCaps;
 import dev.xavier.stein.gfx.SteinCommands;
 import dev.xavier.stein.gfx.SteinDevice;
 import dev.xavier.stein.gfx.SteinFence;
+import dev.xavier.stein.gfx.SteinFormat;
 import dev.xavier.stein.gfx.SteinPipeline;
 import dev.xavier.stein.gfx.SteinRenderPass;
 import dev.xavier.stein.gfx.SteinRenderTarget;
@@ -23,6 +25,8 @@ import dev.xavier.stein.gfx.SteinVertexLayout;
 import org.lwjgl.opengl.EXTTextureFilterAnisotropic;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL12;
+import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL21;
@@ -32,6 +36,7 @@ import org.lwjgl.opengl.GL43;
 import org.lwjgl.opengl.GLCapabilities;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.IntSupplier;
@@ -130,11 +135,11 @@ public final class SteinGlDevice extends SteinDevice {
     @Override
     public void copyTexture(
             SteinTexture src, int srcLayer, SteinTexture dst, int dstLayer, int w, int h) {
-        if (!caps.copyImage) {
-            SteinGlFrame.sync("texture copy without GL 4.3");
-            blitTexture(src, srcLayer, dst, dstLayer, w, h);
-            return;
-        }
+        // Without GL 4.3, and for the game's textures where the driver refuses glCopyImageSubData
+        // from them (see probeGameCopy): through a framebuffer.
+        boolean blit =
+                !caps.copyImage
+                        || ((SteinGlTexture) src).external() && gameCopy() != GAME_COPY_IMAGE;
         if (SteinGlFrame.pending()) {
             // in the recorded frame's order (the pass recorded earlier reads the previous texture)
             SteinGlFrame.copyTexture(
@@ -145,7 +150,12 @@ public final class SteinGlDevice extends SteinDevice {
                     ((SteinGlTexture) dst).target(),
                     dstLayer,
                     w,
-                    h);
+                    h,
+                    blit);
+            return;
+        }
+        if (blit) {
+            blitTexture(src, srcLayer, dst, dstLayer, w, h);
             return;
         }
         GL43.glCopyImageSubData(
@@ -186,47 +196,229 @@ public final class SteinGlDevice extends SteinDevice {
         GL15.glBindBuffer(GL31.GL_COPY_WRITE_BUFFER, prevWrite);
     }
 
-    /**
-     * Without GL 4.3: the copy through two framebuffers and a blit (GL 3.0), restoring the bound
-     * framebuffers.
-     */
     private static void blitTexture(
             SteinTexture src, int srcLayer, SteinTexture dst, int dstLayer, int w, int h) {
+        blit(
+                (int) src.handle(),
+                ((SteinGlTexture) src).target(),
+                srcLayer,
+                (int) dst.handle(),
+                ((SteinGlTexture) dst).target(),
+                dstLayer,
+                w,
+                h);
+    }
+
+    /** The two framebuffers of {@link #blit}, created on the first copy and kept. */
+    private static int blitRead;
+
+    private static int blitDraw;
+
+    /**
+     * The copy through two framebuffers and a blit (GL 3.0), restoring the bound framebuffers and
+     * the scissor; also at replay ({@link SteinGlReplay}). The attachments are taken off
+     * afterwards, so a texture the game deletes is not held by them.
+     */
+    static void blit(
+            int src,
+            int srcTarget,
+            int srcLayer,
+            int dst,
+            int dstTarget,
+            int dstLayer,
+            int w,
+            int h) {
         int prevRead = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         int prevDraw = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         boolean scissor = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
-        int read = GL30.glGenFramebuffers();
-        int draw = GL30.glGenFramebuffers();
+        if (blitRead == 0) {
+            blitRead = GL30.glGenFramebuffers();
+            blitDraw = GL30.glGenFramebuffers();
+        }
         try {
             if (scissor) {
                 GL11.glDisable(GL11.GL_SCISSOR_TEST);
             }
-            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, read);
-            attachLayer(GL30.GL_READ_FRAMEBUFFER, src, srcLayer);
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, blitRead);
+            attachLayer(GL30.GL_READ_FRAMEBUFFER, src, srcTarget, srcLayer);
             GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
-            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
-            attachLayer(GL30.GL_DRAW_FRAMEBUFFER, dst, dstLayer);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, blitDraw);
+            attachLayer(GL30.GL_DRAW_FRAMEBUFFER, dst, dstTarget, dstLayer);
             GL20.glDrawBuffers(GL30.GL_COLOR_ATTACHMENT0);
             GL30.glBlitFramebuffer(
                     0, 0, w, h, 0, 0, w, h, GL11.GL_COLOR_BUFFER_BIT, GL11.GL_NEAREST);
+            attachLayer(GL30.GL_READ_FRAMEBUFFER, 0, srcTarget, 0);
+            attachLayer(GL30.GL_DRAW_FRAMEBUFFER, 0, dstTarget, 0);
         } finally {
             GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevRead);
             GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, prevDraw);
-            GL30.glDeleteFramebuffers(read);
-            GL30.glDeleteFramebuffers(draw);
             if (scissor) {
                 GL11.glEnable(GL11.GL_SCISSOR_TEST);
             }
         }
     }
 
-    private static void attachLayer(int fb, SteinTexture t, int layer) {
-        if (t.desc().kind == SteinTexture.Kind.TEXTURE_2D_ARRAY) {
-            GL30.glFramebufferTextureLayer(
-                    fb, GL30.GL_COLOR_ATTACHMENT0, (int) t.handle(), 0, layer);
+    // ---- the game's textures into ours ----
+
+    private static final int GAME_COPY_IMAGE = 1;
+    private static final int GAME_COPY_BLIT = 2;
+    private static final int GAME_COPY_NONE = 3;
+
+    /** Side of the probe texture. */
+    private static final int PROBE = 4;
+
+    /** How a game texture is copied into ours (0: not decided yet, see {@link #probeGameCopy}). */
+    private int gameCopy;
+
+    @Override
+    public boolean copiesGameTextures() {
+        return gameCopy() != GAME_COPY_NONE;
+    }
+
+    private int gameCopy() {
+        if (gameCopy == 0) {
+            gameCopy = probeGameCopy();
+        }
+        return gameCopy;
+    }
+
+    /**
+     * Once, before the first copy of a game texture: a small texture made the way the game makes
+     * its own (TextureUtil: unsized GL_RGBA, one level, BGRA pixels) is copied into an RGBA8 array
+     * and read back. Some drivers refuse glCopyImageSubData from it (Intel's: INVALID_OPERATION,
+     * the layer stays empty and the players' bodies come out invisible); the copy then goes through
+     * a framebuffer, and if that does not come out right either, the game's textures stay out of
+     * the arrays.
+     */
+    private int probeGameCopy() {
+        SteinGlFrame.sync("game texture copy probe");
+        // errors the game left pending would be blamed on the copy
+        for (int i = 0; i < 16 && GL11.glGetError() != GL11.GL_NO_ERROR; i++) {}
+        int[] pixels = new int[PROBE * PROBE];
+        for (int i = 0; i < pixels.length; i++) {
+            pixels[i] = (255 - i * 9) << 24 | i * 0x050709;
+        }
+        SteinTexture dst =
+                createTexture(
+                        SteinTexture.Desc.array(
+                                "game copy probe", SteinFormat.RGBA8, PROBE, PROBE, 1, 1));
+        int game = GL11.glGenTextures();
+        int prevTexture = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
+        int prevUnpack = GL11.glGetInteger(GL21.GL_PIXEL_UNPACK_BUFFER_BINDING);
+        int prevPack = GL11.glGetInteger(GL21.GL_PIXEL_PACK_BUFFER_BINDING);
+        try {
+            GL15.glBindBuffer(GL21.GL_PIXEL_UNPACK_BUFFER, 0);
+            GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, 0);
+            // TextureUtil.allocateTextureImpl and uploadTextureSub, the way the skins are made
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, game);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL12.GL_TEXTURE_MAX_LEVEL, 0);
+            GL11.glTexParameterf(GL11.GL_TEXTURE_2D, GL12.GL_TEXTURE_MIN_LOD, 0f);
+            GL11.glTexParameterf(GL11.GL_TEXTURE_2D, GL12.GL_TEXTURE_MAX_LOD, 0f);
+            GL11.glTexParameterf(GL11.GL_TEXTURE_2D, GL14.GL_TEXTURE_LOD_BIAS, 0f);
+            GL11.glTexImage2D(
+                    GL11.GL_TEXTURE_2D,
+                    0,
+                    GL11.GL_RGBA,
+                    PROBE,
+                    PROBE,
+                    0,
+                    GL12.GL_BGRA,
+                    GL12.GL_UNSIGNED_INT_8_8_8_8_REV,
+                    (ByteBuffer) null);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MIN_FILTER, GL11.GL_NEAREST);
+            GL11.glTexParameteri(GL11.GL_TEXTURE_2D, GL11.GL_TEXTURE_MAG_FILTER, GL11.GL_NEAREST);
+            GL11.glTexSubImage2D(
+                    GL11.GL_TEXTURE_2D,
+                    0,
+                    0,
+                    0,
+                    PROBE,
+                    PROBE,
+                    GL12.GL_BGRA,
+                    GL12.GL_UNSIGNED_INT_8_8_8_8_REV,
+                    pixels);
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTexture);
+            String forced = SteinGlOptions.GAME_COPY;
+            String refused = forced != null ? "gameCopy=" + forced : "no GL 4.3";
+            if ("none".equals(forced)) {
+                Log.info("gfx", "game textures: not copied (" + refused + ")");
+                return GAME_COPY_NONE;
+            }
+            if (caps.copyImage && forced == null) {
+                GL43.glCopyImageSubData(
+                        game,
+                        GL11.GL_TEXTURE_2D,
+                        0,
+                        0,
+                        0,
+                        0,
+                        (int) dst.handle(),
+                        GL30.GL_TEXTURE_2D_ARRAY,
+                        0,
+                        0,
+                        0,
+                        0,
+                        PROBE,
+                        PROBE,
+                        1);
+                refused = probeResult(dst, pixels);
+                if (refused == null) {
+                    return GAME_COPY_IMAGE;
+                }
+            }
+            SteinTexture src =
+                    importTexture(
+                            SteinTexture.Desc.texture2D(
+                                    "game copy probe", SteinFormat.RGBA8, PROBE, PROBE, 1),
+                            game);
+            blitTexture(src, 0, dst, 0, PROBE, PROBE);
+            String blit = probeResult(dst, pixels);
+            if (blit == null) {
+                Log.info(
+                        "gfx",
+                        "game textures: glCopyImageSubData refused ("
+                                + refused
+                                + "), copied through a framebuffer");
+                return GAME_COPY_BLIT;
+            }
+            Log.info(
+                    "gfx",
+                    "game textures: neither glCopyImageSubData ("
+                            + refused
+                            + ") nor a framebuffer ("
+                            + blit
+                            + ") copies them, entities draw with the game's textures");
+            return GAME_COPY_NONE;
+        } finally {
+            GL11.glBindTexture(GL11.GL_TEXTURE_2D, prevTexture);
+            GL15.glBindBuffer(GL21.GL_PIXEL_UNPACK_BUFFER, prevUnpack);
+            GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, prevPack);
+            GL11.glDeleteTextures(game);
+            dst.destroy();
+        }
+    }
+
+    /** Null if layer 0 of the probe array holds {@code pixels}; otherwise what went wrong. */
+    private static String probeResult(SteinTexture dst, int[] pixels) {
+        int error = GL11.glGetError();
+        if (error != GL11.GL_NO_ERROR) {
+            return "GL error 0x" + Integer.toHexString(error);
+        }
+        int[] read = new int[pixels.length];
+        int prev = GL11.glGetInteger(GL30.GL_TEXTURE_BINDING_2D_ARRAY);
+        GL11.glBindTexture(GL30.GL_TEXTURE_2D_ARRAY, (int) dst.handle());
+        GL11.glGetTexImage(
+                GL30.GL_TEXTURE_2D_ARRAY, 0, GL12.GL_BGRA, GL12.GL_UNSIGNED_INT_8_8_8_8_REV, read);
+        GL11.glBindTexture(GL30.GL_TEXTURE_2D_ARRAY, prev);
+        return Arrays.equals(read, pixels) ? null : "different pixels";
+    }
+
+    private static void attachLayer(int fb, int texture, int target, int layer) {
+        if (target == GL30.GL_TEXTURE_2D_ARRAY) {
+            GL30.glFramebufferTextureLayer(fb, GL30.GL_COLOR_ATTACHMENT0, texture, 0, layer);
         } else {
             GL30.glFramebufferTexture2D(
-                    fb, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, (int) t.handle(), 0);
+                    fb, GL30.GL_COLOR_ATTACHMENT0, GL11.GL_TEXTURE_2D, texture, 0);
         }
     }
 

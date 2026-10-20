@@ -37,6 +37,13 @@ public final class SteinGlOptions {
     static final String TIER = Opt.text("steinbridge.gfx.tier", null);
 
     /**
+     * {@code -Dsteinbridge.gfx.gameCopy=blit|none}: copies the game's textures into the arrays
+     * through a framebuffer, or not at all, as when the driver refuses glCopyImageSubData from them
+     * (default: unset, decided by a probe).
+     */
+    static final String GAME_COPY = Opt.text("steinbridge.gfx.gameCopy", null);
+
+    /**
      * {@code -Dsteinbridge.gfx.recordFrameCheck.every=N}: checks one recorded frame every N
      * (default: 300, minimum 1).
      */
