@@ -145,6 +145,7 @@ public final class SteinGlCommands extends SteinCommands {
     float gOffsetFactor;
     float gOffsetUnits;
     boolean gLogicOp;
+    int gLogicOpMode;
     boolean scissorWas;
 
     // ---- pass state ----
@@ -190,6 +191,11 @@ public final class SteinGlCommands extends SteinCommands {
     boolean cull;
     int cullFace;
     final boolean[] mask = new boolean[4];
+
+    /** glLogicOp's operation emitted, 0 = off; whether the pass changed the operation. */
+    int logicOp;
+
+    boolean logicOpTouched;
 
     public SteinGlCommands(SteinGlDevice device, SteinRenderPass pass) {
         this(device, pass, false);

@@ -486,6 +486,15 @@ final class SteinVkPipeline extends SteinPipeline {
             if (colors > 0) {
                 cb.pAttachments(att.limit(colors)).attachmentCount(colors);
             }
+            if (desc.logicOp != null) {
+                if (device.logicOp) {
+                    cb.logicOpEnable(true).logicOp(desc.logicOp.ordinal());
+                } else {
+                    Log.info(
+                            "gfx",
+                            "vulkan: no logicOp feature, '" + desc.name + "' draws without it");
+                }
+            }
             VkPipelineDynamicStateCreateInfo dyn =
                     VkPipelineDynamicStateCreateInfo.calloc(stack)
                             .sType$Default()

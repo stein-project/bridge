@@ -128,4 +128,8 @@ final class SteinGlGame {
     static boolean logicOp() {
         return !NO_GAME && SteinGameState.logicOp();
     }
+
+    static int logicOpMode() {
+        return NO_GAME ? GL11.GL_COPY : SteinGameState.logicOpMode();
+    }
 }

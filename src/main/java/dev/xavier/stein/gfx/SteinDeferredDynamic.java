@@ -23,6 +23,8 @@ import static dev.xavier.stein.gfx.SteinPassTiming.*;
 
 import dev.xavier.stein.bridge.engine.GLMatrix;
 
+import org.lwjgl.opengl.GL11;
+
 /**
  * Recording of dynamic geometry (Tessellator, font, item lists) for {@link SteinEntityDeferred}:
  * reads the game state at {@code beginDynamic}, reserves the vertices in the frame ring and writes
@@ -87,8 +89,14 @@ final class SteinDeferredDynamic {
         // off) stays immediate.
         boolean noColor = SteinGameState.colorMaskNone();
         boolean noAlpha = !noColor && SteinGameState.colorMaskRgb();
-        if (!noColor && !noAlpha && !SteinGameState.colorMaskAll() || SteinGameState.logicOp()) {
-            return rejectDynamic("partial color mask or logicOp");
+        if (!noColor && !noAlpha && !SteinGameState.colorMaskAll()) {
+            return rejectDynamic("partial color mask");
+        }
+        // The logical operation replaces the blend (see KEY_LOGIC).
+        boolean logicOn = SteinGameState.logicOp();
+        int logic = logicOn ? SteinGameState.logicOpMode() - GL11.GL_CLEAR : -1;
+        if (logicOn && (noColor || logic < 0 || logic > GL11.GL_SET - GL11.GL_CLEAR)) {
+            return rejectDynamic("logicOp");
         }
         long offset = offsetBits();
         if (offset < 0) {
@@ -148,6 +156,9 @@ final class SteinDeferredDynamic {
         if (key < 0) {
             return rejectDynamic("state without a key");
         }
+        if (logic >= 0) {
+            key = key & ~(KEY_BLEND_BIT | 0xFFFF << KEY_SRC_SHIFT) | logic << KEY_SRC_SHIFT;
+        }
         int flags = dynamicFlags(bits, lighting, currentNormal, overlay, vColor, textured);
         if (flags < 0) {
             return false;
@@ -161,7 +172,8 @@ final class SteinDeferredDynamic {
                         | offset
                         | (lines ? KEY_LINES : 0L)
                         | (noColor ? KEY_NOCOLOR : 0L)
-                        | (noAlpha ? KEY_NOALPHA : 0L);
+                        | (noAlpha ? KEY_NOALPHA : 0L)
+                        | (logic >= 0 ? KEY_LOGIC : 0L);
         dynAlphaRef = ref;
         if (session) {
             kindCaptured[sessionKind]++;

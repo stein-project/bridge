@@ -77,6 +77,10 @@ public final class SteinGlPipeline extends SteinPipeline {
     final boolean cull;
     final int cullFace;
     final boolean colorWrite;
+
+    /** glLogicOp's operation, or 0 without a logical operation. */
+    final int logicOp;
+
     final boolean alphaWrite;
 
     public SteinGlPipeline(SteinGlDevice device, SteinPipeline.Desc desc) {
@@ -139,6 +143,7 @@ public final class SteinGlPipeline extends SteinPipeline {
         this.cull = desc.cull != Cull.NONE;
         this.cullFace = desc.cull == Cull.FRONT ? GL11.GL_FRONT : GL11.GL_BACK;
         this.colorWrite = desc.colorWrite;
+        this.logicOp = desc.logicOp == null ? 0 : GL11.GL_CLEAR + desc.logicOp.ordinal();
         this.alphaWrite = desc.alphaWrite;
 
         this.bindings = desc.layout.bindings.toArray(new SteinVertexLayout.Binding[0]);

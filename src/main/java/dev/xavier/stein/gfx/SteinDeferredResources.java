@@ -230,7 +230,9 @@ final class SteinDeferredResources {
         if ((full & KEY_LINES) != 0) {
             b.topology(SteinPipeline.Topology.LINES);
         }
-        if (keyBlend(key)) {
+        if ((full & KEY_LOGIC) != 0) {
+            b.logicOp(SteinPipeline.LogicOp.values()[(key >>> KEY_SRC_SHIFT) & 15]);
+        } else if (keyBlend(key)) {
             b.blend(
                     keyFactor(key, KEY_SRC_SHIFT),
                     keyFactor(key, KEY_DST_SHIFT),

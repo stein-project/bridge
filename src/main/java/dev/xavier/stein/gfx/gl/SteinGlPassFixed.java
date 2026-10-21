@@ -47,6 +47,10 @@ final class SteinGlPassFixed {
         cmd.gOffsetFactor = SteinGlGame.polygonOffsetFactor();
         cmd.gOffsetUnits = SteinGlGame.polygonOffsetUnits();
         cmd.gLogicOp = SteinGlGame.logicOp();
+        cmd.gLogicOpMode = SteinGlGame.logicOpMode();
+        // off for the pass (disableForPass)
+        cmd.logicOp = 0;
+        cmd.logicOpTouched = false;
         cmd.fixedKnown = true;
         cmd.blend = cmd.gBlend;
         cmd.blendSrc = cmd.gBlendSrc;
@@ -130,6 +134,14 @@ final class SteinGlPassFixed {
             cmd.mask[2] = c;
             cmd.mask[3] = a;
         }
+        if (all || cmd.logicOp != p.logicOp) {
+            enable(GL11.GL_COLOR_LOGIC_OP, p.logicOp != 0);
+            if (p.logicOp != 0) {
+                GL11.glLogicOp(p.logicOp);
+                cmd.logicOpTouched = true;
+            }
+            cmd.logicOp = p.logicOp;
+        }
     }
 
     static void enable(int cap, boolean on) {
@@ -182,6 +194,12 @@ final class SteinGlPassFixed {
         }
         if (cmd.offsetTouched) {
             GL11.glPolygonOffset(cmd.gOffsetFactor, cmd.gOffsetUnits);
+        }
+        if (cmd.logicOp != 0 && !cmd.gLogicOp) {
+            GL11.glDisable(GL11.GL_COLOR_LOGIC_OP);
+        }
+        if (cmd.logicOpTouched) {
+            GL11.glLogicOp(cmd.gLogicOpMode);
         }
         if (cmd.gLogicOp) {
             GL11.glEnable(GL11.GL_COLOR_LOGIC_OP);

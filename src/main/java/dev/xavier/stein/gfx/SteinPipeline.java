@@ -50,6 +50,30 @@ public abstract class SteinPipeline {
         CUSTOM
     }
 
+    /**
+     * Logical operation on the colour, in place of blending (the game's glLogicOp: the text field's
+     * selection uses OR_REVERSE). The same order as OpenGL (GL_CLEAR + ordinal) and Vulkan
+     * (VkLogicOp).
+     */
+    public enum LogicOp {
+        CLEAR,
+        AND,
+        AND_REVERSE,
+        COPY,
+        AND_INVERTED,
+        NO_OP,
+        XOR,
+        OR,
+        NOR,
+        EQUIVALENT,
+        INVERT,
+        OR_REVERSE,
+        COPY_INVERTED,
+        OR_INVERTED,
+        NAND,
+        SET
+    }
+
     /** Blend factor (the same set as Vulkan and OpenGL). */
     public enum Factor {
         ZERO,
@@ -108,6 +132,9 @@ public abstract class SteinPipeline {
         public final Cull cull;
         public final boolean colorWrite;
 
+        /** null = no logical operation; otherwise it replaces the blend. */
+        public final LogicOp logicOp;
+
         /** Alpha write (with color on): the menu panorama writes only RGB. */
         public final boolean alphaWrite;
 
@@ -133,6 +160,7 @@ public abstract class SteinPipeline {
             this.depthWrite = b.depthWrite;
             this.cull = b.cull;
             this.colorWrite = b.colorWrite;
+            this.logicOp = b.logicOp;
             this.alphaWrite = b.alphaWrite;
             this.textures = Collections.unmodifiableMap(new LinkedHashMap<>(b.textures));
             this.uniforms = Collections.unmodifiableMap(new LinkedHashMap<>(b.uniforms));
@@ -157,6 +185,7 @@ public abstract class SteinPipeline {
                     && d.depthWrite == depthWrite
                     && d.cull == cull
                     && d.colorWrite == colorWrite
+                    && d.logicOp == logicOp
                     && d.alphaWrite == alphaWrite
                     && d.textures.equals(textures)
                     && d.uniforms.equals(uniforms)
@@ -177,6 +206,7 @@ public abstract class SteinPipeline {
                             depthWrite,
                             cull,
                             colorWrite,
+                            logicOp,
                             alphaWrite,
                             textures,
                             uniforms,
@@ -201,6 +231,7 @@ public abstract class SteinPipeline {
         private boolean depthWrite = true;
         private Cull cull = Cull.BACK;
         private boolean colorWrite = true;
+        private LogicOp logicOp;
         private boolean alphaWrite = true;
         private final Map<String, Integer> textures = new LinkedHashMap<>();
         private final Map<String, Integer> uniforms = new LinkedHashMap<>();
@@ -269,6 +300,12 @@ public abstract class SteinPipeline {
 
         public Builder colorWrite(boolean w) {
             this.colorWrite = w;
+            return this;
+        }
+
+        /** null turns it off. */
+        public Builder logicOp(LogicOp op) {
+            this.logicOp = op;
             return this;
         }
 
