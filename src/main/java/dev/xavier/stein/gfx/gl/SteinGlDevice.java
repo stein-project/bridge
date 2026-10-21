@@ -292,8 +292,6 @@ public final class SteinGlDevice extends SteinDevice {
      */
     private int probeGameCopy() {
         SteinGlFrame.sync("game texture copy probe");
-        // errors the game left pending would be blamed on the copy
-        for (int i = 0; i < 16 && GL11.glGetError() != GL11.GL_NO_ERROR; i++) {}
         int[] pixels = new int[PROBE * PROBE];
         for (int i = 0; i < pixels.length; i++) {
             pixels[i] = (255 - i * 9) << 24 | i * 0x050709;
@@ -353,6 +351,7 @@ public final class SteinGlDevice extends SteinDevice {
                                     + " refuses it, the CopyImageSubData error right after this is"
                                     + " expected (the \"game textures\" line says what was chosen)");
                 }
+                clearErrors();
                 GL43.glCopyImageSubData(
                         game,
                         GL11.GL_TEXTURE_2D,
@@ -379,6 +378,7 @@ public final class SteinGlDevice extends SteinDevice {
                             SteinTexture.Desc.texture2D(
                                     "game copy probe", SteinFormat.RGBA8, PROBE, PROBE, 1),
                             game);
+            clearErrors();
             blitTexture(src, 0, dst, 0, PROBE, PROBE);
             String blit = probeResult(dst, pixels);
             if (blit == null) {
@@ -404,6 +404,11 @@ public final class SteinGlDevice extends SteinDevice {
             GL11.glDeleteTextures(game);
             dst.destroy();
         }
+    }
+
+    /** Errors left pending (by the game, or by an earlier step) would be blamed on the copy. */
+    private static void clearErrors() {
+        for (int i = 0; i < 16 && GL11.glGetError() != GL11.GL_NO_ERROR; i++) {}
     }
 
     /** Null if layer 0 of the probe array holds {@code pixels}; otherwise what went wrong. */
