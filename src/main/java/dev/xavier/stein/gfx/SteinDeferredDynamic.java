@@ -93,8 +93,9 @@ final class SteinDeferredDynamic {
             return rejectDynamic("partial color mask");
         }
         // The logical operation replaces the blend (see KEY_LOGIC).
-        int logic = SteinGameState.logicOp() ? SteinGameState.logicOpMode() - GL11.GL_CLEAR : -1;
-        if (logic >= 0 && (noColor || logic > GL11.GL_SET - GL11.GL_CLEAR)) {
+        boolean logicOn = SteinGameState.logicOp();
+        int logic = logicOn ? SteinGameState.logicOpMode() - GL11.GL_CLEAR : -1;
+        if (logicOn && (noColor || logic < 0 || logic > GL11.GL_SET - GL11.GL_CLEAR)) {
             return rejectDynamic("logicOp");
         }
         long offset = offsetBits();

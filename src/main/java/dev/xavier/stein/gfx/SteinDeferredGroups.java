@@ -69,7 +69,9 @@ final class SteinDeferredGroups {
 
         Group(long key) {
             this.key = key;
-            this.blend = keyBlend((int) key);
+            // A logical operation reads the destination like a blend: it goes out with the
+            // blended groups, after what it covers.
+            this.blend = keyBlend((int) key) || (key & KEY_LOGIC) != 0;
             this.dynamic = (key & KEY_DYNAMIC) != 0;
             this.fromStatic = (key & KEY_STATIC) != 0;
             this.fromText = (key & KEY_TEXT) != 0;
