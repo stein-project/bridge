@@ -412,7 +412,8 @@ public final class SteinGlFrame {
             int dstTarget,
             int dstLayer,
             int w,
-            int h) {
+            int h,
+            boolean blit) {
         op(COPY_TEXTURE);
         i(src);
         i(srcTarget);
@@ -422,8 +423,19 @@ public final class SteinGlFrame {
         i(dstLayer);
         i(w);
         i(h);
+        i(blit ? 1 : 0);
         if (checking) {
-            chkRec(COPY_TEXTURE, src, srcTarget, srcLayer, dst, dstTarget, dstLayer, w, h);
+            chkRec(
+                    COPY_TEXTURE,
+                    src,
+                    srcTarget,
+                    srcLayer,
+                    dst,
+                    dstTarget,
+                    dstLayer,
+                    w,
+                    h,
+                    blit ? 1 : 0);
         }
     }
 

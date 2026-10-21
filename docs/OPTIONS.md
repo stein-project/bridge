@@ -224,6 +224,7 @@ listed at the end.
 - `-Dsteinbridge.gfx.audit=true`: reports the draws that bypass Stein GFX (default: off).
 - `-Dsteinbridge.gfx.glDebug=true`: turns on the driver's debug output (default: off).
 - `-Dsteinbridge.gfx.tier=41`: pretends to be a GL 4.1 device (default: unset, the real device).
+- `-Dsteinbridge.gfx.gameCopy=blit|none`: copies the game's textures into the arrays through a framebuffer, or not at all, as when the driver refuses glCopyImageSubData from them (default: unset, decided by a probe).
 - `-Dsteinbridge.gfx.recordFrameCheck.every=N`: checks one recorded frame every N (default: 300, minimum 1).
 - `-Dsteinbridge.gfx.recordFrameDump=N`: prints the recorded frame number N (default: -1, never).
 - `-Dsteinbridge.gfx.test.noGame=true`: runs without the game, for the out-of-game test (default: off).

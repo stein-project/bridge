@@ -369,12 +369,17 @@ final class SteinGlReplay {
         int dl = ints[ip++];
         int w = ints[ip++];
         int h = ints[ip++];
+        boolean blit = ints[ip++] != 0;
         if (checking) {
-            chkRep(COPY_TEXTURE, src, st, sl, dst, dt, dl, w, h);
+            chkRep(COPY_TEXTURE, src, st, sl, dst, dt, dl, w, h, blit ? 1 : 0);
             checkTexture(src);
             checkTexture(dst);
         }
-        GL43.glCopyImageSubData(src, st, 0, 0, 0, sl, dst, dt, 0, 0, 0, dl, w, h, 1);
+        if (blit) {
+            SteinGlDevice.blit(src, st, sl, dst, dt, dl, w, h);
+        } else {
+            GL43.glCopyImageSubData(src, st, 0, 0, 0, sl, dst, dt, 0, 0, 0, dl, w, h, 1);
+        }
     }
 
     private static void playDeleteBuffer() {

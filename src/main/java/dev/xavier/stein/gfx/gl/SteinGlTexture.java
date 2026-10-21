@@ -125,6 +125,11 @@ final class SteinGlTexture extends SteinTexture {
         return id;
     }
 
+    /** A texture of the game's ({@link SteinGlDevice#importTexture}), not created by us. */
+    boolean external() {
+        return !owned;
+    }
+
     /** The OpenGL target ({@code GL_TEXTURE_2D} or {@code GL_TEXTURE_2D_ARRAY}). */
     int target() {
         return target;
