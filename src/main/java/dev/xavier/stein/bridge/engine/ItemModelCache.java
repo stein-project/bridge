@@ -168,6 +168,20 @@ public final class ItemModelCache {
 
     /** RenderItem.renderModel(model, colour, stack), diverted from its call sites in RenderItem. */
     public static void renderModel(Object renderItem, Object model, int color, Object stack) {
+        if (RenderCheck.on()) {
+            // The diagnostic counts the vertices of this model's draw (beforeDraw).
+            RenderCheck.drawing(model);
+            try {
+                render(renderItem, model, color, stack);
+            } finally {
+                RenderCheck.drawing(null);
+            }
+            return;
+        }
+        render(renderItem, model, color, stack);
+    }
+
+    private static void render(Object renderItem, Object model, int color, Object stack) {
         if (VANILLA) {
             ((RenderItem) renderItem).renderModel((IBakedModel) model, color, (ItemStack) stack);
             return;
@@ -329,6 +343,9 @@ public final class ItemModelCache {
 
     /** Before Tessellator.draw inside RenderItem: in the check, compares the bytes. */
     public static void beforeDraw() {
+        if (RenderCheck.on()) {
+            RenderCheck.drawn(Tessellator.getInstance().getWorldRenderer().getVertexCount());
+        }
         if (!CHECK || checking == null) {
             return;
         }
@@ -369,6 +386,7 @@ public final class ItemModelCache {
     /** After every resource reload: the models are recreated, the old lists are no use. */
     public static void clear() {
         SteinHeldItem.clear(); // the moulds point to the lists' geometry
+        RenderCheck.clear();
         if (CACHE.isEmpty()) {
             return;
         }

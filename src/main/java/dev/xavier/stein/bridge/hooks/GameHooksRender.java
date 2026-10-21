@@ -9,6 +9,7 @@
 package dev.xavier.stein.bridge.hooks;
 
 import dev.xavier.stein.bridge.engine.ArmorTextures;
+import dev.xavier.stein.bridge.engine.RenderCheck;
 
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
@@ -266,17 +267,21 @@ final class GameHooksRender {
      */
     static Object itemModel(Object mesher, Object stack) {
         Object model = ((ItemModelMesher) mesher).getItemModel((ItemStack) stack);
+        Object chosen = model;
         if (GameHooks.SINK != null && stack != null) {
             try {
                 Object m = GameHooks.SINK.itemModel(stack, model);
                 if (m != null) {
-                    return m;
+                    chosen = m;
                 }
             } catch (Throwable e) {
                 GameHooks.fail("itemModel", e);
             }
         }
-        return model;
+        if (RenderCheck.on()) {
+            RenderCheck.model(stack, model, chosen);
+        }
+        return chosen;
     }
 
     /** The armor piece that renderLayer is drawing (only the render thread uses it). */
