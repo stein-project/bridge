@@ -55,6 +55,12 @@ public final class RenderCheck {
     /** The model RenderItem is drawing now, for {@link #drawn}. */
     private static Object drawing;
 
+    /**
+     * Models written at most: a listener that builds a new model on every call (a mod) would
+     * otherwise grow the map and the file for as long as the diagnostic is on.
+     */
+    private static final int MAX_MODELS = 4096;
+
     private static boolean environmentWritten;
 
     private RenderCheck() {}
@@ -72,13 +78,23 @@ public final class RenderCheck {
         if (model == null || SEEN.containsKey(model)) {
             return;
         }
-        if (!environmentWritten) {
-            environmentWritten = true;
-            environment();
+        if (SEEN.size() >= MAX_MODELS) {
+            return;
         }
-        SEEN.put(model, new int[] {-1, quads(model)});
+        // A diagnostic must never take the game down: a model a mod built differently is written
+        // as not described, and the draw goes on.
         try {
+            if (!environmentWritten) {
+                environmentWritten = true;
+                environment();
+            }
+            int[] seen = {-1, 0};
+            SEEN.put(model, seen);
+            seen[1] = quads(model);
             describe((ItemStack) stack, (IBakedModel) model, model != gameModel);
+            if (SEEN.size() == MAX_MODELS) {
+                write("WARNING " + MAX_MODELS + " models written, the next ones are not");
+            }
         } catch (RuntimeException e) {
             write("model: could not describe " + model + ": " + e);
         }

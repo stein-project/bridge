@@ -312,10 +312,11 @@ public final class SteinLog {
             while (true) {
                 String line = LINES.take();
                 if (line == STOP) {
-                    for (BufferedWriter w : out) {
-                        if (w != null) {
-                            tail(w);
-                            w.close();
+                    for (int i = 0; i < channels; i++) {
+                        if (out[i] != null) {
+                            tail(out[i]);
+                            out[i].close();
+                            out[i] = null;
                         }
                     }
                     return;
@@ -352,6 +353,18 @@ public final class SteinLog {
         } catch (IOException e) {
             on = false;
             Log.warn("log", "stopped writing: " + e);
+        } finally {
+            // Stopped by an error: the other subjects' files are still open, and what is in their
+            // buffers is the end of the session.
+            for (BufferedWriter w : out) {
+                if (w != null) {
+                    try {
+                        w.close();
+                    } catch (IOException ignored) {
+                        // already stopping; the line above says why
+                    }
+                }
+            }
         }
     }
 
