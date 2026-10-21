@@ -12,3 +12,6 @@ org/lwjgl/opengl/GL11	glGetString	(I)Ljava/lang/String;	glGetString	dev/xavier/s
 java/lang/String	substring	(I)Ljava/lang/String;	levelPath	dev/xavier/stein/bridge/core/ServerPacks	static	bcy.a(Lhd;)V
 java/io/File	exists	()Z	cached	dev/xavier/stein/bridge/core/ServerPacks	static	bnm.a(Ljava/lang/String;Ljava/lang/String;)Lcom/google/common/util/concurrent/ListenableFuture;
 java/net/URL	openConnection	(Ljava/net/Proxy;)Ljava/net/URLConnection;	open	dev/xavier/stein/bridge/core/ServerPacks	static	nj$1.run()V
+# Item edges (engine/ItemEdges): ItemModelGenerator.isTransparent also takes nearly transparent pixels (alpha up to 16) as
+# empty, as the clients resource packs are made on do; otherwise an item painted on an alpha-1 background comes out flat.
+bgp	a	([IIIII)Z	empty	dev/xavier/stein/bridge/engine/ItemEdges	body

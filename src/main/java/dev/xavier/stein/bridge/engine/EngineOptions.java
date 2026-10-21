@@ -352,6 +352,13 @@ public final class EngineOptions {
     static final boolean VANILLA_ITEM_MODEL = Opt.flag("steinbridge.opt.vanillaItemModel");
 
     /**
+     * {@code -Dsteinbridge.opt.vanillaItemEdges=true}: generated items get edges only around fully
+     * transparent pixels, as in the original (default: also around nearly transparent ones, see
+     * ItemEdges).
+     */
+    static final boolean VANILLA_ITEM_EDGES = Opt.flag("steinbridge.opt.vanillaItemEdges");
+
+    /**
      * {@code -Dsteinbridge.opt.vanillaModelBatch=true}: draws each model part with its own
      * glLoadMatrixf + glCallList in the fixed-function fallback (default: batched from a persistent
      * buffer).
