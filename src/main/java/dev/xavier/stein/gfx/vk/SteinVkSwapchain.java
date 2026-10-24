@@ -40,6 +40,7 @@ import static org.lwjgl.vulkan.VK10.VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 import static org.lwjgl.vulkan.VK10.VK_NULL_HANDLE;
 import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_TRANSFER_BIT;
 import static org.lwjgl.vulkan.VK10.VK_SHARING_MODE_EXCLUSIVE;
+import static org.lwjgl.vulkan.VK10.VK_SUCCESS;
 import static org.lwjgl.vulkan.VK10.vkCmdBlitImage;
 import static org.lwjgl.vulkan.VK10.vkCreateSemaphore;
 import static org.lwjgl.vulkan.VK10.vkDestroySemaphore;
@@ -115,6 +116,9 @@ final class SteinVkSwapchain {
     private boolean vsync = true;
     private boolean stale = true;
     private int modeLogged = -1;
+
+    /** The last surface query was refused (logged once per refusal). */
+    private boolean capsRefused;
 
     /** The window's size, asked once per frame (reused: no allocation per frame). */
     private final int[] sizeW = new int[1];
@@ -274,9 +278,17 @@ final class SteinVkSwapchain {
     private boolean recreate() {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             VkSurfaceCapabilitiesKHR caps = VkSurfaceCapabilitiesKHR.calloc(stack);
-            SteinVkDevice.check(
-                    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device.physical(), surface, caps),
-                    "surface capabilities");
+            int r = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device.physical(), surface, caps);
+            if (r != VK_SUCCESS) {
+                // a minimized window with the display off or the session locked: some drivers
+                // refuse to describe its surface. Nothing to present now; the next frame retries.
+                if (!capsRefused) {
+                    capsRefused = true;
+                    Log.warn("gfx", "vulkan: the window's surface is not available (" + r + ")");
+                }
+                return false;
+            }
+            capsRefused = false;
             int[] fw = new int[1];
             int[] fh = new int[1];
             glfwGetFramebufferSize(window, fw, fh);
