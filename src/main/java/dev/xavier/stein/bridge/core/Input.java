@@ -40,6 +40,8 @@ import org.lwjgl.glfw.GLFWMouseButtonCallback;
 import org.lwjgl.glfw.GLFWScrollCallback;
 import org.lwjgl.glfw.GLFWWindowFocusCallback;
 import org.lwjgl.system.Callback;
+import org.lwjgl.system.Platform;
+import org.lwjgl.system.windows.User32;
 
 import java.util.Deque;
 
@@ -66,6 +68,20 @@ public final class Input {
     private static GLFWScrollCallback scroll;
     private static GLFWCursorEnterCallback cursorEnter;
     private static GLFWWindowFocusCallback focusCallback;
+
+    /** How long the cursor is hidden again every frame after the window gets focus back. */
+    private static final long HIDE_CURSOR_NANOS = 2_000_000_000L;
+
+    private static final boolean WINDOWS = Platform.get() == Platform.WINDOWS;
+
+    /**
+     * Until when (nanoTime) {@link #afterEvents} hides the cursor; 0 when it does not. After an
+     * Alt+Tab back to the game with the mouse captured, Windows may keep showing the cursor frozen
+     * at the center of the window for seconds: GLFW hides it only on WM_SETCURSOR, which can go to
+     * the task switcher still on top when the focus arrives.
+     */
+    private static long hideCursorUntil;
+
     private static GLFWFramebufferSizeCallback framebufferSizeCallback;
 
     /** Last key-press event still without an associated character. */
@@ -261,9 +277,27 @@ public final class Input {
 
     private static void onFocus(long w, boolean focused) {
         Win.focused = focused;
+        if (focused && Win.grabbed && WINDOWS) {
+            hideCursorUntil = System.nanoTime() + HIDE_CURSOR_NANOS;
+        }
         if (!focused) {
             releaseAll();
         }
+    }
+
+    /**
+     * After the window's events of the frame: for a moment after the focus comes back with the
+     * mouse captured, the cursor is hidden again (see {@link #hideCursorUntil}).
+     */
+    public static void afterEvents() {
+        if (hideCursorUntil == 0L) {
+            return;
+        }
+        if (!Win.focused || !Win.grabbed || System.nanoTime() - hideCursorUntil > 0L) {
+            hideCursorUntil = 0L;
+            return;
+        }
+        User32.SetCursor(0L);
     }
 
     public static void free() {

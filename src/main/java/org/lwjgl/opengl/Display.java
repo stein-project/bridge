@@ -44,6 +44,7 @@ import static org.lwjgl.glfw.GLFW.glfwSetWindowAttrib;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowIcon;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowMonitor;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowPos;
+import static org.lwjgl.glfw.GLFW.glfwSetWindowPosCallback;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowSize;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowTitle;
 import static org.lwjgl.glfw.GLFW.glfwShowWindow;
@@ -78,6 +79,7 @@ import dev.xavier.stein.gfx.vk.SteinVkWindow;
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.glfw.GLFWImage;
 import org.lwjgl.glfw.GLFWVidMode;
+import org.lwjgl.glfw.GLFWWindowPosCallback;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -120,6 +122,12 @@ public final class Display {
     private static long fence;
     private static int adaptive = -1;
     private static int refresh;
+
+    /** With Vulkan: a window move shows the last frame again ({@link #onMoved}). */
+    private static GLFWWindowPosCallback moved;
+
+    /** Inside the glfwPollEvents of {@link #swap()}, between two frames. */
+    private static boolean polling;
 
     private Display() {}
 
@@ -169,6 +177,10 @@ public final class Display {
         applyInterval();
 
         Input.install(win);
+        if (Win.vulkan) {
+            moved = GLFWWindowPosCallback.create(Display::onMoved);
+            glfwSetWindowPosCallback(win, moved);
+        }
         refreshSizes();
         if (background) {
             glfwIconifyWindow(win);
@@ -281,6 +293,10 @@ public final class Display {
         }
         glfwDestroyWindow(Win.handle);
         Win.handle = 0L;
+        if (moved != null) {
+            moved.free();
+            moved = null;
+        }
         glfwTerminate();
         if (errorCallback != null) {
             errorCallback.free();
@@ -383,9 +399,23 @@ public final class Display {
         long t1 = TIME_SWAP ? System.nanoTime() : 0L;
         markFrame();
         Win.resized = false;
+        polling = Win.vulkan;
         glfwPollEvents();
+        polling = false;
+        Input.afterEvents();
         if (TIME_SWAP) {
             recordSwap(t0, t1, System.nanoTime());
+        }
+    }
+
+    /**
+     * Dragging the title bar runs Windows' move loop inside glfwPollEvents: the game draws nothing
+     * until the button is released, and with a Vulkan swapchain the image only follows the window
+     * on a new presentation (it lagged behind the frame). Each move presents the last frame again.
+     */
+    private static void onMoved(long w, int x, int y) {
+        if (polling) {
+            SteinGameFramebuffers.present();
         }
     }
 
