@@ -59,4 +59,11 @@ public final class CoreOptions {
      * prints the worst case and average per second (default: off).
      */
     public static final boolean TIME_SWAP = Opt.flag("steinbridge.perf.timeSwap");
+
+    /**
+     * {@code -Dsteinbridge.perf.frameStats=true}: every 5 seconds, prints the frame count, the
+     * average, p50 and p99 frame times and the 1% low (the average FPS of the slowest 1% of
+     * frames), to compare the graphics APIs on the bench (default: off).
+     */
+    public static final boolean FRAME_STATS = Opt.flag("steinbridge.perf.frameStats");
 }

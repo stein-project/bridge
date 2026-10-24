@@ -8,6 +8,10 @@
 
 package dev.xavier.stein.bridge.engine;
 
+import dev.xavier.stein.bridge.core.CoreOptions;
+import dev.xavier.stein.bridge.core.Log;
+
+import java.util.Arrays;
 import java.util.Locale;
 
 /**
@@ -28,6 +32,15 @@ public final class FrameTime {
 
     private FrameTime() {}
 
+    private static final boolean STATS = CoreOptions.FRAME_STATS;
+    private static final long STATS_NANOS = 5_000_000_000L;
+
+    /** The bench's frame statistics ({@link CoreOptions#FRAME_STATS}): this window's frames. */
+    private static final long[] window = STATS ? new long[1 << 16] : null;
+
+    private static int windowCount;
+    private static long windowStart;
+
     /** In Display.update, once per frame. */
     public static void tick() {
         long now = System.nanoTime();
@@ -35,8 +48,49 @@ public final class FrameTime {
             DURATION[head] = now - last;
             END[head] = now;
             head = (head + 1) & (RING - 1);
+            if (STATS) {
+                stats(now, now - last);
+            }
         }
         last = now;
+    }
+
+    private static void stats(long now, long frame) {
+        if (windowStart == 0L) {
+            windowStart = now;
+        }
+        if (windowCount < window.length) {
+            window[windowCount++] = frame;
+        }
+        if (now - windowStart < STATS_NANOS) {
+            return;
+        }
+        long[] f = window;
+        int n = windowCount;
+        Arrays.sort(f, 0, n);
+        long sum = 0L;
+        for (int i = 0; i < n; i++) {
+            sum += f[i];
+        }
+        int slow = Math.max(1, n / 100);
+        long slowSum = 0L;
+        for (int i = n - slow; i < n; i++) {
+            slowSum += f[i];
+        }
+        Log.info(
+                "frames",
+                "%d frames in %.1f s: fps %.0f | avg %.3f ms, p50 %.3f, p99 %.3f, max %.3f | 1%% low"
+                        + " %.0f fps",
+                n,
+                (now - windowStart) / 1e9,
+                n * 1e9 / (now - windowStart),
+                sum / NANOS_PER_MILLI / n,
+                f[n / 2] / NANOS_PER_MILLI,
+                f[Math.min(n - 1, n * 99 / 100)] / NANOS_PER_MILLI,
+                f[n - 1] / NANOS_PER_MILLI,
+                1e9 * slow / slowSum);
+        windowCount = 0;
+        windowStart = now;
     }
 
     private static final long NANOS_PER_SECOND = 1_000_000_000L;
