@@ -8,7 +8,6 @@
 
 package dev.xavier.stein.bridge.lens;
 
-import dev.xavier.stein.bridge.core.CoreOptions;
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.bridge.engine.ChunkKeep;
 import dev.xavier.stein.bridge.engine.Visuals;
@@ -153,26 +152,16 @@ final class VideoOptions {
     }
 
     /**
-     * The graphics API (OpenGL or Vulkan): saved for the next start, since the window is created
-     * for one of them. Until then the label says it waits for the restart; if Vulkan did not start
+     * The graphics API in use (OpenGL or Vulkan), shown only: it is chosen in the Stein Client,
+     * before the game opens, since the window is created for one of them. If Vulkan did not start
      * on this computer, or the last start with it died on the way, the hint says so.
      */
     private void graphicsApi() {
         SteinBackend.Fallback why = SteinBackend.fallback();
         addText(
                 "steinlens.graphicsApi",
-                () -> {
-                    SteinBackend next = SteinBackend.saved();
-                    String name = apiName(next);
-                    return next == SteinBackend.running()
-                            ? name
-                            : tr("steinlens.graphicsApi.restart", name);
-                },
-                () ->
-                        SteinBackend.save(
-                                SteinBackend.saved() == SteinBackend.VULKAN
-                                        ? SteinBackend.OPENGL
-                                        : SteinBackend.VULKAN),
+                () -> apiName(SteinBackend.running()),
+                () -> {},
                 SteinBackend.crashedLastTime()
                         ? tr("steinlens.graphicsApi.crashed")
                         : why == null
@@ -182,8 +171,8 @@ final class VideoOptions {
                                         tr(
                                                 "steinlens.graphicsApi.reason."
                                                         + why.name().toLowerCase(Locale.ROOT))),
-                // only Stein GFX draws with either API (the fixed-function fallback is OpenGL)
-                () -> CoreOptions.GFX);
+                // never clickable: the Stein Client chooses
+                () -> false);
     }
 
     private static String apiName(SteinBackend api) {

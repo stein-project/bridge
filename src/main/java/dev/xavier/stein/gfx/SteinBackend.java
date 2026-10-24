@@ -24,9 +24,10 @@ import java.util.Properties;
 
 /**
  * The graphics API Stein GFX draws with: OpenGL (the default) or Vulkan. The player picks it in the
- * video options; the choice is saved in {@code config/stein-graphics.properties} and takes effect
- * at the next start, because the window is created for one API. {@code -Dsteinbridge.gfx.api=...}
- * overrides the file for the session (the test bench).
+ * Stein Client, which writes it to {@code config/stein-graphics.properties} before starting the
+ * game (the window is created for one API, so it is chosen before the game opens; the video options
+ * only show it). {@code -Dsteinbridge.gfx.api=...} overrides the file for the session (the test
+ * bench).
  *
  * <p>What was asked for and what is running can differ: when Vulkan does not start (no driver, no
  * GPU with Vulkan 1.2, the window refuses a surface) the game falls back to OpenGL and {@link
@@ -53,6 +54,12 @@ public enum SteinBackend {
      * seconds: still there at the next start means the last one died on the way.
      */
     private static final String STARTING = "vulkanStarting";
+
+    /**
+     * Written when a start went back to OpenGL because the last one with Vulkan died: the Stein
+     * Client reads it, switches its choice to OpenGL and tells the player.
+     */
+    private static final String CRASHED = "vulkanCrashed";
 
     /** A Vulkan start counts as good after this many frames over {@link #HEALTHY_NANOS}. */
     private static final int HEALTHY_FRAMES = 60;
@@ -95,15 +102,11 @@ public enum SteinBackend {
             crashedLastTime = true;
             p.setProperty(KEY, OPENGL.key);
             p.remove(STARTING);
+            p.setProperty(CRASHED, "true");
             store(p);
             return OPENGL;
         }
         return api;
-    }
-
-    /** The choice saved by the video options (what the next start will ask for). */
-    public static SteinBackend saved() {
-        return parse(load().getProperty(KEY), OPENGL);
     }
 
     /** The last start with Vulkan died on the way, and this one went back to OpenGL. */
@@ -146,13 +149,6 @@ public enum SteinBackend {
             p.remove(STARTING);
             store(p);
         }
-    }
-
-    /** Saves the API for the next start (the video options). */
-    public static void save(SteinBackend api) {
-        Properties p = load();
-        p.setProperty(KEY, api.key);
-        store(p);
     }
 
     private static Properties load() {
