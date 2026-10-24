@@ -8,6 +8,8 @@
 
 package dev.xavier.stein.bridge.compat;
 
+import dev.xavier.stein.bridge.core.Win;
+import dev.xavier.stein.gfx.SteinGfxOptions;
 import dev.xavier.stein.gfx.gl.SteinCoreGl;
 
 import org.lwjgl.glfw.GLFW;
@@ -33,6 +35,9 @@ public final class GLCompat {
      * CharSequence} or {@code PointerBuffer}.
      */
     public static void glShaderSource(int shader, ByteBuffer source) {
+        if (SteinGfxOptions.VULKAN) {
+            return; // the game's shaders are only names there (gfx.game.SteinGameGl)
+        }
         GL20.glShaderSource(shader, decode(source));
     }
 
@@ -43,6 +48,9 @@ public final class GLCompat {
      * showing the error that caused it.
      */
     public static String glGetString(int name) {
+        if (Win.vulkan) {
+            return SteinCoreGl.glGetString(name);
+        }
         if (GLFW.glfwGetCurrentContext() == 0L) {
             return "(no GL context on thread " + Thread.currentThread().getName() + ")";
         }
@@ -51,6 +59,9 @@ public final class GLCompat {
 
     /** ARB variant of the call above. */
     public static void glShaderSourceARB(int shaderObj, ByteBuffer source) {
+        if (SteinGfxOptions.VULKAN) {
+            return;
+        }
         ARBShaderObjects.glShaderSourceARB(shaderObj, decode(source));
     }
 

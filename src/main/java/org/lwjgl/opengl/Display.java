@@ -66,10 +66,14 @@ import dev.xavier.stein.bridge.engine.FrameTime;
 import dev.xavier.stein.bridge.engine.IdleLimit;
 import dev.xavier.stein.bridge.engine.ModelBatch;
 import dev.xavier.stein.bridge.engine.ServerWatch;
+import dev.xavier.stein.gfx.SteinBackend;
+import dev.xavier.stein.gfx.SteinDevice;
 import dev.xavier.stein.gfx.SteinGfxOptions;
+import dev.xavier.stein.gfx.game.SteinGameFramebuffers;
 import dev.xavier.stein.gfx.gl.SteinGlDebug;
 import dev.xavier.stein.gfx.gl.SteinGlFrame;
 import dev.xavier.stein.gfx.gl.SteinGlGpuTiming;
+import dev.xavier.stein.gfx.vk.SteinVkWindow;
 
 import org.lwjgl.glfw.GLFWErrorCallback;
 import org.lwjgl.glfw.GLFWImage;
@@ -83,7 +87,8 @@ import java.util.List;
  * LWJGL 2 window API implemented over GLFW.
  *
  * <p>Pipeline: both — creates a core context for Stein GFX, or the compatibility context for the
- * fixed pipeline, and ends the frame in each.
+ * fixed pipeline, and ends the frame in each. With Vulkan ({@link SteinBackend}) the window has no
+ * OpenGL context and the frame ends by presenting the game's screen.
  */
 public final class Display {
 
@@ -135,11 +140,19 @@ public final class Display {
         }
 
         boolean background = CoreOptions.DIAG_BACKGROUND;
-        applyWindowHints(pf, background);
-        long win = createWindow();
-        // Stein GFX reads Win.coreContext once, when SteinGfxOptions loads: it must load after the
-        // window exists, or it would see no core context and stay off.
-        if (Win.coreContext && !SteinGfxOptions.ENABLED) {
+        long win = NULL;
+        if (CoreOptions.GFX && SteinBackend.requested() == SteinBackend.VULKAN) {
+            applyWindowHints(pf, background);
+            win = SteinVkWindow.create(mode.getWidth(), mode.getHeight(), title);
+        }
+        if (win == NULL) {
+            applyWindowHints(pf, background);
+            win = createWindow();
+        }
+        SteinBackend.started(Win.vulkan ? SteinBackend.VULKAN : SteinBackend.OPENGL);
+        // Stein GFX reads Win.coreContext and Win.vulkan once, when SteinGfxOptions loads: it must
+        // load after the window exists, or it would see neither and stay off.
+        if ((Win.coreContext || Win.vulkan) && !SteinGfxOptions.ENABLED) {
             throw new IllegalStateException("SteinGfxOptions was loaded before the window");
         }
         Win.handle = win;
@@ -148,9 +161,11 @@ public final class Display {
         applyIcons(); // requested by the game before the window existed
 
         centerOnPrimary();
-        glfwMakeContextCurrent(win);
-        GL.createCapabilities();
-        SteinGlDebug.install();
+        if (!Win.vulkan) {
+            glfwMakeContextCurrent(win);
+            GL.createCapabilities();
+            SteinGlDebug.install();
+        }
         applyInterval();
 
         Input.install(win);
@@ -260,6 +275,10 @@ public final class Display {
             return;
         }
         Input.free();
+        if (Win.vulkan) {
+            // the GPU idle and the swapchain and surface gone before their window
+            SteinVkWindow.destroy();
+        }
         glfwDestroyWindow(Win.handle);
         Win.handle = 0L;
         glfwTerminate();
@@ -294,6 +313,10 @@ public final class Display {
     private static void endOfFrame() {
         // F3 frame time.
         FrameTime.tick();
+        if (Win.vulkan) {
+            endOfVulkanFrame();
+            return;
+        }
         // Stein GFX recorded frame: the whole list goes to the driver here, before everything in
         // the swap (only with the renderer).
         SteinGlFrame.endFrame();
@@ -320,6 +343,21 @@ public final class Display {
     }
 
     /**
+     * The end of the frame with Vulkan: the engine's per-frame work that does not touch OpenGL (the
+     * presentation in {@link #swap()} submits the frame).
+     */
+    private static void endOfVulkanFrame() {
+        // the terrain's end of frame (Stein GFX: the slices released go back after their fence)
+        ChunkArena.endFrame();
+        DirectRender.beforeSwap();
+        ServerWatch.frame();
+        ClientSettings.frame();
+        if (Scenes.ENABLED) {
+            Scenes.onFrame();
+        }
+    }
+
+    /**
      * {@code -Dsteinbridge.perf.timeSwap=true}: measures how much of the frame goes to the handoff
      * to the window — the buffer swap and the event queue — and prints the worst case and the
      * average per second. It serves to separate what is ours (drawing) from what is the system's
@@ -337,7 +375,11 @@ public final class Display {
     /** Swaps the buffers and polls the events, timing both when {@link #TIME_SWAP} is on. */
     private static void swap() {
         long t0 = TIME_SWAP ? System.nanoTime() : 0L;
-        glfwSwapBuffers(Win.handle);
+        if (Win.vulkan) {
+            SteinGameFramebuffers.present();
+        } else {
+            glfwSwapBuffers(Win.handle);
+        }
         long t1 = TIME_SWAP ? System.nanoTime() : 0L;
         markFrame();
         Win.resized = false;
@@ -381,6 +423,9 @@ public final class Display {
     }
 
     private static void markFrame() {
+        if (Win.vulkan) {
+            return; // the swapchain keeps its own frames in flight
+        }
         if (vsync && LATENCY_FIX && GL.getCapabilities().OpenGL32) {
             fence = GL32.glFenceSync(GL32.GL_SYNC_GPU_COMMANDS_COMPLETE, 0);
         }
@@ -488,6 +533,10 @@ public final class Display {
      * one.
      */
     private static void applyInterval() {
+        if (Win.vulkan) {
+            SteinDevice.get().vsync(vsync); // the swapchain's present mode
+            return;
+        }
         if (adaptive < 0) {
             adaptive =
                     glfwExtensionSupported("WGL_EXT_swap_control_tear")

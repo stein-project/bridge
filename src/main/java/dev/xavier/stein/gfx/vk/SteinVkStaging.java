@@ -33,12 +33,12 @@ final class SteinVkStaging {
 
     final class Chunk {
         final long buffer;
-        final SteinVkDevice.Allocation mem;
+        final SteinVkMemory.Allocation mem;
         long used;
         long lastValue;
 
         Chunk() {
-            SteinVkDevice.Allocation[] a = new SteinVkDevice.Allocation[1];
+            SteinVkMemory.Allocation[] a = new SteinVkMemory.Allocation[1];
             buffer =
                     dev.createRawBuffer(
                             CHUNK,
@@ -58,7 +58,7 @@ final class SteinVkStaging {
 
     SteinVkDevice.StagingSlice alloc(long bytes, long alignment) {
         if (bytes > CHUNK / 2) {
-            SteinVkDevice.Allocation[] a = new SteinVkDevice.Allocation[1];
+            SteinVkMemory.Allocation[] a = new SteinVkMemory.Allocation[1];
             long b =
                     dev.createRawBuffer(
                             bytes,
@@ -68,7 +68,7 @@ final class SteinVkStaging {
                             0,
                             "large staging",
                             a);
-            SteinVkDevice.Allocation mem = a[0];
+            SteinVkMemory.Allocation mem = a[0];
             dev.retire(
                     () -> {
                         vkDestroyBuffer(dev.vk(), b, null);

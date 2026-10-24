@@ -22,8 +22,6 @@ import static dev.xavier.stein.gfx.SteinInstanceWriter.*;
 import static dev.xavier.stein.gfx.SteinPassTiming.*;
 import static dev.xavier.stein.gfx.SteinSegmentCheck.*;
 
-import dev.xavier.stein.gfx.gl.SteinGlCommands;
-
 import org.lwjgl.system.MemoryUtil;
 
 import java.util.Arrays;
@@ -185,19 +183,15 @@ final class SteinDeferredFrame {
     }
 
     /**
-     * The group's polygon offset ({@code id} = index + 1; 0 turns it off). Straight on OpenGL: the
-     * pass runs the commands immediately, starts with the offset off, and the glPopAttrib at the
-     * end returns the game's. Pending in the API: a setDepthBias in SteinCommands (dynamic state,
-     * as in Vulkan).
+     * The group's polygon offset ({@code id} = index + 1; 0 turns it off), as the pass's depth
+     * bias: on OpenGL the pass notes what it touched and returns the game's at the end.
      */
-    static void polygonOffset(int id) {
-        // the same calls, through the pass (which notes what was touched and returns the game's at
-        // the end, without glPopAttrib in core)
+    static void polygonOffset(SteinCommands c, int id) {
         if (id == 0) {
-            SteinGlCommands.polygonOffset(false, 0f, 0f);
+            c.setDepthBias(false, 0f, 0f);
             return;
         }
-        SteinGlCommands.polygonOffset(true, offsetFactor[id - 1], offsetUnits[id - 1]);
+        c.setDepthBias(true, offsetFactor[id - 1], offsetUnits[id - 1]);
     }
 
     /**
@@ -207,7 +201,7 @@ final class SteinDeferredFrame {
     static void drawRange(SteinCommands c, Group g, int from, int count) {
         c.bindPipeline(g.pipeline);
         if (g.offset != 0) {
-            polygonOffset(g.offset);
+            polygonOffset(c, g.offset);
         }
         if (g.gameTex) {
             // model part with the game's texture directly, with its parameters
@@ -235,7 +229,7 @@ final class SteinDeferredFrame {
             SteinTessCapture.restore(g.texture, was);
         }
         if (g.offset != 0) {
-            polygonOffset(0);
+            polygonOffset(c, 0);
         }
         draws++;
     }

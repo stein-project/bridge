@@ -34,7 +34,10 @@ import java.util.List;
  *   <li>scissor with origin at bottom left;
  *   <li>texture and buffer copy on the GPU (also right after the pass's clear); mipmaps generated;
  *   <li>compute writing an instance and an indirect command read by the next draw of the same pass
- *       (the dispatch barrier), and reading the buffer back to the CPU.
+ *       (the dispatch barrier), and reading the buffer back to the CPU;
+ *   <li>depth bias pulling a square at the same depth in front;
+ *   <li>a BGRA8 texture read in its own byte order and converted by a copy into RGBA8;
+ *   <li>a clear inside the pass, inside a rectangle (Vulkan only).
  * </ul>
  *
  * <p>Pipeline: Stein GFX only.
@@ -296,6 +299,13 @@ public final class SteinGfxApiTest {
             if (caps.compute && caps.multiDrawIndirect && caps.baseInstance) {
                 computeCase(dev, fails, target, plain, vertices, layers, sampler, tint, color, px);
             }
+
+            depthBiasCase(
+                    dev, fails, target, plain, vertices, inst, layers, sampler, tint, color, px);
+
+            bgraCase(dev, fails, copy);
+
+            clearCase(dev, fails, target, plain, vertices, inst, layers, sampler, tint, color, px);
         } finally {
             MemoryUtil.memFree(px);
         }
@@ -408,6 +418,113 @@ public final class SteinGfxApiTest {
             cmd.destroy();
             inst.destroy();
             comp.destroy();
+        }
+    }
+
+    /** Case 10: depth bias pulls a square at the same depth in front of the one drawn first. */
+    private static void depthBiasCase(
+            SteinDevice dev,
+            List<String> fails,
+            SteinRenderTarget target,
+            SteinPipeline plain,
+            SteinBuffer vertices,
+            SteinBuffer inst,
+            SteinTexture layers,
+            SteinSampler sampler,
+            SteinBuffer tint,
+            SteinTexture color,
+            ByteBuffer px) {
+        int[][] rgb = {{255, 0, 0}, {0, 255, 0}, {0, 0, 255}};
+        // ---- 10: depth bias: the same square at the same depth passes LESS only with it ----
+        putInst(inst, 0, 0f, 0f, 0f, 0.3f);
+        putInst(inst, 1, 0f, 0f, 1f, 0.3f);
+        SteinCommands c = begin(dev, target, plain, vertices, inst, layers, sampler, tint);
+        c.draw(6, 1, 6, 0);
+        c.draw(6, 1, 6, 1);
+        c.end();
+        dev.readPixels(color, 0, 0, SIZE, SIZE, px);
+        expect(fails, px, 32, 32, rgb[0], "10: without bias the equal depth fails LESS");
+        c = begin(dev, target, plain, vertices, inst, layers, sampler, tint);
+        c.draw(6, 1, 6, 0);
+        c.setDepthBias(true, 0f, -8f);
+        c.draw(6, 1, 6, 1);
+        c.setDepthBias(false, 0f, 0f);
+        c.end();
+        dev.readPixels(color, 0, 0, SIZE, SIZE, px);
+        expect(fails, px, 32, 32, rgb[1], "10: the bias pulls the second square in front");
+    }
+
+    /** Case 12: a clear inside the pass, inside a rectangle (Vulkan: the game's glClear). */
+    private static void clearCase(
+            SteinDevice dev,
+            List<String> fails,
+            SteinRenderTarget target,
+            SteinPipeline plain,
+            SteinBuffer vertices,
+            SteinBuffer inst,
+            SteinTexture layers,
+            SteinSampler sampler,
+            SteinBuffer tint,
+            SteinTexture color,
+            ByteBuffer px) {
+        int[][] rgb = {{255, 0, 0}, {0, 255, 0}, {0, 0, 255}};
+        // ---- 12: clear inside a pass, inside a rectangle (Vulkan: the game's glClear) ----
+        putInst(inst, 0, 0f, 0f, 2f, 0.5f);
+        SteinCommands c = begin(dev, target, plain, vertices, inst, layers, sampler, tint);
+        c.draw(6, 1, 6, 0);
+        boolean clears = true;
+        try {
+            c.clear(true, 0f, 1f, 0f, 1f, false, 1f, new int[] {0, 0, SIZE / 2, SIZE});
+        } catch (UnsupportedOperationException e) {
+            clears = false; // OpenGL: the game's own glClear reaches the driver
+        }
+        c.end();
+        if (clears) {
+            dev.readPixels(color, 0, 0, SIZE, SIZE, px);
+            expect(fails, px, 8, 8, rgb[1], "12: cleared inside the rectangle");
+            expect(fails, px, 31, 32, rgb[1], "12: the square under the rectangle cleared");
+            expect(fails, px, 36, 32, rgb[2], "12: the square outside it kept");
+        }
+    }
+
+    /**
+     * Case 11: a BGRA8 texture (the game's) keeps its byte order when read, and a copy into an
+     * RGBA8 texture converts it (the colour comes out the same).
+     */
+    private static void bgraCase(SteinDevice dev, List<String> fails, SteinTexture rgba) {
+        SteinTexture bgra =
+                dev.createTexture(
+                        SteinTexture.Desc.texture2D("api bgra", SteinFormat.BGRA8, 4, 4, 1));
+        // red, written as the game writes it: B, G, R, A
+        ByteBuffer p = solid(4, 4, new int[] {0, 0, 255});
+        ByteBuffer back = MemoryUtil.memAlloc(4 * 4 * 4);
+        try {
+            bgra.upload(0, 0, 0, 0, 4, 4, p);
+            dev.readPixels(bgra, 0, 0, 4, 4, back);
+            if ((back.get(2) & 255) != 255 || (back.get(0) & 255) != 0) {
+                fails.add(
+                        "11: BGRA8 read back in another order: "
+                                + (back.get(0) & 255)
+                                + ","
+                                + (back.get(1) & 255)
+                                + ","
+                                + (back.get(2) & 255));
+            }
+            dev.copyTexture(bgra, 0, rgba, 0, 4, 4);
+            dev.readPixels(rgba, 0, 0, 4, 4, back);
+            if ((back.get(0) & 255) != 255 || (back.get(2) & 255) != 0) {
+                fails.add(
+                        "11: BGRA8 copied into RGBA8 is not red: "
+                                + (back.get(0) & 255)
+                                + ","
+                                + (back.get(1) & 255)
+                                + ","
+                                + (back.get(2) & 255));
+            }
+        } finally {
+            MemoryUtil.memFree(back);
+            MemoryUtil.memFree(p);
+            bgra.destroy();
         }
     }
 

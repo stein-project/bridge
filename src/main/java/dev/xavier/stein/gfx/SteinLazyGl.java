@@ -11,6 +11,8 @@ package dev.xavier.stein.gfx;
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.bridge.engine.GLMatrix;
 import dev.xavier.stein.bridge.engine.ModelBatch;
+import dev.xavier.stein.gfx.game.SteinGameFramebuffers;
+import dev.xavier.stein.gfx.game.SteinGameTextures;
 import dev.xavier.stein.gfx.gl.SteinCoreGl;
 
 import org.lwjgl.opengl.GL11;
@@ -41,6 +43,13 @@ public final class SteinLazyGl {
 
     public static final boolean REQUESTED = SteinGfxOptions.feature("lazyState", true);
 
+    /**
+     * No OpenGL context (the Vulkan backend): nothing is deferred and nothing reaches a driver; the
+     * texture bindings and the depth mask go to the game's objects on the API, the rest lives in
+     * the GlStateManager cache, which is where the renderer reads it.
+     */
+    private static final boolean VULKAN = SteinGfxOptions.VULKAN;
+
     private static boolean active;
     private static boolean dirty;
     private static boolean syncing;
@@ -51,6 +60,9 @@ public final class SteinLazyGl {
     // ---- on and off (SteinEntityDeferred) ----
 
     static void activate() {
+        if (VULKAN) {
+            return;
+        }
         if (!REQUESTED || active) {
             return;
         }
@@ -176,6 +188,9 @@ public final class SteinLazyGl {
 
     /** Sends what is recorded to the driver. */
     public static void sync() {
+        if (VULKAN) {
+            return;
+        }
         if (!dirty || syncing) {
             return;
         }
@@ -288,6 +303,10 @@ public final class SteinLazyGl {
     }
 
     public static void glActiveTexture(int unit) {
+        if (VULKAN) {
+            SteinGameTextures.activeTexture(unit);
+            return;
+        }
         if (!active) {
             ModelBatch.flush();
             GL13.glActiveTexture(unit);
@@ -302,6 +321,10 @@ public final class SteinLazyGl {
     }
 
     public static void glBindTexture(int target, int texture) {
+        if (VULKAN) {
+            SteinGameTextures.bind(target, texture);
+            return;
+        }
         int u = (active ? lazyActive : 0) - GL13.GL_TEXTURE0;
         if (!active || target != GL11.GL_TEXTURE_2D || u < 0 || u >= MAX_UNITS) {
             if (active) {
@@ -317,6 +340,9 @@ public final class SteinLazyGl {
     }
 
     public static void glBlendFunc(int src, int dst) {
+        if (VULKAN) {
+            return;
+        }
         if (!active) {
             ModelBatch.flush();
             GL11.glBlendFunc(src, dst);
@@ -329,6 +355,9 @@ public final class SteinLazyGl {
     }
 
     public static void glBlendFuncSeparate(int src, int dst, int srcA, int dstA) {
+        if (VULKAN) {
+            return;
+        }
         if (!active) {
             ModelBatch.flush();
             GL14.glBlendFuncSeparate(src, dst, srcA, dstA);
@@ -359,6 +388,9 @@ public final class SteinLazyGl {
     }
 
     public static void glDepthFunc(int func) {
+        if (VULKAN) {
+            return;
+        }
         if (!active) {
             ModelBatch.flush();
             GL11.glDepthFunc(func);
@@ -370,6 +402,10 @@ public final class SteinLazyGl {
     }
 
     public static void glDepthMask(boolean mask) {
+        if (VULKAN) {
+            SteinGameFramebuffers.depthMask(mask);
+            return;
+        }
         if (!active) {
             ModelBatch.flush();
             GL11.glDepthMask(mask);
@@ -381,6 +417,9 @@ public final class SteinLazyGl {
     }
 
     public static void glCullFace(int face) {
+        if (VULKAN) {
+            return;
+        }
         if (!active) {
             ModelBatch.flush();
             GL11.glCullFace(face);
@@ -407,6 +446,10 @@ public final class SteinLazyGl {
     }
 
     public static void glColorMask(boolean r, boolean g, boolean b, boolean a) {
+        if (VULKAN) {
+            SteinGameFramebuffers.colorMask(r, g, b, a);
+            return;
+        }
         if (!active) {
             ModelBatch.flush();
             GL11.glColorMask(r, g, b, a);
@@ -444,6 +487,9 @@ public final class SteinLazyGl {
     }
 
     public static void glPolygonOffset(float factor, float units) {
+        if (VULKAN) {
+            return;
+        }
         if (!active) {
             ModelBatch.flush();
             GL11.glPolygonOffset(factor, units);
@@ -490,6 +536,9 @@ public final class SteinLazyGl {
     }
 
     public static void glLogicOp(int op) {
+        if (VULKAN) {
+            return;
+        }
         if (!active) {
             ModelBatch.flush();
             GL11.glLogicOp(op);

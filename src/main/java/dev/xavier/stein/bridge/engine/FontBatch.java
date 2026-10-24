@@ -10,6 +10,7 @@ package dev.xavier.stein.bridge.engine;
 
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.gfx.SteinGameState;
+import dev.xavier.stein.gfx.SteinGfxOptions;
 import dev.xavier.stein.gfx.SteinLazyGl;
 import dev.xavier.stein.gfx.SteinTessCapture;
 import dev.xavier.stein.gfx.SteinTextCache;
@@ -253,6 +254,13 @@ public final class FontBatch {
         // New renderer (deferred entities): the batch becomes recorded data, in the order of the
         // rest of the pass.
         if (SteinTessCapture.font(ADDR, count, boundLocation == OWN)) {
+            count = 0;
+            return;
+        }
+        if (SteinGfxOptions.VULKAN) {
+            // no direct draw without OpenGL: what the capture refused does not show up (as in the
+            // core context, where it would not either)
+            SteinTessCapture.droppedDirect("font batch");
             count = 0;
             return;
         }

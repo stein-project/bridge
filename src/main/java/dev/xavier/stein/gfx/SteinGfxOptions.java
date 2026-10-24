@@ -31,9 +31,16 @@ public final class SteinGfxOptions {
 
     /**
      * Stein GFX draws: asked for ({@code -Dsteinbridge.gfx}, on by default) and the window has a
-     * core context ({@link Win#coreContext}, set by Display before this class loads).
+     * core context ({@link Win#coreContext}) or presents through Vulkan ({@link Win#vulkan}), both
+     * set by Display before this class loads.
      */
-    public static final boolean ENABLED = CoreOptions.GFX && Win.coreContext;
+    public static final boolean ENABLED = CoreOptions.GFX && (Win.coreContext || Win.vulkan);
+
+    /**
+     * The Vulkan backend draws ({@link SteinBackend}): there is no OpenGL context, and every call
+     * the game makes to OpenGL goes to the game's objects on the API ({@code SteinGame*}).
+     */
+    public static final boolean VULKAN = ENABLED && Win.vulkan;
 
     /**
      * Core context (OpenGL 4.6, fallback 4.1): exactly when Stein GFX draws. In it the driver has
@@ -312,10 +319,14 @@ public final class SteinGfxOptions {
     private SteinGfxOptions() {}
 
     /**
-     * The F3 line: who draws (Stein GFX or the game's fixed-function pipeline) and the context's
-     * OpenGL version (read from the driver, once). On the render thread.
+     * The F3 line: who draws (Stein GFX or the game's fixed-function pipeline) and with what: the
+     * context's OpenGL version (read from the driver, once) or the Vulkan device's. On the render
+     * thread.
      */
     public static String describe() {
+        if (described == null && VULKAN) {
+            described = "Stein GFX, " + SteinDevice.get().caps().backend;
+        }
         if (described == null) {
             // the version from the driver string ("4.6.0 Compatibility Profile ...", "4.6.0 Core
             // Profile ..."): it also works in the context the game opens without the renderer

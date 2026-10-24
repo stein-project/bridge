@@ -307,4 +307,10 @@ final class SteinGlRecorder extends SteinCommands {
         ended = true;
         SteinGlFrame.endPass(this);
     }
+
+    /** Into the list, like the deferred entities' direct offset ({@link SteinGlCommands}). */
+    @Override
+    public void setDepthBias(boolean on, float factor, float units) {
+        SteinGlCommands.polygonOffset(on, factor, units);
+    }
 }

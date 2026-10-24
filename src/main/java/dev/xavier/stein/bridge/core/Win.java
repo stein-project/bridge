@@ -39,6 +39,12 @@ public final class Win {
      */
     public static boolean coreContext;
 
+    /**
+     * The window has no OpenGL context: it presents through Vulkan, and Stein GFX draws with its
+     * Vulkan backend. Set by Display before anything reads {@code SteinGfxOptions}.
+     */
+    public static boolean vulkan;
+
     /** Framebuffer size: what OpenGL sees. Governs Display.getWidth. */
     public static int width = DEFAULT_WIDTH;
 

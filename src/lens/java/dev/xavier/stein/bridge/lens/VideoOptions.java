@@ -8,9 +8,11 @@
 
 package dev.xavier.stein.bridge.lens;
 
+import dev.xavier.stein.bridge.core.CoreOptions;
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.bridge.engine.ChunkKeep;
 import dev.xavier.stein.bridge.engine.Visuals;
+import dev.xavier.stein.gfx.SteinBackend;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
@@ -28,6 +30,7 @@ import net.minecraft.client.settings.GameSettings;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
@@ -146,6 +149,45 @@ final class VideoOptions {
         game(GameSettings.Options.GUI_SCALE);
         game(GameSettings.Options.GAMMA);
         game(GameSettings.Options.PARTICLES);
+        graphicsApi(); // last: the rows above keep their places
+    }
+
+    /**
+     * The graphics API (OpenGL or Vulkan): saved for the next start, since the window is created
+     * for one of them. Until then the label says it waits for the restart; if Vulkan did not start
+     * on this computer, or the last start with it died on the way, the hint says so.
+     */
+    private void graphicsApi() {
+        SteinBackend.Fallback why = SteinBackend.fallback();
+        addText(
+                "steinlens.graphicsApi",
+                () -> {
+                    SteinBackend next = SteinBackend.saved();
+                    String name = apiName(next);
+                    return next == SteinBackend.running()
+                            ? name
+                            : tr("steinlens.graphicsApi.restart", name);
+                },
+                () ->
+                        SteinBackend.save(
+                                SteinBackend.saved() == SteinBackend.VULKAN
+                                        ? SteinBackend.OPENGL
+                                        : SteinBackend.VULKAN),
+                SteinBackend.crashedLastTime()
+                        ? tr("steinlens.graphicsApi.crashed")
+                        : why == null
+                                ? tr("steinlens.graphicsApi.hint")
+                                : tr(
+                                        "steinlens.graphicsApi.unavailable",
+                                        tr(
+                                                "steinlens.graphicsApi.reason."
+                                                        + why.name().toLowerCase(Locale.ROOT))),
+                // only Stein GFX draws with either API (the fixed-function fallback is OpenGL)
+                () -> CoreOptions.GFX);
+    }
+
+    private static String apiName(SteinBackend api) {
+        return api == SteinBackend.VULKAN ? "Vulkan" : "OpenGL";
     }
 
     private void buildCamera() {

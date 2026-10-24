@@ -73,6 +73,25 @@ public final class SteinTessCapture {
     /** Warnings about immediate draws in the core (nothing is output). */
     private static int coreWarned;
 
+    /** Warnings about direct draws dropped with Vulkan. */
+    private static int droppedWarned;
+
+    /**
+     * Vulkan: a direct draw the capture refused (the font batch outside a recorded pass), dropped
+     * because there is no OpenGL to draw it — as in the core, it does not show up. Logged like the
+     * core's immediate draws, with where it came from.
+     */
+    public static void droppedDirect(String what) {
+        if (droppedWarned++ < 8) {
+            StackTraceElement[] st = new Throwable().getStackTrace();
+            StringBuilder b = new StringBuilder("vulkan: direct draw dropped (" + what + ")");
+            for (int i = 1; i < Math.min(8, st.length); i++) {
+                b.append("\n[gfx]     ").append(st[i]);
+            }
+            Log.info("gfx", b.toString());
+        }
+    }
+
     /**
      * In the core, a draw into a display list (the game's or the item cache's): the list is just a
      * number (the item comes from the fixed buffer, the model parts from the instancer's geometry)

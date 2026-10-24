@@ -30,3 +30,6 @@ org/lwjgl/opengl/GL11	glColor4f	(FFFF)V	glColor4f	dev/xavier/stein/gfx/gl/SteinC
 org/lwjgl/opengl/GL11	glColor3f	(FFF)V	glColor3f	dev/xavier/stein/gfx/gl/SteinCoreGl
 org/lwjgl/opengl/GL11	glAlphaFunc	(IF)V	glAlphaFunc	dev/xavier/stein/gfx/gl/SteinCoreGl
 org/lwjgl/opengl/GL11	glShadeModel	(I)V	glShadeModel	dev/xavier/stein/gfx/gl/SteinCoreGl
+# The game's objects on the API (gfx/game/SteinGameGl), the variants only the Loader and mods call (the game's own
+# are in redirects-opt.tsv): with Vulkan there is no context, and these reach the emulation.
+org/lwjgl/opengl/GL11	glTexSubImage2D	(IIIIIIIILjava/nio/ByteBuffer;)V	glTexSubImage2D	dev/xavier/stein/gfx/game/SteinGameGl

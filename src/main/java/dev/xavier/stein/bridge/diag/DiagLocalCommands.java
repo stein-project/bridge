@@ -54,7 +54,9 @@ final class DiagLocalCommands {
      *   <li>{@code !shader next|off}: the game's post-processing shader (the "super secret
      *       settings");
      *   <li>{@code !key code 1|0}: presses or releases the key, like {@code steinbridge.diag.keys};
-     *   <li>{@code !reload}: reloads the resources (the game's loading screen).
+     *   <li>{@code !reload}: reloads the resources (the game's loading screen);
+     *   <li>{@code !quit}: closes the game the way its Quit button does (what runs at the close:
+     *       the Vulkan pipeline cache written to disk, for instance).
      * </ul>
      */
     static void run(String text) throws ReflectiveOperationException {
@@ -77,6 +79,10 @@ final class DiagLocalCommands {
             case "!packs" -> packs(a, text);
             case "!tex" -> texture(a);
             case "!reload" -> reload(a);
+            case "!quit" -> {
+                Log.info("diag", "quitting");
+                DiagGame.mc().shutdown();
+            }
             default -> Log.info("diag", "unknown local command: " + text);
         }
     }
@@ -202,8 +208,9 @@ final class DiagLocalCommands {
     }
 
     /**
-     * {@code !tex path}: the number the TextureManager has for the texture and the average of its
-     * pixels on the GPU.
+     * {@code !tex path [x y]}: the number the TextureManager has for the texture and the average of
+     * its pixels (and alpha) on the GPU; with {@code x y}, also the alpha of the 8x8 texels from
+     * there. Works with either backend (with Vulkan the texture is read through the API).
      */
     private static void texture(String[] a) {
         ITextureObject obj =
@@ -213,27 +220,68 @@ final class DiagLocalCommands {
             return;
         }
         int id = obj.getGlTextureId();
-        int w =
-                org.lwjgl.opengl.GL45.glGetTextureLevelParameteri(
-                        id, 0, org.lwjgl.opengl.GL11.GL_TEXTURE_WIDTH);
-        int h =
-                org.lwjgl.opengl.GL45.glGetTextureLevelParameteri(
-                        id, 0, org.lwjgl.opengl.GL11.GL_TEXTURE_HEIGHT);
-        java.nio.ByteBuffer px = org.lwjgl.BufferUtils.createByteBuffer(Math.max(1, w * h * 4));
-        org.lwjgl.opengl.GL45.glGetTextureImage(
-                id, 0, org.lwjgl.opengl.GL11.GL_RGBA, org.lwjgl.opengl.GL11.GL_UNSIGNED_BYTE, px);
+        int w;
+        int h;
+        java.nio.ByteBuffer px;
+        if (dev.xavier.stein.gfx.SteinGfxOptions.VULKAN) {
+            // the game's texture is ours: read through the API (BGRA when it came from TextureUtil)
+            dev.xavier.stein.gfx.game.SteinGameTexture t =
+                    dev.xavier.stein.gfx.game.SteinGameTextures.get(id);
+            dev.xavier.stein.gfx.SteinTexture b = t == null ? null : t.backing();
+            w = b == null ? 0 : b.width();
+            h = b == null ? 0 : b.height();
+            px = org.lwjgl.BufferUtils.createByteBuffer(Math.max(1, w * h * 4));
+            if (b != null) {
+                dev.xavier.stein.gfx.SteinDevice.get().readPixels(b, 0, 0, w, h, px);
+                if (b.desc().format == dev.xavier.stein.gfx.SteinFormat.BGRA8) {
+                    for (int i = 0; i < w * h; i++) {
+                        byte blue = px.get(i * 4);
+                        px.put(i * 4, px.get(i * 4 + 2));
+                        px.put(i * 4 + 2, blue);
+                    }
+                }
+            }
+        } else {
+            w =
+                    org.lwjgl.opengl.GL45.glGetTextureLevelParameteri(
+                            id, 0, org.lwjgl.opengl.GL11.GL_TEXTURE_WIDTH);
+            h =
+                    org.lwjgl.opengl.GL45.glGetTextureLevelParameteri(
+                            id, 0, org.lwjgl.opengl.GL11.GL_TEXTURE_HEIGHT);
+            px = org.lwjgl.BufferUtils.createByteBuffer(Math.max(1, w * h * 4));
+            org.lwjgl.opengl.GL45.glGetTextureImage(
+                    id,
+                    0,
+                    org.lwjgl.opengl.GL11.GL_RGBA,
+                    org.lwjgl.opengl.GL11.GL_UNSIGNED_BYTE,
+                    px);
+        }
         long r = 0;
         long g = 0;
         long b = 0;
+        long alpha = 0;
         for (int i = 0; i < w * h; i++) {
             r += px.get(i * 4) & 255;
             g += px.get(i * 4 + 1) & 255;
             b += px.get(i * 4 + 2) & 255;
+            alpha += px.get(i * 4 + 3) & 255;
         }
         int n = Math.max(1, w * h);
+        if (a.length > 3) {
+            int cx = Integer.parseInt(a[2]);
+            int cy = Integer.parseInt(a[3]);
+            StringBuilder cell = new StringBuilder("cell " + cx + "," + cy + " alpha:");
+            for (int y = cy; y < Math.min(h, cy + 8); y++) {
+                cell.append(" |");
+                for (int x = cx; x < Math.min(w, cx + 8); x++) {
+                    cell.append(' ').append(px.get((y * w + x) * 4 + 3) & 255);
+                }
+            }
+            Log.info("diag", cell.toString());
+        }
         Log.info(
                 "diag",
-                "textura "
+                "texture "
                         + a[1]
                         + ": number "
                         + id
@@ -246,7 +294,9 @@ final class DiagLocalCommands {
                         + ","
                         + g / n
                         + ","
-                        + b / n);
+                        + b / n
+                        + ", alpha "
+                        + alpha / n);
     }
 
     private static void reload(String[] a) {

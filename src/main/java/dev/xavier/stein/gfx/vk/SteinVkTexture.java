@@ -68,7 +68,7 @@ final class SteinVkTexture extends SteinTexture {
     private final int format;
     private final int aspect;
     private long image;
-    private SteinVkDevice.Allocation mem;
+    private SteinVkMemory.Allocation mem;
     private long view;
     private long attachView;
 
@@ -114,9 +114,9 @@ final class SteinVkTexture extends SteinTexture {
             image = lp.get(0);
             VkMemoryRequirements req = VkMemoryRequirements.calloc(stack);
             vkGetImageMemoryRequirements(device.vk(), image, req);
-            mem = device.allocate(req, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, desc.name);
+            mem = device.allocate(req, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, 0, true, desc.name);
             SteinVkDevice.check(
-                    vkBindImageMemory(device.vk(), image, mem.memory, 0L),
+                    vkBindImageMemory(device.vk(), image, mem.memory, mem.offset),
                     "memory of '" + desc.name + "'");
             boolean array = desc.kind == Kind.TEXTURE_2D_ARRAY;
             view =
@@ -343,7 +343,7 @@ final class SteinVkTexture extends SteinTexture {
         long i = image;
         long v = view;
         long av = attachView;
-        SteinVkDevice.Allocation m = mem;
+        SteinVkMemory.Allocation m = mem;
         image = VK_NULL_HANDLE;
         device.retire(
                 () -> {

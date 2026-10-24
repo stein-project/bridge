@@ -33,4 +33,25 @@ public final class SteinVkOptions {
      * -1, automatic).
      */
     static final int DEVICE = Opt.integer("steinbridge.gfx.vkDevice", -1);
+
+    /**
+     * {@code -Dsteinbridge.gfx.vkGameCopy=false} (diagnostics): the game's textures are not copied
+     * into the renderer's texture arrays; entities and the HUD draw with the game's texture itself
+     * (default: copied).
+     */
+    static final boolean GAME_COPY = Opt.flag("steinbridge.gfx.vkGameCopy", true);
+
+    /**
+     * {@code -Dsteinbridge.gfx.vkDebugDrawsAtSec=N} (diagnostics): logs every draw of one frame, N
+     * seconds after startup — pass, pipeline state, textures and the start of the uniforms
+     * (default: off).
+     */
+    static final int DEBUG_DRAWS_AT_SEC = Opt.integer("steinbridge.gfx.vkDebugDrawsAtSec", -1);
+
+    /**
+     * {@code -Dsteinbridge.gfx.vkSyncEachPass=true} (diagnostics): submits and waits for the GPU at
+     * the end of every pass, so nothing the CPU writes afterwards can reach a pass already recorded
+     * (default: off).
+     */
+    static final boolean SYNC_EACH_PASS = Opt.flag("steinbridge.gfx.vkSyncEachPass");
 }

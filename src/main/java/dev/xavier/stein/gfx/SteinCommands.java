@@ -71,6 +71,31 @@ public abstract class SteinCommands {
      */
     public abstract void dispatch(int x, int y, int z);
 
+    /**
+     * Clears the target inside {@code rect} (x, y, width, height; null = all of it), the way the
+     * game's glClear does: the colour attachments with ({@code r, g, b, a}) when {@code color}, the
+     * depth with {@code depth} when {@code clearDepth}; no other drawing state applies. Only the
+     * Vulkan backend has it (on OpenGL the game's own glClear reaches the driver).
+     */
+    public void clear(
+            boolean color,
+            float r,
+            float g,
+            float b,
+            float a,
+            boolean clearDepth,
+            float depth,
+            int[] rect) {
+        throw new UnsupportedOperationException("clear inside a pass: Vulkan only");
+    }
+
+    /**
+     * Depth bias (OpenGL's polygon offset) for the following draws: {@code factor} times the depth
+     * slope plus {@code units} times the smallest depth step; off with {@code on} false. Dynamic
+     * state, as in Vulkan: it lasts until changed or until the pass ends.
+     */
+    public abstract void setDepthBias(boolean on, float factor, float units);
+
     /** Ends the pass. */
     public abstract void end();
 }

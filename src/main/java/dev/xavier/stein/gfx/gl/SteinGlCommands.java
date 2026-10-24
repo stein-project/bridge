@@ -588,11 +588,15 @@ public final class SteinGlCommands extends SteinCommands {
         GL11.glScissor(rect[0], rect[1], rect[2], rect[3]);
     }
 
+    @Override
+    public void setDepthBias(boolean on, float factor, float units) {
+        polygonOffset(on, factor, units);
+    }
+
     /**
-     * The direct polygon offset of the entity flush (the API does not have it yet: a setDepthBias,
-     * like Vulkan's dynamic state, is pending). The same calls as before; on the open pass it is
-     * noted, so the tracked {@link #end()} gives the game's back (the enable and the factor and
-     * units).
+     * The pass's depth bias as OpenGL's polygon offset (also {@link SteinGlRecorder}'s): into the
+     * recorded pass as a command, or the calls now; on the open pass it is noted, so the tracked
+     * {@link #end()} gives the game's back (the enable and the factor and units).
      */
     public static void polygonOffset(boolean on, float factor, float units) {
         if (SteinGlFrame.passOpen()) {

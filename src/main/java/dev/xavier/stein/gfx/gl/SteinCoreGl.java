@@ -12,6 +12,8 @@ import dev.xavier.stein.bridge.engine.GLMatrix;
 import dev.xavier.stein.bridge.engine.Mat4;
 import dev.xavier.stein.gfx.SteinGfxOptions;
 import dev.xavier.stein.gfx.SteinTessCapture;
+import dev.xavier.stein.gfx.game.SteinGameGl;
+import dev.xavier.stein.gfx.game.SteinGameTextures;
 
 import net.minecraft.client.renderer.texture.TextureUtil;
 
@@ -49,6 +51,9 @@ public final class SteinCoreGl {
 
     /** Core context: the renderer's normal mode ({@link SteinGfxOptions#CORE}). */
     public static final boolean CORE = SteinGfxOptions.CORE;
+
+    /** No OpenGL context (the Vulkan backend): nothing here reaches a driver. */
+    private static final boolean VULKAN = SteinGfxOptions.VULKAN;
 
     private static final int GL_MODELVIEW = GL11.GL_MODELVIEW;
     private static final int GL_PROJECTION = GL11.GL_PROJECTION;
@@ -333,6 +338,9 @@ public final class SteinCoreGl {
                 }
                 default -> {}
             }
+        }
+        if (VULKAN) {
+            return; // nothing else the game asks for lives in a driver
         }
         GL11.glGetFloatv(pname, out);
     }
@@ -619,13 +627,13 @@ public final class SteinCoreGl {
     }
 
     public static void glEnable(int cap) {
-        if (!CORE || !fixedCap(cap)) {
+        if (!VULKAN && (!CORE || !fixedCap(cap))) {
             GL11.glEnable(cap);
         }
     }
 
     public static void glDisable(int cap) {
-        if (!CORE || !fixedCap(cap)) {
+        if (!VULKAN && (!CORE || !fixedCap(cap))) {
             GL11.glDisable(cap);
         }
     }
@@ -646,6 +654,10 @@ public final class SteinCoreGl {
 
     public static void glTexParameteri(int target, int pname, int v) {
         int value = CORE && v == GL_CLAMP ? GL12.GL_CLAMP_TO_EDGE : v;
+        if (VULKAN) {
+            SteinGameTextures.texParameter(target, pname, value);
+            return;
+        }
         int tex = recordedTexture(target);
         if (tex > 0) {
             SteinGlFrame.textureParameteri(tex, pname, value);
@@ -657,6 +669,10 @@ public final class SteinCoreGl {
     /** The game's Framebuffer passes GL_CLAMP as a float. */
     public static void glTexParameterf(int target, int pname, float v) {
         float value = CORE && v == GL_CLAMP ? GL12.GL_CLAMP_TO_EDGE : v;
+        if (VULKAN) {
+            SteinGameTextures.texParameter(target, pname, (int) value);
+            return;
+        }
         int tex = recordedTexture(target);
         if (tex > 0) {
             SteinGlFrame.textureParameterf(tex, pname, value);
@@ -688,6 +704,9 @@ public final class SteinCoreGl {
     }
 
     public static String glGetString(int name) {
+        if (VULKAN) {
+            return SteinGameGl.glGetString(name);
+        }
         if (CORE && name == GL_EXTENSIONS) {
             int n = GL11.glGetInteger(GL30.GL_NUM_EXTENSIONS);
             StringBuilder b = new StringBuilder();
