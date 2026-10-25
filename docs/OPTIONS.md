@@ -179,7 +179,7 @@ listed at the end.
 `dev.xavier.stein.gfx.SteinGfxOptions`
 
 - `-Dsteinbridge.gfx.passStateCheck=true` (diagnostics): on every tracked pass, the queries to the driver, compared with what was tracked at opening and with the game's state at closing; counts and prints the divergences.
-- `-Dsteinbridge.gfx.gpuPassTiming=true` (diagnostics): GPU time of each pass (OpenGL timestamps), read a few frames later and printed every 5 s.
+- `-Dsteinbridge.gfx.gpuPassTiming=true` (diagnostics): GPU time of each pass (OpenGL or Vulkan timestamps), read a few frames later and printed every 5 s.
 - `-Dsteinbridge.gfx.recordFrameCheck=true` (diagnostics): on one frame in 300, each command is described at recording and again at replay, compared one by one, and the resources it uses are checked in the driver at replay time (buffer, texture, sampler and framebuffer still exist).
 - `-Dsteinbridge.gfx.frameSubmitStats=true` (diagnostics): submissions to the driver per frame and the reason (and the caller) of each submission outside the end of the frame, every 5 s.
 - `-Dsteinbridge.gfx.passTiming=true`: (diagnostics) measures the CPU time to open and close each pass and prints it periodically (default: off).

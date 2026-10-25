@@ -74,6 +74,7 @@ import dev.xavier.stein.gfx.game.SteinGameFramebuffers;
 import dev.xavier.stein.gfx.gl.SteinGlDebug;
 import dev.xavier.stein.gfx.gl.SteinGlFrame;
 import dev.xavier.stein.gfx.gl.SteinGlGpuTiming;
+import dev.xavier.stein.gfx.vk.SteinVkGpuTiming;
 import dev.xavier.stein.gfx.vk.SteinVkWindow;
 
 import org.lwjgl.glfw.GLFWErrorCallback;
@@ -371,6 +372,8 @@ public final class Display {
         if (Scenes.ENABLED) {
             Scenes.onFrame();
         }
+        // GPU time per pass (only with gpuPassTiming)
+        SteinVkGpuTiming.frame();
     }
 
     /**

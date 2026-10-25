@@ -185,6 +185,10 @@ public final class SteinVkDevice extends SteinDevice {
     final int depth24;
 
     final boolean multiDrawIndirect;
+
+    /** Timestamp queries can be reset from the CPU (Vulkan 1.2 hostQueryReset). */
+    final boolean hostQueryReset;
+
     final int maxDrawIndirectCount;
 
     /** How many bindings a push descriptor set accepts (above that the pipeline uses the pool). */
@@ -291,6 +295,7 @@ public final class SteinVkDevice extends SteinDevice {
                         "vulkan: no VK_EXT_depth_clip_control: the near half of OpenGL's"
                                 + " NDC depth (-1 to 1) is lost");
             }
+            hostQueryReset = v12Q.hostQueryReset();
             multiDrawIndirect = has.multiDrawIndirect();
             logicOp = has.logicOp();
             wideLines = has.wideLines();
@@ -310,6 +315,9 @@ public final class SteinVkDevice extends SteinDevice {
                             .sType$Default()
                             .timelineSemaphore(true)
                             .drawIndirectCount(v12Q.drawIndirectCount())
+                            // resetting timestamp queries from the CPU (gpuPassTiming): a reset
+                            // command is not allowed inside a render, and passes keep theirs open
+                            .hostQueryReset(v12Q.hostQueryReset())
                             .pNext(dynOn.address());
             VkPhysicalDeviceFeatures on =
                     VkPhysicalDeviceFeatures.calloc(stack)
@@ -507,6 +515,11 @@ public final class SteinVkDevice extends SteinDevice {
 
     VkDevice vk() {
         return device;
+    }
+
+    /** The graphics queue's family. */
+    int family() {
+        return family;
     }
 
     VkPhysicalDevice physical() {
@@ -924,6 +937,7 @@ public final class SteinVkDevice extends SteinDevice {
         vkDeviceWaitIdle(device);
         destroyed = true;
         defaults.destroy();
+        SteinVkGpuTiming.destroy(this);
         completedCache = Long.MAX_VALUE;
         reclaim();
         while (!retired.isEmpty()) {

@@ -9,6 +9,7 @@
 package dev.xavier.stein.gfx.gl;
 
 import dev.xavier.stein.bridge.core.Log;
+import dev.xavier.stein.gfx.SteinTimestampRing;
 
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL15;
@@ -46,7 +47,7 @@ final class SteinGlOpTiming {
     /**
      * Slots, labels and totals of the commands (shared bookkeeping with {@link SteinGlGpuTiming}).
      */
-    private static SteinGlTimestampRing ring;
+    private static SteinTimestampRing ring;
 
     /**
      * The first timestamp of a submission: it only serves as a starting point (there is no command
@@ -84,7 +85,7 @@ final class SteinGlOpTiming {
             for (int i = 0; i < SLOTS; i++) {
                 queries[i] = GL45.glCreateQueries(GL33.GL_TIMESTAMP);
             }
-            ring = new SteinGlTimestampRing(SLOTS, 64);
+            ring = new SteinTimestampRing(SLOTS, 64);
             slotStart = new boolean[SLOTS];
         }
         return true;
@@ -144,7 +145,7 @@ final class SteinGlOpTiming {
     }
 
     private static void collect() {
-        SteinGlTimestampRing r = ring;
+        SteinTimestampRing r = ring;
         long[] sum = r.sum;
         long[] hits = r.hits;
         while (r.any()) {
@@ -175,7 +176,7 @@ final class SteinGlOpTiming {
         if (now - reportAt < 5_000_000_000L || windowFrames == 0) {
             return;
         }
-        SteinGlTimestampRing r = ring;
+        SteinTimestampRing r = ring;
         long[] sum = r.sum;
         long[] hits = r.hits;
         Integer[] order = new Integer[r.names.size()];

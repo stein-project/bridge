@@ -140,6 +140,9 @@ final class SteinVkCommands extends SteinCommands {
 
     private boolean dynDirty = true;
 
+    /** This pass's slot in the GPU timer (gpuPassTiming), or -1. */
+    private int gpuSlot = -1;
+
     SteinVkCommands(SteinVkDevice device, SteinRenderPass pass) {
         this.device = device;
         this.pass = pass;
@@ -161,6 +164,9 @@ final class SteinVkCommands extends SteinCommands {
             viewport[3] = t.height();
         }
         device.passOpened(this);
+        if (SteinVkGpuTiming.ON) {
+            gpuSlot = SteinVkGpuTiming.begin(device, device.cmd(), pass.name);
+        }
         boolean clears =
                 pass.colorLoad == SteinRenderPass.Load.CLEAR
                         || pass.depthLoad == SteinRenderPass.Load.CLEAR;
@@ -841,6 +847,9 @@ final class SteinVkCommands extends SteinCommands {
     @Override
     public void end() {
         check();
+        if (gpuSlot >= 0) {
+            SteinVkGpuTiming.end(device.cmd(), gpuSlot);
+        }
         ended = true;
         device.passEnded(this);
         if (SteinVkOptions.SYNC_EACH_PASS) {

@@ -63,8 +63,8 @@ public final class SteinGfxOptions {
     public static final boolean BIND_CACHE = feature("bindCache", true);
 
     /**
-     * {@code -Dsteinbridge.gfx.gpuPassTiming=true} (diagnostics): GPU time of each pass (OpenGL
-     * timestamps), read a few frames later and printed every 5 s.
+     * {@code -Dsteinbridge.gfx.gpuPassTiming=true} (diagnostics): GPU time of each pass (OpenGL or
+     * Vulkan timestamps), read a few frames later and printed every 5 s.
      */
     public static final boolean GPU_PASS_TIMING = Opt.flag("steinbridge.gfx.gpuPassTiming");
 
