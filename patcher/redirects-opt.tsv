@@ -267,6 +267,10 @@ bfk	b	(FI)V	handBegin	dev/xavier/stein/gfx/SteinEntityDeferred	before	bfk.a(IFJ)
 bfk	b	(FI)V	handEnd	dev/xavier/stein/gfx/SteinEntityDeferred	after	bfk.a(IFJ)V
 # Lens post-processing (SteinPostFx): after renderWorld (bfk.b(FJ)V) in updateCameraAndRender, with the world and the
 # hand done, before the game's shader group (spectator, F4) and the HUD.
+# The video settings' showcase (showcase.Showcase): renderWorld draws its own world while it is open (the swap
+# happens inside, the post-processing after still applies), and the real player's hand is not drawn in it.
+bfk	b	(FJ)V	renderWorld	dev/xavier/stein/bridge/showcase/Showcase	static	bfk.a(FJ)V
+bfk	b	(FI)V	renderHand	dev/xavier/stein/bridge/showcase/Showcase	static	bfk.a(IFJ)V
 bfk	b	(FJ)V	afterWorld	dev/xavier/stein/gfx/SteinPostFx	after	bfk.a(FJ)V
 # The depth clear before the hand (GlStateManager.clear(GL_DEPTH_BUFFER_BIT) in renderWorldPass) takes the world's depth
 # away: the edge smoothing copies it first.

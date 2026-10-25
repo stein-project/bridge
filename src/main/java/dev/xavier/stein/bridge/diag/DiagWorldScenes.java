@@ -9,6 +9,7 @@
 package dev.xavier.stein.bridge.diag;
 
 import dev.xavier.stein.bridge.core.Log;
+import dev.xavier.stein.bridge.showcase.Showcase;
 
 import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.settings.GameSettings;
@@ -287,6 +288,33 @@ final class DiagWorldScenes {
     static void thirdPersonFrame() {
         if (DiagOptions.THIRD_PERSON > 0) {
             keepThirdPerson();
+        }
+    }
+
+    private static boolean showcaseOpened;
+
+    /**
+     * The showcase scenes ({@link DiagOptions#SHOWCASE_AT}, {@link DiagOptions#SHOWCASE_NIGHT_AT}).
+     */
+    static void showcaseFrame() {
+        if (DiagOptions.SHOWCASE_AT < 0) {
+            return;
+        }
+        long sec = Scenes.elapsed() / 1_000_000_000L;
+        if (!showcaseOpened && sec >= DiagOptions.SHOWCASE_AT) {
+            Showcase.open();
+            showcaseOpened = Showcase.active();
+            if (showcaseOpened) {
+                Log.info("diag", "showcase open");
+            }
+        }
+        long n = DiagOptions.SHOWCASE_NIGHT_AT;
+        if (showcaseOpened && n > 0 && sec >= n) {
+            boolean night = (sec / n) % 2 == 1;
+            if (night != Showcase.night()) {
+                Showcase.setNight(night);
+                Log.info("diag", "showcase " + (night ? "night" : "day"));
+            }
         }
     }
 

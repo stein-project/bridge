@@ -89,6 +89,8 @@ listed at the end.
 - `-Dsteinbridge.diag.graphicsAtSec=S:1,S:0...`: switches Fancy (1) or Fast (0) graphics at second S (default: none).
 - `-Dsteinbridge.diag.citAtSec=N`: runs the custom-item-textures scene N seconds after startup (default: off).
 - `-Dsteinbridge.diag.thirdPerson=N`: keeps the third-person view, 1 from behind or 2 from the front (default 0: off).
+- `-Dsteinbridge.diag.showcaseAtSec=N`: opens the video settings' showcase (the landscape drawn instead of the world) N seconds after startup, with a world loaded (default: off).
+- `-Dsteinbridge.diag.showcaseNightAtSec=N`: turns the showcase to night N seconds after startup, and back to day N seconds after that, alternating (default: off).
 
 ## EngineOptions
 

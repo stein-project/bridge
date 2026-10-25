@@ -344,6 +344,18 @@ final class DiagOptions {
     static final int THIRD_PERSON = Opt.integer("steinbridge.diag.thirdPerson", 0);
 
     /**
+     * {@code -Dsteinbridge.diag.showcaseAtSec=N}: opens the video settings' showcase (the landscape
+     * drawn instead of the world) N seconds after startup, with a world loaded (default: off).
+     */
+    static final long SHOWCASE_AT = Opt.number("steinbridge.diag.showcaseAtSec", -1L);
+
+    /**
+     * {@code -Dsteinbridge.diag.showcaseNightAtSec=N}: turns the showcase to night N seconds after
+     * startup, and back to day N seconds after that, alternating (default: off).
+     */
+    static final long SHOWCASE_NIGHT_AT = Opt.number("steinbridge.diag.showcaseNightAtSec", -1L);
+
+    /**
      * A list option: empty when the property is unset or empty, otherwise the value split at {@code
      * regex}.
      */

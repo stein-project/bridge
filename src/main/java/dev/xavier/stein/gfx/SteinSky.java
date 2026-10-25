@@ -15,8 +15,8 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
-import java.util.IdentityHashMap;
 import java.util.Map;
+import java.util.WeakHashMap;
 
 /**
  * The sky in Stein's graphics API (renderer stage 4). The game's RenderGlobal.renderSky stays as is
@@ -39,8 +39,12 @@ public final class SteinSky {
     private static final Object SKY = new Object();
     private static final Object SKY2 = new Object();
 
-    /** Game VBO -> role. */
-    private static final Map<Object, Object> ROLE = new IdentityHashMap<>();
+    /**
+     * Game VBO -> role. Several VBOs may hold the same role: every RenderGlobal builds its own sky
+     * (the video settings' showcase has a second one), and the geometry is the same. Weak keys: a
+     * VBO the game replaces on reload goes with it (VertexBuffer keeps Object's identity equality).
+     */
+    private static final Map<Object, Object> ROLE = new WeakHashMap<>();
 
     private SteinSky() {}
 
@@ -62,8 +66,6 @@ public final class SteinSky {
     private static void register(Object role, Object vb, Object buffer) {
         ByteBuffer data = (ByteBuffer) buffer;
         ((VertexBuffer) vb).bufferData(data);
-        // Forgets the old VBO of this role (the game rebuilds the sky on reload).
-        ROLE.values().remove(role);
         // All three are quads in the position-only format (the game builds them with begin(7,
         // POSITION)).
         boolean registered =
