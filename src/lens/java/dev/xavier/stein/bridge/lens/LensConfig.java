@@ -99,6 +99,15 @@ final class LensConfig {
     boolean oldBlockPose = true;
     boolean oldArmorHurt = true;
 
+    /** Bloom: 0 off, 1 low, 2 high (the SteinPostFx.BLOOM_*). */
+    int bloom = 0;
+
+    /** More saturated colours with a little more contrast. */
+    boolean vividColors = false;
+
+    /** Smoothing of object outlines (where the depth breaks; textures stay sharp). */
+    boolean smoothEdges = false;
+
     void load(File file) {
         if (!file.isFile()) {
             save(file);
@@ -143,6 +152,9 @@ final class LensConfig {
             oldRod = bool(o, "oldRod", oldRod);
             oldBlockPose = bool(o, "oldBlockPose", oldBlockPose);
             oldArmorHurt = bool(o, "oldArmorHurt", oldArmorHurt);
+            bloom = integer(o, "bloom", bloom, 0, 2);
+            vividColors = bool(o, "vividColors", vividColors);
+            smoothEdges = bool(o, "smoothEdges", smoothEdges);
         } catch (Exception e) {
             Log.info("lens", file + " unreadable, using defaults: " + e);
         }
@@ -160,6 +172,15 @@ final class LensConfig {
         String ctm = LensOptions.CONNECTED_TEXTURES;
         if (ctm != null) {
             connectedTextures = Boolean.parseBoolean(ctm);
+        }
+        if (LensOptions.BLOOM >= 0) {
+            bloom = Math.min(2, LensOptions.BLOOM);
+        }
+        if (LensOptions.VIVID_COLORS != null) {
+            vividColors = Boolean.parseBoolean(LensOptions.VIVID_COLORS);
+        }
+        if (LensOptions.SMOOTH_EDGES != null) {
+            smoothEdges = Boolean.parseBoolean(LensOptions.SMOOTH_EDGES);
         }
     }
 
@@ -192,6 +213,9 @@ final class LensConfig {
         o.addProperty("oldRod", oldRod);
         o.addProperty("oldBlockPose", oldBlockPose);
         o.addProperty("oldArmorHurt", oldArmorHurt);
+        o.addProperty("bloom", bloom);
+        o.addProperty("vividColors", vividColors);
+        o.addProperty("smoothEdges", smoothEdges);
         file.getAbsoluteFile().getParentFile().mkdirs();
         try (Writer w =
                 new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8)) {

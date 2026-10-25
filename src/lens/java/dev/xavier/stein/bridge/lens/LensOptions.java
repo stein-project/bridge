@@ -40,6 +40,24 @@ final class LensOptions {
     static final String CONNECTED_TEXTURES = Opt.text("steinlens.connectedTextures", null);
 
     /**
+     * {@code -Dsteinlens.bloom=0|1|2}: overrides the file's bloom (off, low, high) without saving
+     * (default: unset, the file decides).
+     */
+    static final int BLOOM = Opt.integer("steinlens.bloom", -1);
+
+    /**
+     * {@code -Dsteinlens.vividColors=true|false}: overrides the file's vivid colours setting
+     * without saving (default: unset, the file decides).
+     */
+    static final String VIVID_COLORS = Opt.text("steinlens.vividColors", null);
+
+    /**
+     * {@code -Dsteinlens.smoothEdges=true|false}: overrides the file's edge smoothing setting
+     * without saving (default: unset, the file decides).
+     */
+    static final String SMOOTH_EDGES = Opt.text("steinlens.smoothEdges", null);
+
+    /**
      * {@code -Dsteinlens.debug=true}: zoom state (every 2 s and on every change) and custom items
      * lookups, recomputed choices and enchantment version steps (every 2 s) in the log (default:
      * off).

@@ -13,6 +13,9 @@ listed at the end.
 - `-Dsteinlens.diag.presetAtSec=S:P`: test, applies graphics slider position P after S seconds of play (default: unset).
 - `-Dsteinlens.customItems=true|false`: overrides the file's custom items setting without saving (default: unset, the file decides).
 - `-Dsteinlens.connectedTextures=true|false`: overrides the file's connected textures setting without saving (default: unset, the file decides).
+- `-Dsteinlens.bloom=0|1|2`: overrides the file's bloom (off, low, high) without saving (default: unset, the file decides).
+- `-Dsteinlens.vividColors=true|false`: overrides the file's vivid colours setting without saving (default: unset, the file decides).
+- `-Dsteinlens.smoothEdges=true|false`: overrides the file's edge smoothing setting without saving (default: unset, the file decides).
 - `-Dsteinlens.debug=true`: zoom state (every 2 s and on every change) and custom items lookups, recomputed choices and enchantment version steps (every 2 s) in the log (default: off).
 
 ## CoreOptions
@@ -225,6 +228,10 @@ listed at the end.
 - `-Dsteinbridge.gfx.retainTilesStats=...`: (diagnostics) prints only the retained tile numbers (default: off).
 - `-Dsteinbridge.gfx.retainTilesReplayCheck=...`: (diagnostics) checks every re-emitted retained tile against the plain computation (corrected matrices and group lookups) and prints the mismatches (default: off).
 - `-Dsteinbridge.gfx.retainTilesPredict=false`: the retained tiles read the state for every block instead of predicting it between blocks of a sequence; only the exact value `false` turns the prediction off (default: on).
+- `-Dsteinbridge.gfx.postEdgeView=true`: (diagnostics) with the Lens edge smoothing on, paints in red the pixels it treats as an object's outline (default: off).
+- `-Dsteinbridge.gfx.postEdgeRatio=R`: the edge smoothing treats a pixel as an outline when the depth's second difference passes R times its first difference (default 0.5).
+- `-Dsteinbridge.gfx.postEdgeFloor=D`: the smallest depth step (in the depth buffer's 0..1) the edge smoothing counts as an outline, above its rounding (default 4e-7).
+- `-Dsteinbridge.gfx.postBloomStrength=X`: multiplies the strength of the Lens bloom, for tuning (default 1).
 
 ## SteinGlOptions
 

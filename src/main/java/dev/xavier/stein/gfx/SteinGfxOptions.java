@@ -343,6 +343,30 @@ public final class SteinGfxOptions {
     static final boolean RETAIN_TILES_PREDICT =
             ENABLED && Opt.unlessFalse("steinbridge.gfx.retainTilesPredict");
 
+    /**
+     * {@code -Dsteinbridge.gfx.postEdgeView=true}: (diagnostics) with the Lens edge smoothing on,
+     * paints in red the pixels it treats as an object's outline (default: off).
+     */
+    static final boolean POST_EDGE_VIEW = Opt.flag("steinbridge.gfx.postEdgeView");
+
+    /**
+     * {@code -Dsteinbridge.gfx.postEdgeRatio=R}: the edge smoothing treats a pixel as an outline
+     * when the depth's second difference passes R times its first difference (default 0.5).
+     */
+    static final double POST_EDGE_RATIO = Opt.decimal("steinbridge.gfx.postEdgeRatio", 0.5);
+
+    /**
+     * {@code -Dsteinbridge.gfx.postEdgeFloor=D}: the smallest depth step (in the depth buffer's
+     * 0..1) the edge smoothing counts as an outline, above its rounding (default 4e-7).
+     */
+    static final double POST_EDGE_FLOOR = Opt.decimal("steinbridge.gfx.postEdgeFloor", 4e-7);
+
+    /**
+     * {@code -Dsteinbridge.gfx.postBloomStrength=X}: multiplies the strength of the Lens bloom, for
+     * tuning (default 1).
+     */
+    static final double POST_BLOOM_STRENGTH = Opt.decimal("steinbridge.gfx.postBloomStrength", 1.0);
+
     private static final Pattern GL_VERSION = Pattern.compile("^(\\d+\\.\\d+)");
 
     /** Cached F3 line; written and read on the render thread only. */

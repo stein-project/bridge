@@ -68,6 +68,12 @@ public abstract class SteinSampler {
                     Filter.NEAREST, Filter.NEAREST, Mip.NONE, Wrap.REPEAT, Wrap.REPEAT, 1f, false);
         }
 
+        /** Per pixel, clamped at the edges (images read pixel by pixel: depth, scene copies). */
+        public static Desc nearestClamp() {
+            return new Desc(
+                    Filter.NEAREST, Filter.NEAREST, Mip.NONE, Wrap.CLAMP, Wrap.CLAMP, 1f, false);
+        }
+
         public static Desc linearClamp() {
             return new Desc(
                     Filter.LINEAR, Filter.LINEAR, Mip.NONE, Wrap.CLAMP, Wrap.CLAMP, 1f, false);

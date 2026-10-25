@@ -19,6 +19,7 @@ import dev.xavier.stein.bridge.engine.Rain;
 import dev.xavier.stein.bridge.engine.Visuals;
 import dev.xavier.stein.bridge.hooks.GameHooks;
 import dev.xavier.stein.bridge.hooks.HookSink;
+import dev.xavier.stein.gfx.SteinPostFx;
 
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
@@ -419,6 +420,7 @@ public final class Lens implements HookSink {
         ChunkKeep.setMode(config.keepChunks, config.keepChunksMb);
         Rain.setHidden(!config.rain);
         OldAnimations.set(config.oldAnimations, oldAnimationParts(config));
+        SteinPostFx.configure(config.bloom, config.vividColors, config.smoothEdges);
     }
 
     /** The enabled parts of the 1.7 animations, in OldAnimations' bits. */

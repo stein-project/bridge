@@ -21,3 +21,9 @@ selftest.frag       frag     selftest.frag
 selftest.comp       comp     selftest.comp
 blue.vert           vert     fullscreen_blue.vert
 blue.frag           frag     fullscreen_blue.frag
+post.vert             vert     post.vert
+post_bloom_first.frag frag     post_bloom_down.frag  FIRST
+post_bloom_down.frag  frag     post_bloom_down.frag
+post_bloom_up.frag    frag     post_bloom_up.frag
+post_composite.frag   frag     post_composite.frag
+post_luma.frag        frag     post_luma.frag

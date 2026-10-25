@@ -12,6 +12,7 @@ import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.bridge.engine.ChunkKeep;
 import dev.xavier.stein.bridge.engine.Visuals;
 import dev.xavier.stein.gfx.SteinBackend;
+import dev.xavier.stein.gfx.SteinPostFx;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
@@ -129,6 +130,7 @@ final class VideoOptions {
         buildGeneral();
         buildCamera();
         buildLight();
+        buildImage();
         buildSky();
         buildTextures();
         buildPlayers();
@@ -204,6 +206,33 @@ final class VideoOptions {
         header("light");
         game(GameSettings.Options.AMBIENT_OCCLUSION);
         game(GameSettings.Options.ENTITY_SHADOWS);
+    }
+
+    /** Stein's post-processing (SteinPostFx): only where Stein GFX draws. */
+    private void buildImage() {
+        header("image");
+        BooleanSupplier post = SteinPostFx::available;
+        add(
+                "steinlens.bloom",
+                () ->
+                        c.bloom == SteinPostFx.BLOOM_HIGH
+                                ? tr("steinlens.bloom.high")
+                                : c.bloom == SteinPostFx.BLOOM_LOW
+                                        ? tr("steinlens.bloom.low")
+                                        : tr("options.off"),
+                () -> c.bloom = (c.bloom + 1) % 3,
+                "steinlens.bloom.hint",
+                post);
+        toggle(
+                "steinlens.vividColors",
+                () -> c.vividColors,
+                () -> c.vividColors = !c.vividColors,
+                post);
+        toggle(
+                "steinlens.smoothEdges",
+                () -> c.smoothEdges,
+                () -> c.smoothEdges = !c.smoothEdges,
+                post);
     }
 
     private void buildSky() {

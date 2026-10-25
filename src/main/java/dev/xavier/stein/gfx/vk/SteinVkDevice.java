@@ -885,6 +885,28 @@ public final class SteinVkDevice extends SteinDevice {
         return SteinGameFramebuffers.drawTarget();
     }
 
+    /** Both targets hold our own textures here (the game's too): two texture copies. */
+    @Override
+    public boolean copyTarget(SteinRenderTarget src, SteinRenderTarget dst, boolean depth) {
+        int w = dst.width();
+        int h = dst.height();
+        SteinTexture from = src.color(0);
+        if (from != null && dst.color(0) != null) {
+            SteinVkTransfers.copyTexture(this, from, 0, dst.color(0), 0, w, h);
+        }
+        if (!depth) {
+            return true;
+        }
+        SteinTexture fromDepth = src.depth();
+        if (fromDepth == null
+                || dst.depth() == null
+                || fromDepth.desc().format != dst.depth().desc().format) {
+            return false;
+        }
+        SteinVkTransfers.copyTexture(this, fromDepth, 0, dst.depth(), 0, w, h);
+        return true;
+    }
+
     // ---- work ----
 
     @Override

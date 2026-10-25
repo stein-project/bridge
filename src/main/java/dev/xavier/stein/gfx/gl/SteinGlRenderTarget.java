@@ -81,7 +81,12 @@ final class SteinGlRenderTarget extends SteinRenderTarget {
             }
             if (n == 0) {
                 GL11.glDrawBuffer(GL11.GL_NONE);
+                // glReadBuffer sets the framebuffer bound for READING: bound here only for it, or
+                // it would take the colour away from the game's (its copies then read nothing)
+                int previousRead = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+                GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, fbo);
                 GL11.glReadBuffer(GL11.GL_NONE);
+                GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, previousRead);
             } else {
                 GL20.glDrawBuffers(Arrays.copyOf(buffers, n));
             }
