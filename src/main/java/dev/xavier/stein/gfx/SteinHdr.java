@@ -35,6 +35,19 @@ public final class SteinHdr {
 
     private static volatile boolean requested;
 
+    /** The Encode block: scale (paper white, peak, test mode) and the test's rectangle. */
+    private static final int ENCODE_BYTES = 32;
+
+    /**
+     * The peak test of the HDR calibration: inside {@link #testRect} the screen shows the chosen
+     * peak, and on it a symbol far brighter than any screen. With the peak right, the symbol just
+     * disappears into the patch.
+     */
+    private static boolean peakTest;
+
+    /** The test's rectangle, in the screen's pixels, rows from the bottom (x0, y0, x1, y1). */
+    private static final float[] testRect = new float[4];
+
     /**
      * The Lens calibration: the paper white and the screen's peak, in nits. Plain numbers: the Lens
      * configures before the window exists, when SteinGfxOptions must not load yet.
@@ -68,6 +81,18 @@ public final class SteinHdr {
         requested = on;
         whiteNits = paperWhite;
         peakNits = peak;
+    }
+
+    /**
+     * The calibration's peak test over a rectangle of the screen (in pixels, rows from the top, as
+     * the GUI places it), or off. Render thread; only while HDR is on.
+     */
+    public static void peakTest(boolean on, int x, int y, int w, int h, int screenHeight) {
+        peakTest = on;
+        testRect[0] = x;
+        testRect[1] = screenHeight - (y + h);
+        testRect[2] = x + w;
+        testRect[3] = screenHeight - y;
     }
 
     /** Whether the option can act: Vulkan draws and the window offers scRGB. */
@@ -136,10 +161,10 @@ public final class SteinHdr {
                                         screen.height()));
                 target = dev.createTarget(new SteinTexture[] {targetColor}, null);
             }
-            long at = block.reserve(16, dev.caps().uniformAlignment);
+            long at = block.reserve(ENCODE_BYTES, dev.caps().uniformAlignment);
             if (at == -2) {
                 block.nextRegion();
-                at = block.reserve(16, dev.caps().uniformAlignment);
+                at = block.reserve(ENCODE_BYTES, dev.caps().uniformAlignment);
             }
             long p = block.address(at);
             float white =
@@ -151,13 +176,16 @@ public final class SteinHdr {
             top = Math.max(top, white * 1.5f);
             MemoryUtil.memPutFloat(p, white / 80f);
             MemoryUtil.memPutFloat(p + 4, top / 80f);
-            MemoryUtil.memPutFloat(p + 8, 0f);
+            MemoryUtil.memPutFloat(p + 8, peakTest ? 1f : 0f);
             MemoryUtil.memPutFloat(p + 12, 0f);
+            for (int i = 0; i < 4; i++) {
+                MemoryUtil.memPutFloat(p + 16 + 4L * i, testRect[i]);
+            }
             block.commitRing();
             SteinCommands c = dev.beginPass(SteinRenderPass.discard("hdr encode", target));
             try {
                 c.bindPipeline(encode);
-                c.bindUniforms(0, block, at, 16);
+                c.bindUniforms(0, block, at, ENCODE_BYTES);
                 c.bindTexture(0, screen, nearest);
                 c.draw(3, 1, 0, 0);
             } finally {

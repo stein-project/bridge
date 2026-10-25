@@ -212,6 +212,7 @@ final class VideoModel implements VideoSettings.Source {
                 () -> c.smoothEdges = !c.smoothEdges,
                 post);
         toggle("steinlens.hdr", () -> c.hdr, () -> c.hdr = !c.hdr, SteinHdr::available);
+        last("hdr");
         BooleanSupplier hdrOn = () -> c.hdr && SteinHdr.available();
         nits(
                 "steinlens.hdrWhite",
@@ -221,6 +222,7 @@ final class VideoModel implements VideoSettings.Source {
                 HDR_WHITE_MAX,
                 10,
                 hdrOn);
+        last("hdrWhite");
         nits(
                 "steinlens.hdrPeak",
                 () -> c.hdrPeak,
@@ -229,6 +231,7 @@ final class VideoModel implements VideoSettings.Source {
                 HDR_PEAK_MAX,
                 50,
                 hdrOn);
+        last("hdrPeak");
     }
 
     private void sky() {
@@ -390,6 +393,11 @@ final class VideoModel implements VideoSettings.Source {
     }
 
     // ---- building blocks ----
+
+    /** Names the option just added, for the screens that look for it (the HDR calibration). */
+    private void last(String id) {
+        entries.get(entries.size() - 1).id(id);
+    }
 
     private void topic(String id) {
         entries = new ArrayList<>();

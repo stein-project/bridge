@@ -11,8 +11,25 @@
 // bends towards the peak and never reaches it, with the other two scaled alike: bright lights stay lights with their
 // colour and detail instead of flattening into one white at the screen's limit.
 layout(std140, set = 0, binding = 0) uniform Encode {
-    vec4 scale;   // x: paper white / 80, y: peak / 80
+    vec4 scale;   // x: paper white / 80, y: peak / 80, z: 1 during the calibration's peak test
+    vec4 test;    // the peak test's rectangle in pixels (x0, y0, x1, y1), rows from the bottom
 };
+
+// The calibration's peak test: the patch at exactly the chosen peak, and on it a ring and a dot far brighter than any
+// screen (10000 nits). Past the screen's real limit both clip to the same light and the symbol disappears; below it the
+// symbol shows. No curve here: the test needs the raw values.
+bool peakTest(out vec3 c) {
+    vec2 p = gl_FragCoord.xy;
+    if (scale.z < 0.5 || p.x < test.x || p.y < test.y || p.x >= test.z || p.y >= test.w) {
+        return false;
+    }
+    vec2 size = test.zw - test.xy;
+    vec2 q = (p - test.xy) / size - 0.5;
+    float r = length(q);
+    bool symbol = abs(r - 0.28) < 0.035 || r < 0.06;
+    c = vec3(symbol ? 10000.0 / 80.0 : scale.y);
+    return true;
+}
 layout(set = 0, binding = 1) uniform sampler2D screen;
 layout(location = 0) out vec4 color;
 
@@ -23,6 +40,11 @@ vec3 decode(vec3 c) {
 }
 
 void main() {
+    vec3 tested;
+    if (peakTest(tested)) {
+        color = vec4(tested, 1.0);
+        return;
+    }
     vec3 c = texelFetch(screen, ivec2(gl_FragCoord.xy), 0).rgb;
     c = any(isnan(c)) || any(isinf(c)) ? vec3(0.0) : max(c, vec3(0.0));
     vec3 lin = decode(c) * scale.x;

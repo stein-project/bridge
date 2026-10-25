@@ -61,6 +61,18 @@ public final class VideoSettings {
         public final DoubleConsumer setFraction;
 
         /**
+         * A stable name for the few options a screen looks for by itself (the HDR calibration:
+         * "hdr", "hdrWhite", "hdrPeak"); null for the rest.
+         */
+        public String id;
+
+        /** Names the option ({@link #id}) and returns it. */
+        public Entry id(String name) {
+            this.id = name;
+            return this;
+        }
+
+        /**
          * A slider that rebuilds the world (the graphics preset, the render distance): the screen
          * applies it only when the drag ends.
          */
@@ -194,6 +206,18 @@ public final class VideoSettings {
     /** The owner of the options, or null when nothing provided them. */
     public static Source source() {
         return source;
+    }
+
+    /** The option named {@code id} ({@link Entry#id}) among the topics now, or null. */
+    public static Entry find(String id) {
+        for (Section s : sections()) {
+            for (Entry e : s.entries) {
+                if (id.equals(e.id)) {
+                    return e;
+                }
+            }
+        }
+        return null;
     }
 
     /** The topics now; empty when nothing provided them. */
