@@ -15,7 +15,6 @@ import static dev.xavier.stein.gfx.SteinPlayerPoseJobs.*;
 import static dev.xavier.stein.gfx.SteinPlayerPoseModels.*;
 
 import dev.xavier.stein.bridge.engine.GLMatrix;
-import dev.xavier.stein.bridge.engine.Mat4;
 import dev.xavier.stein.bridge.engine.NameCache;
 import dev.xavier.stein.bridge.engine.OldAnimations;
 import dev.xavier.stein.bridge.engine.Visuals;
@@ -641,11 +640,7 @@ final class SteinPlayerPoseCollect {
             int unlit = SteinEntityDeferred.poseFlags(false, lightmap, fog);
             float[] t = TEX;
             for (int i = 0; i < 2; i++) {
-                Mat4.identity(t);
-                float third = GLINT_SCALE;
-                Mat4.scale(t, third, third, third);
-                Mat4.rotate(t, 30.0F - (float) i * 60.0F, 0.0F, 0.0F, 1.0F);
-                Mat4.translate(t, 0.0F, time * (0.001F + (float) i * 0.003F) * 20.0F, 0.0F);
+                glintMatrix(t, i, time);
                 state(
                         s0 + ST_GLINT + i,
                         gtex & 0xFFFF,
