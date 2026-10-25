@@ -17,6 +17,8 @@ import static org.lwjgl.vulkan.VK10.VK_COMPARE_OP_ALWAYS;
 import static org.lwjgl.vulkan.VK10.VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 import static org.lwjgl.vulkan.VK10.VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
 import static org.lwjgl.vulkan.VK10.VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+import static org.lwjgl.vulkan.VK10.VK_DYNAMIC_STATE_DEPTH_BIAS;
+import static org.lwjgl.vulkan.VK10.VK_DYNAMIC_STATE_LINE_WIDTH;
 import static org.lwjgl.vulkan.VK10.VK_DYNAMIC_STATE_SCISSOR;
 import static org.lwjgl.vulkan.VK10.VK_DYNAMIC_STATE_VIEWPORT;
 import static org.lwjgl.vulkan.VK10.VK_FORMAT_UNDEFINED;
@@ -442,6 +444,9 @@ final class SteinVkPipeline extends SteinPipeline {
                             .polygonMode(VK_POLYGON_MODE_FILL)
                             .cullMode(SteinVkFormats.cull(desc.cull))
                             .frontFace(VK_FRONT_FACE_CLOCKWISE)
+                            // always on, zero unless the pass sets it (setDepthBias): OpenGL's
+                            // polygon offset is a switch, Vulkan 1.2's bias is pipeline state
+                            .depthBiasEnable(true)
                             .lineWidth(1f);
             VkPipelineMultisampleStateCreateInfo ms =
                     VkPipelineMultisampleStateCreateInfo.calloc(stack)
@@ -499,8 +504,16 @@ final class SteinVkPipeline extends SteinPipeline {
                     VkPipelineDynamicStateCreateInfo.calloc(stack)
                             .sType$Default()
                             .pDynamicStates(
-                                    stack.ints(
-                                            VK_DYNAMIC_STATE_VIEWPORT, VK_DYNAMIC_STATE_SCISSOR));
+                                    device.wideLines
+                                            ? stack.ints(
+                                                    VK_DYNAMIC_STATE_VIEWPORT,
+                                                    VK_DYNAMIC_STATE_SCISSOR,
+                                                    VK_DYNAMIC_STATE_DEPTH_BIAS,
+                                                    VK_DYNAMIC_STATE_LINE_WIDTH)
+                                            : stack.ints(
+                                                    VK_DYNAMIC_STATE_VIEWPORT,
+                                                    VK_DYNAMIC_STATE_SCISSOR,
+                                                    VK_DYNAMIC_STATE_DEPTH_BIAS));
 
             IntBuffer colorFormats = colors == 0 ? null : stack.ints(formats.colors());
             VkPipelineRenderingCreateInfo ri =

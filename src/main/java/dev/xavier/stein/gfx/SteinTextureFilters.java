@@ -9,6 +9,7 @@
 package dev.xavier.stein.gfx;
 
 import dev.xavier.stein.bridge.engine.ModelBatch;
+import dev.xavier.stein.gfx.game.SteinGameTextures;
 import dev.xavier.stein.gfx.gl.SteinCoreGl;
 import dev.xavier.stein.gfx.gl.SteinGlFrame;
 
@@ -216,6 +217,11 @@ final class SteinTextureFilters {
         int c = code - 1;
         int min = MIN_FILTERS[c >> 1];
         int mag = (c & 1) == 0 ? GL11.GL_NEAREST : GL11.GL_LINEAR;
+        if (SteinGfxOptions.VULKAN) {
+            // the game's texture is ours: the next draw that samples it takes the new sampler
+            SteinGameTextures.setFilter(tex, min, mag);
+            return;
+        }
         if (GL.getCapabilities().OpenGL45) {
             SteinGlFrame.textureParameteri(tex, GL11.GL_TEXTURE_MIN_FILTER, min);
             SteinGlFrame.textureParameteri(tex, GL11.GL_TEXTURE_MAG_FILTER, mag);

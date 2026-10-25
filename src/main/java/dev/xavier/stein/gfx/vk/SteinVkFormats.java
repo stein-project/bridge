@@ -36,6 +36,7 @@ import static org.lwjgl.vulkan.VK10.VK_CULL_MODE_FRONT_BIT;
 import static org.lwjgl.vulkan.VK10.VK_CULL_MODE_NONE;
 import static org.lwjgl.vulkan.VK10.VK_FILTER_LINEAR;
 import static org.lwjgl.vulkan.VK10.VK_FILTER_NEAREST;
+import static org.lwjgl.vulkan.VK10.VK_FORMAT_B8G8R8A8_UNORM;
 import static org.lwjgl.vulkan.VK10.VK_FORMAT_D16_UNORM;
 import static org.lwjgl.vulkan.VK10.VK_FORMAT_D24_UNORM_S8_UINT;
 import static org.lwjgl.vulkan.VK10.VK_FORMAT_D32_SFLOAT;
@@ -84,6 +85,7 @@ final class SteinVkFormats {
     static int texture(SteinFormat f, int depth24) {
         return switch (f) {
             case RGBA8 -> VK_FORMAT_R8G8B8A8_UNORM;
+            case BGRA8 -> VK_FORMAT_B8G8R8A8_UNORM;
             case R8 -> VK_FORMAT_R8_UNORM;
             case RG8 -> VK_FORMAT_R8G8_UNORM;
             case RGBA16F -> VK_FORMAT_R16G16B16A16_SFLOAT;

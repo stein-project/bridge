@@ -27,7 +27,6 @@ import org.lwjgl.opengl.GL30;
 import org.lwjgl.opengl.GL33;
 import org.lwjgl.opengl.GL40;
 import org.lwjgl.opengl.GL43;
-import org.lwjgl.opengl.GLCapabilities;
 import org.lwjgl.system.MemoryUtil;
 
 import java.util.Arrays;
@@ -178,8 +177,9 @@ public final class SteinModelInstancer {
         if (!REQUESTED) {
             return false;
         }
-        GLCapabilities caps = GL.getCapabilities();
-        if (!caps.OpenGL33 || !GLMatrix.emulating()) {
+        // with Vulkan there is no OpenGL to ask: the API stands in for 3.3
+        boolean gl33 = SteinGfxOptions.VULKAN || GL.getCapabilities().OpenGL33;
+        if (!gl33 || !GLMatrix.emulating()) {
             Log.info("gfx", "instanced parts off: need GL 3.3 and the matrix stack in Java");
             return false;
         }

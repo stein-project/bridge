@@ -11,6 +11,7 @@ package dev.xavier.stein.bridge.lens;
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.bridge.engine.ChunkKeep;
 import dev.xavier.stein.bridge.engine.Visuals;
+import dev.xavier.stein.gfx.SteinBackend;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
@@ -28,6 +29,7 @@ import net.minecraft.client.settings.GameSettings;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
@@ -146,6 +148,35 @@ final class VideoOptions {
         game(GameSettings.Options.GUI_SCALE);
         game(GameSettings.Options.GAMMA);
         game(GameSettings.Options.PARTICLES);
+        graphicsApi(); // last: the rows above keep their places
+    }
+
+    /**
+     * The graphics API in use (OpenGL or Vulkan), shown only: it is chosen in the Stein Client,
+     * before the game opens, since the window is created for one of them. If Vulkan did not start
+     * on this computer, or the last start with it died on the way, the hint says so.
+     */
+    private void graphicsApi() {
+        SteinBackend.Fallback why = SteinBackend.fallback();
+        addText(
+                "steinlens.graphicsApi",
+                () -> apiName(SteinBackend.running()),
+                () -> {},
+                SteinBackend.crashedLastTime()
+                        ? tr("steinlens.graphicsApi.crashed")
+                        : why == null
+                                ? tr("steinlens.graphicsApi.hint")
+                                : tr(
+                                        "steinlens.graphicsApi.unavailable",
+                                        tr(
+                                                "steinlens.graphicsApi.reason."
+                                                        + why.name().toLowerCase(Locale.ROOT))),
+                // never clickable: the Stein Client chooses
+                () -> false);
+    }
+
+    private static String apiName(SteinBackend api) {
+        return api == SteinBackend.VULKAN ? "Vulkan" : "OpenGL";
     }
 
     private void buildCamera() {

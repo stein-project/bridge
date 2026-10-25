@@ -20,6 +20,8 @@ listed at the end.
 `dev.xavier.stein.bridge.core.CoreOptions`
 
 - `-Dsteinbridge.gfx=false`: the game draws with its own fixed-function pipeline instead of Stein GFX (default: Stein GFX). Without an OpenGL 4.1 core context the fixed-function pipeline is used anyway.
+- `-Dsteinbridge.gfx.api=opengl|vulkan`: the graphics API Stein GFX draws with for this session, instead of the one saved in the video options (default: unset, the saved choice; OpenGL when there is none). Without Vulkan on the machine the game falls back to OpenGL.
+- `-Dsteinbridge.gfx.vkGlSink=false` (diagnostics): with Vulkan, no hidden OpenGL context absorbs the OpenGL calls of mods that call it directly — such a call then aborts the game, which is how to find one (default: the context exists).
 - `-Dsteinbridge.opt.noVsyncLatencyFix=true`: goes back to the usual VSync instead of adaptive VSync with a GPU fence per frame (default: off, the latency fix is on).
 - `-Dsteinbridge.diag.background=true`: test bench only; the window appears minimized and without focus (default: off).
 - `-Dsteinbridge.gfx.glDebug=true`: asks GLFW for an OpenGL debug context (default: off).
@@ -239,6 +241,9 @@ listed at the end.
 - `-Dsteinbridge.gfx.vkValidation=true`: turns on the Vulkan SDK validation layers (default: off).
 - `-Dsteinbridge.gfx.vkNoPush=true`: does not use push descriptors (default: off).
 - `-Dsteinbridge.gfx.vkDevice=N`: chooses the physical device by driver order (default: -1, automatic).
+- `-Dsteinbridge.gfx.vkGameCopy=false` (diagnostics): the game's textures are not copied into the renderer's texture arrays; entities and the HUD draw with the game's texture itself (default: copied).
+- `-Dsteinbridge.gfx.vkDebugDrawsAtSec=N` (diagnostics): logs every draw of one frame, N seconds after startup — pass, pipeline state, textures and the start of the uniforms (default: off).
+- `-Dsteinbridge.gfx.vkSyncEachPass=true` (diagnostics): submits and waits for the GPU at the end of every pass, so nothing the CPU writes afterwards can reach a pass already recorded (default: off).
 
 ## Removed options
 

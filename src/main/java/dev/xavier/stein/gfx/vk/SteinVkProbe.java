@@ -8,6 +8,7 @@
 
 package dev.xavier.stein.gfx.vk;
 
+import static org.lwjgl.vulkan.KHRSurface.vkGetPhysicalDeviceSurfaceSupportKHR;
 import static org.lwjgl.vulkan.VK10.VK_API_VERSION_MAJOR;
 import static org.lwjgl.vulkan.VK10.VK_API_VERSION_MINOR;
 import static org.lwjgl.vulkan.VK10.VK_API_VERSION_PATCH;
@@ -16,6 +17,7 @@ import static org.lwjgl.vulkan.VK10.VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU;
 import static org.lwjgl.vulkan.VK10.VK_PHYSICAL_DEVICE_TYPE_VIRTUAL_GPU;
 import static org.lwjgl.vulkan.VK10.VK_QUEUE_COMPUTE_BIT;
 import static org.lwjgl.vulkan.VK10.VK_QUEUE_GRAPHICS_BIT;
+import static org.lwjgl.vulkan.VK10.VK_TRUE;
 import static org.lwjgl.vulkan.VK10.vkEnumerateDeviceExtensionProperties;
 import static org.lwjgl.vulkan.VK10.vkEnumerateInstanceExtensionProperties;
 import static org.lwjgl.vulkan.VK10.vkEnumerateInstanceLayerProperties;
@@ -26,6 +28,7 @@ import static org.lwjgl.vulkan.VK10.vkGetPhysicalDeviceQueueFamilyProperties;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.KHRDynamicRendering;
+import org.lwjgl.vulkan.KHRSwapchain;
 import org.lwjgl.vulkan.VkExtensionProperties;
 import org.lwjgl.vulkan.VkInstance;
 import org.lwjgl.vulkan.VkLayerProperties;
@@ -97,9 +100,11 @@ final class SteinVkProbe {
 
     /**
      * The GPU: the discrete one before the integrated one, only those with Vulkan 1.2 and a
-     * graphics queue with compute. {@code -Dsteinbridge.gfx.vkDevice=N} chooses by driver order.
+     * graphics queue with compute (that also presents to {@code surface}, when there is one).
+     * {@code -Dsteinbridge.gfx.vkDevice=N} chooses by driver order.
      */
-    static VkPhysicalDevice pickPhysical(VkInstance instance, MemoryStack stack, int apiVersion) {
+    static VkPhysicalDevice pickPhysical(
+            VkInstance instance, MemoryStack stack, int apiVersion, long surface) {
         IntBuffer n = stack.mallocInt(1);
         SteinVkDevice.check(vkEnumeratePhysicalDevices(instance, n, null), "GPUs");
         if (n.get(0) == 0) {
@@ -115,7 +120,12 @@ final class SteinVkProbe {
             VkPhysicalDeviceProperties p = VkPhysicalDeviceProperties.calloc(stack);
             vkGetPhysicalDeviceProperties(pd, p);
             int v = Math.min(p.apiVersion(), apiVersion);
-            boolean ok = VK_API_VERSION_MINOR(v) >= 2 && graphicsFamily(stack, pd) >= 0;
+            boolean ok = VK_API_VERSION_MINOR(v) >= 2 && graphicsFamily(stack, pd, surface) >= 0;
+            if (ok && surface != 0L) {
+                ok =
+                        deviceExtensions(stack, pd)
+                                .contains(KHRSwapchain.VK_KHR_SWAPCHAIN_EXTENSION_NAME);
+            }
             if (ok && VK_API_VERSION_MINOR(v) < 3) {
                 ok =
                         deviceExtensions(stack, pd)
@@ -142,21 +152,37 @@ final class SteinVkProbe {
             }
         }
         if (best == null) {
-            throw new IllegalStateException("vulkan: no GPU with Vulkan 1.2 and dynamic rendering");
+            throw new IllegalStateException(
+                    surface != 0L
+                            ? "vulkan: no GPU with Vulkan 1.2 and dynamic rendering that presents"
+                                    + " to the window"
+                            : "vulkan: no GPU with Vulkan 1.2 and dynamic rendering");
         }
         return best;
     }
 
-    static int graphicsFamily(MemoryStack stack, VkPhysicalDevice pd) {
+    /**
+     * The queue family with graphics and compute (and that presents to {@code surface}, when it is
+     * not 0), or -1.
+     */
+    static int graphicsFamily(MemoryStack stack, VkPhysicalDevice pd, long surface) {
         IntBuffer n = stack.mallocInt(1);
         vkGetPhysicalDeviceQueueFamilyProperties(pd, n, null);
         VkQueueFamilyProperties.Buffer q = VkQueueFamilyProperties.malloc(n.get(0), stack);
         vkGetPhysicalDeviceQueueFamilyProperties(pd, n, q);
         int want = VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT;
         for (int i = 0; i < q.capacity(); i++) {
-            if ((q.get(i).queueFlags() & want) == want) {
-                return i;
+            if ((q.get(i).queueFlags() & want) != want) {
+                continue;
             }
+            if (surface != 0L) {
+                IntBuffer present = stack.mallocInt(1);
+                vkGetPhysicalDeviceSurfaceSupportKHR(pd, i, surface, present);
+                if (present.get(0) != VK_TRUE) {
+                    continue;
+                }
+            }
+            return i;
         }
         return -1;
     }

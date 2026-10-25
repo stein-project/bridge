@@ -262,7 +262,9 @@ public final class SteinEntityDeferred {
         viewportY = y;
         viewportW = w;
         viewportH = h;
-        GL11.glViewport(x, y, w, h);
+        if (!SteinGfxOptions.VULKAN) {
+            GL11.glViewport(x, y, w, h);
+        }
     }
 
     /** Before switching framebuffer mid-pass: what was recorded goes out on the current target. */

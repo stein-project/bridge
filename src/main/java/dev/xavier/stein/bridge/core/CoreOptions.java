@@ -23,6 +23,20 @@ public final class CoreOptions {
     public static final boolean GFX = Opt.flag("steinbridge.gfx", true);
 
     /**
+     * {@code -Dsteinbridge.gfx.api=opengl|vulkan}: the graphics API Stein GFX draws with for this
+     * session, instead of the one saved in the video options (default: unset, the saved choice;
+     * OpenGL when there is none). Without Vulkan on the machine the game falls back to OpenGL.
+     */
+    public static final String GFX_API = Opt.text("steinbridge.gfx.api", null);
+
+    /**
+     * {@code -Dsteinbridge.gfx.vkGlSink=false} (diagnostics): with Vulkan, no hidden OpenGL context
+     * absorbs the OpenGL calls of mods that call it directly — such a call then aborts the game,
+     * which is how to find one (default: the context exists).
+     */
+    public static final boolean VK_GL_SINK = Opt.flag("steinbridge.gfx.vkGlSink", true);
+
+    /**
      * {@code -Dsteinbridge.opt.noVsyncLatencyFix=true}: goes back to the usual VSync instead of
      * adaptive VSync with a GPU fence per frame (default: off, the latency fix is on).
      */

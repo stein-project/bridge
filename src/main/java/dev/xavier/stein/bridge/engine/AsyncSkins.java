@@ -9,6 +9,7 @@
 package dev.xavier.stein.bridge.engine;
 
 import dev.xavier.stein.bridge.core.Log;
+import dev.xavier.stein.gfx.game.SteinGameGl;
 
 import net.minecraft.client.renderer.ThreadDownloadImageData;
 import net.minecraft.client.renderer.texture.ITextureObject;
@@ -17,8 +18,6 @@ import net.minecraft.client.renderer.texture.TextureUtil;
 import net.minecraft.client.resources.IResource;
 import net.minecraft.client.resources.IResourceManager;
 import net.minecraft.util.ResourceLocation;
-
-import org.lwjgl.opengl.GL11;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
@@ -208,7 +207,7 @@ public final class AsyncSkins {
         if (d.shared == 0) {
             d.shared =
                     TextureUtil.uploadTextureImageAllocate(
-                            GL11.glGenTextures(), d.image, false, false);
+                            SteinGameGl.glGenTextures(), d.image, false, false);
         }
         // All the skins still waiting for the real one point to the same texture: the image is the
         // same, and uploading it 400 times when a crowd arrives cost a whole frame (pixel

@@ -9,6 +9,7 @@
 package dev.xavier.stein.gfx;
 
 import dev.xavier.stein.bridge.engine.GLMatrix;
+import dev.xavier.stein.gfx.game.SteinGameFramebuffers;
 import dev.xavier.stein.gfx.gl.SteinCoreGl;
 import dev.xavier.stein.gfx.gl.SteinGlBindings;
 import dev.xavier.stein.gfx.gl.SteinGlFrame;
@@ -48,6 +49,12 @@ public final class SteinGlTrack {
 
     /** Sync reason: the game deleted a framebuffer. */
     private static final String GAME_FRAMEBUFFER_DELETED = "game framebuffer deleted";
+
+    /**
+     * No OpenGL context (the Vulkan backend): framebuffers, clears, the viewport and the scissor go
+     * to the game's objects on the API ({@link SteinGameFramebuffers}) instead of the driver.
+     */
+    private static final boolean VULKAN = SteinGfxOptions.VULKAN;
 
     private SteinGlTrack() {}
 
@@ -93,12 +100,20 @@ public final class SteinGlTrack {
 
     /** GL30.glBindFramebuffer (OpenGlHelper.glBindFramebuffer, the GL 3.0 path). */
     public static void glBindFramebuffer(int target, int fb) {
+        if (VULKAN) {
+            bindGameFramebuffer(target, fb);
+            return;
+        }
         GL30.glBindFramebuffer(target, fb);
         SteinGlBindings.noteFramebuffer(target, fb);
     }
 
     /** ARBFramebufferObject.glBindFramebuffer (OpenGlHelper's ARB path). */
     public static void glBindFramebufferARB(int target, int fb) {
+        if (VULKAN) {
+            bindGameFramebuffer(target, fb);
+            return;
+        }
         ARBFramebufferObject.glBindFramebuffer(target, fb);
         SteinGlBindings.noteFramebuffer(target, fb);
     }
@@ -108,8 +123,23 @@ public final class SteinGlTrack {
      * GL_FRAMEBUFFER).
      */
     public static void glBindFramebufferEXT(int target, int fb) {
+        if (VULKAN) {
+            bindGameFramebuffer(target, fb);
+            return;
+        }
         EXTFramebufferObject.glBindFramebufferEXT(target, fb);
         SteinGlBindings.noteFramebuffer(target, fb);
+    }
+
+    /**
+     * Vulkan: what was recorded so far goes out on the previous target, and the game draws into the
+     * new one.
+     */
+    private static void bindGameFramebuffer(int target, int fb) {
+        if (fb != SteinGameFramebuffers.drawBound()) {
+            SteinEntityDeferred.barrier();
+        }
+        SteinGameFramebuffers.bindFramebuffer(target, fb);
     }
 
     /**
@@ -118,18 +148,30 @@ public final class SteinGlTrack {
      * its target (the game's, rebuilt when the window changes).
      */
     public static void glDeleteFramebuffers(int fb) {
+        if (VULKAN) {
+            SteinGameFramebuffers.deleteFramebuffer(fb);
+            return;
+        }
         SteinGlFrame.sync(GAME_FRAMEBUFFER_DELETED);
         GL30.glDeleteFramebuffers(fb);
         SteinGlBindings.noteDeleteFramebuffer(fb);
     }
 
     public static void glDeleteFramebuffersARB(int fb) {
+        if (VULKAN) {
+            SteinGameFramebuffers.deleteFramebuffer(fb);
+            return;
+        }
         SteinGlFrame.sync(GAME_FRAMEBUFFER_DELETED);
         ARBFramebufferObject.glDeleteFramebuffers(fb);
         SteinGlBindings.noteDeleteFramebuffer(fb);
     }
 
     public static void glDeleteFramebuffersEXT(int fb) {
+        if (VULKAN) {
+            SteinGameFramebuffers.deleteFramebuffer(fb);
+            return;
+        }
         SteinGlFrame.sync(GAME_FRAMEBUFFER_DELETED);
         EXTFramebufferObject.glDeleteFramebuffersEXT(fb);
         SteinGlBindings.noteDeleteFramebuffer(fb);
@@ -144,6 +186,12 @@ public final class SteinGlTrack {
      * the world and the hand, without splitting the submission); otherwise, immediately.
      */
     public static void glClear(int mask) {
+        if (VULKAN) {
+            // in order: what was recorded before the clear goes out first
+            SteinEntityDeferred.barrier();
+            SteinGameFramebuffers.clear(mask, scissor);
+            return;
+        }
         if (SteinGlFrame.pending()) {
             SteinGlFrame.gameClear(mask);
             return;
@@ -153,12 +201,20 @@ public final class SteinGlTrack {
 
     /** GL11.glClearColor (GlStateManager.clearColor): noted for the recorded clear. */
     public static void glClearColor(float r, float g, float b, float a) {
+        if (VULKAN) {
+            SteinGameFramebuffers.clearColor(r, g, b, a);
+            return;
+        }
         GL11.glClearColor(r, g, b, a);
         SteinGlBindings.noteClearColor(r, g, b, a);
     }
 
     /** GL11.glClearDepth (GlStateManager.clearDepth). */
     public static void glClearDepth(double d) {
+        if (VULKAN) {
+            SteinGameFramebuffers.clearDepth(d);
+            return;
+        }
         GL11.glClearDepth(d);
         SteinGlBindings.noteClearDepth(d);
     }
@@ -169,8 +225,19 @@ public final class SteinGlTrack {
      * the end of the frame.
      */
     public static void glLineWidth(float w) {
+        lineWidth = w;
+        if (VULKAN) {
+            return;
+        }
         GL11.glLineWidth(w);
         SteinGlBindings.noteLineWidth(w);
+    }
+
+    private static float lineWidth = 1f;
+
+    /** The line width the game set last (the outline of the targeted block uses 2). */
+    public static float lineWidth() {
+        return lineWidth;
     }
 
     /** Before the game's glTexImage2D / glTexSubImage2D: the texture may be in a recorded pass. */
@@ -215,12 +282,18 @@ public final class SteinGlTrack {
 
     /** GL20.glUseProgram (OpenGlHelper.glUseProgram). */
     public static void glUseProgram(int p) {
+        if (VULKAN) {
+            return;
+        }
         GL20.glUseProgram(p);
         SteinGlBindings.noteProgram(p);
     }
 
     /** ARBShaderObjects.glUseProgramObjectARB (OpenGlHelper's ARB path). */
     public static void glUseProgramObjectARB(int p) {
+        if (VULKAN) {
+            return;
+        }
         ARBShaderObjects.glUseProgramObjectARB(p);
         SteinGlBindings.noteProgram(p);
     }
@@ -231,8 +304,24 @@ public final class SteinGlTrack {
      * recorded under the previous viewport and calls OpenGL.
      */
     public static void glViewport(int x, int y, int w, int h) {
+        VIEWPORT[0] = x;
+        VIEWPORT[1] = y;
+        VIEWPORT[2] = w;
+        VIEWPORT[3] = h;
         SteinEntityDeferred.glViewport(x, y, w, h);
-        SteinGlBindings.noteViewport(x, y, w, h);
+        if (!VULKAN) {
+            SteinGlBindings.noteViewport(x, y, w, h);
+        }
+    }
+
+    private static final int[] VIEWPORT = new int[4];
+
+    /**
+     * The game's viewport (x, y, width, height), as the last glViewport left it: what a pass on the
+     * game's target uses when it does not say otherwise.
+     */
+    public static int[] viewport() {
+        return VIEWPORT;
     }
 
     // ---- scissor (glScissor) of the Loader's and mods' screens ----
@@ -250,16 +339,20 @@ public final class SteinGlTrack {
         SteinEntityDeferred.barrier();
         if (on) {
             scissor = new int[] {x, y, Math.max(0, w), Math.max(0, h)};
-            GL11.glEnable(GL11.GL_SCISSOR_TEST);
-            GL11.glScissor(x, y, Math.max(0, w), Math.max(0, h));
+            if (!VULKAN) {
+                GL11.glEnable(GL11.GL_SCISSOR_TEST);
+                GL11.glScissor(x, y, Math.max(0, w), Math.max(0, h));
+            }
         } else {
             scissor = null;
-            GL11.glDisable(GL11.GL_SCISSOR_TEST);
+            if (!VULKAN) {
+                GL11.glDisable(GL11.GL_SCISSOR_TEST);
+            }
         }
     }
 
     /** The scissor enabled now, or null. */
-    static int[] scissor() {
+    public static int[] scissor() {
         return scissor;
     }
 

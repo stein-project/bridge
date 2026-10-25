@@ -8,6 +8,9 @@
 
 package dev.xavier.stein.gfx;
 
+import dev.xavier.stein.gfx.game.SteinGameTexture;
+import dev.xavier.stein.gfx.game.SteinGameTextures;
+
 import net.minecraft.client.renderer.GlStateManager;
 
 import org.lwjgl.opengl.GL;
@@ -114,7 +117,18 @@ public final class SteinTextureArrays {
         int w;
         int h;
         int format;
-        if (GL.getCapabilities().OpenGL45) {
+        if (SteinGfxOptions.VULKAN) {
+            // the game's textures are ours there (BGRA8 or RGBA8: the copy converts)
+            SteinGameTexture t = SteinGameTextures.get(tex);
+            w = t == null ? 0 : t.width();
+            h = t == null ? 0 : t.height();
+            format =
+                    t != null
+                                    && (t.format() == SteinFormat.BGRA8
+                                            || t.format() == SteinFormat.RGBA8)
+                            ? GL30.GL_RGBA8
+                            : 0;
+        } else if (GL.getCapabilities().OpenGL45) {
             w = GL45.glGetTextureLevelParameteri(tex, 0, GL11.GL_TEXTURE_WIDTH);
             h = GL45.glGetTextureLevelParameteri(tex, 0, GL11.GL_TEXTURE_HEIGHT);
             format = GL45.glGetTextureLevelParameteri(tex, 0, GL11.GL_TEXTURE_INTERNAL_FORMAT);
@@ -169,7 +183,11 @@ public final class SteinTextureArrays {
     private static int samplerKind(int tex) {
         int mag;
         int wrap;
-        if (GL.getCapabilities().OpenGL45) {
+        if (SteinGfxOptions.VULKAN) {
+            SteinGameTexture t = SteinGameTextures.get(tex);
+            mag = t == null ? GL11.GL_NEAREST : t.magFilter();
+            wrap = t == null ? GL11.GL_REPEAT : t.wrapS();
+        } else if (GL.getCapabilities().OpenGL45) {
             mag = GL45.glGetTextureParameteri(tex, GL11.GL_TEXTURE_MAG_FILTER);
             wrap = GL45.glGetTextureParameteri(tex, GL11.GL_TEXTURE_WRAP_S);
         } else {

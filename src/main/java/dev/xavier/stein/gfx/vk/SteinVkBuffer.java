@@ -49,7 +49,7 @@ final class SteinVkBuffer extends SteinBuffer {
 
     private final SteinVkDevice device;
     private long buffer;
-    private SteinVkDevice.Allocation mem;
+    private SteinVkMemory.Allocation mem;
 
     /**
      * Where the CPU writes directly ({@link Memory#UPLOAD}); 0 on {@link Memory#GPU} even if the
@@ -77,7 +77,7 @@ final class SteinVkBuffer extends SteinBuffer {
         if (desc.usage.contains(Usage.INDIRECT) || desc.usage.contains(Usage.STORAGE)) {
             usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
         }
-        SteinVkDevice.Allocation[] a = new SteinVkDevice.Allocation[1];
+        SteinVkMemory.Allocation[] a = new SteinVkMemory.Allocation[1];
         if (desc.memory == Memory.UPLOAD) {
             buffer =
                     device.createRawBuffer(
@@ -165,7 +165,7 @@ final class SteinVkBuffer extends SteinBuffer {
             return;
         }
         long b = buffer;
-        SteinVkDevice.Allocation m = mem;
+        SteinVkMemory.Allocation m = mem;
         buffer = VK_NULL_HANDLE;
         device.retire(
                 () -> {

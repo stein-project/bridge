@@ -22,7 +22,8 @@ Every rendering change must work in both pipelines (Stein GFX and the fixed-func
 |---|---|
 | Something the game calls (a hook) | a method in `hooks/` plus a rule in `patcher/redirects-mods.tsv`; the Loader receives it through `HookSink` |
 | An invisible optimization | `bridge/engine/`, with its rule in `patcher/redirects-opt.tsv`, a `steinbridge.opt.vanilla*` kill switch and a `steinbridge.opt.check*` verification mode |
-| Rendering (Stein GFX) | `gfx/` (API and renderer), `gfx/gl/` (OpenGL backend), shaders in `src/main/shaders` |
+| Rendering (Stein GFX) | `gfx/` (API and renderer), `gfx/gl/` (OpenGL backend), `gfx/vk/` (Vulkan backend), `gfx/game/` (the game's OpenGL objects on the API, for Vulkan), shaders in `src/main/shaders` |
+| An OpenGL call the game makes by itself | a method of `gfx/game/SteinGameGl` that calls OpenGL as before and emulates it with Vulkan, plus its rule in `patcher/redirects-opt.tsv` (the one exception to that file's kill switch and check mode: on OpenGL it changes nothing) |
 | The LWJGL 2 compatibility layer | `org.lwjgl.*`: it must match the LWJGL 2 API exactly as the game calls it |
 | A diagnostic scene | `bridge/diag/`, read from a `steinbridge.diag.*` option; it costs nothing unless one is set |
 | A new `-D` option | a `static final` field in the package's `*Options` class, read with `core.Opt`, with a Javadoc starting `{@code -Dname=...}`; then run `./gradlew options` (`./gradlew build` checks `docs/OPTIONS.md` is up to date) |

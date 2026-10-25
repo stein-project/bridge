@@ -10,7 +10,9 @@ package dev.xavier.stein.bridge.hooks;
 
 import dev.xavier.stein.bridge.SteinBridge;
 import dev.xavier.stein.bridge.engine.FrameTime;
+import dev.xavier.stein.gfx.SteinDevice;
 import dev.xavier.stein.gfx.SteinGfxOptions;
+import dev.xavier.stein.gfx.game.SteinGameGl;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.FontRenderer;
@@ -28,6 +30,8 @@ import net.minecraft.inventory.Slot;
 import net.minecraft.scoreboard.ScoreObjective;
 import net.minecraft.scoreboard.Scoreboard;
 import net.minecraft.util.IChatComponent;
+
+import org.lwjgl.opengl.GL11;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -141,6 +145,15 @@ final class GameHooksHud {
     @SuppressWarnings("unchecked")
     static Object debugInfoRight(Object overlay) {
         List<String> lines = ((GuiOverlayDebug) overlay).getDebugInfoRight();
+        if (SteinGfxOptions.VULKAN) {
+            // the game's version line is GL_VERSION, which with Vulkan starts with an OpenGL
+            // version for mods that read it as a number ("3.0 (Vulkan 1.3.0)"): F3 shows only the
+            // API in use
+            int i = lines.indexOf(SteinGameGl.glGetString(GL11.GL_VERSION));
+            if (i >= 0) {
+                lines.set(i, SteinDevice.get().caps().backend);
+            }
+        }
         List<String> ours = new ArrayList<>();
         ours.add("");
         ours.add(SteinBridge.NAME + " v" + SteinBridge.VERSION);

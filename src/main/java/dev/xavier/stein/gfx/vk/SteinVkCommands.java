@@ -12,6 +12,8 @@ import static org.lwjgl.vulkan.VK10.VK_ATTACHMENT_LOAD_OP_CLEAR;
 import static org.lwjgl.vulkan.VK10.VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 import static org.lwjgl.vulkan.VK10.VK_ATTACHMENT_LOAD_OP_LOAD;
 import static org.lwjgl.vulkan.VK10.VK_ATTACHMENT_STORE_OP_STORE;
+import static org.lwjgl.vulkan.VK10.VK_IMAGE_ASPECT_COLOR_BIT;
+import static org.lwjgl.vulkan.VK10.VK_IMAGE_ASPECT_DEPTH_BIT;
 import static org.lwjgl.vulkan.VK10.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
 import static org.lwjgl.vulkan.VK10.VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
 import static org.lwjgl.vulkan.VK10.VK_INDEX_TYPE_UINT16;
@@ -23,25 +25,33 @@ import static org.lwjgl.vulkan.VK10.vkCmdBindDescriptorSets;
 import static org.lwjgl.vulkan.VK10.vkCmdBindIndexBuffer;
 import static org.lwjgl.vulkan.VK10.vkCmdBindPipeline;
 import static org.lwjgl.vulkan.VK10.vkCmdBindVertexBuffers;
+import static org.lwjgl.vulkan.VK10.vkCmdClearAttachments;
 import static org.lwjgl.vulkan.VK10.vkCmdDispatch;
 import static org.lwjgl.vulkan.VK10.vkCmdDraw;
 import static org.lwjgl.vulkan.VK10.vkCmdDrawIndexed;
 import static org.lwjgl.vulkan.VK10.vkCmdDrawIndexedIndirect;
 import static org.lwjgl.vulkan.VK10.vkCmdDrawIndirect;
+import static org.lwjgl.vulkan.VK10.vkCmdSetDepthBias;
+import static org.lwjgl.vulkan.VK10.vkCmdSetLineWidth;
 import static org.lwjgl.vulkan.VK10.vkCmdSetScissor;
 import static org.lwjgl.vulkan.VK10.vkCmdSetViewport;
 import static org.lwjgl.vulkan.VK10.vkUpdateDescriptorSets;
 
 import dev.xavier.stein.gfx.SteinBuffer;
 import dev.xavier.stein.gfx.SteinCommands;
+import dev.xavier.stein.gfx.SteinGlTrack;
 import dev.xavier.stein.gfx.SteinPipeline;
 import dev.xavier.stein.gfx.SteinRenderPass;
 import dev.xavier.stein.gfx.SteinSampler;
 import dev.xavier.stein.gfx.SteinShader;
 import dev.xavier.stein.gfx.SteinTexture;
+import dev.xavier.stein.gfx.game.SteinGameFramebuffers;
+import dev.xavier.stein.gfx.game.SteinGameTexture;
 
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.KHRPushDescriptor;
+import org.lwjgl.vulkan.VkClearAttachment;
+import org.lwjgl.vulkan.VkClearRect;
 import org.lwjgl.vulkan.VkCommandBuffer;
 import org.lwjgl.vulkan.VkDescriptorBufferInfo;
 import org.lwjgl.vulkan.VkDescriptorImageInfo;
@@ -98,7 +108,19 @@ final class SteinVkCommands extends SteinCommands {
     private int indexType = VK_INDEX_TYPE_UINT32;
     private boolean indexDirty;
 
-    private final SteinVkTexture[] textures = new SteinVkTexture[MAX_SLOTS];
+    /** What was bound: our textures, or the game's (resolved to their backing at draw time). */
+    private final SteinTexture[] textures = new SteinTexture[MAX_SLOTS];
+
+    /** Slots whose last written descriptor came from a game texture (one bit per slot). */
+    private long gameSlots;
+
+    /**
+     * For those slots: the sampler and the pixels written, to notice when the game changes them.
+     */
+    private final SteinSampler[] gameSampler = new SteinSampler[MAX_SLOTS];
+
+    private final SteinTexture[] gameBacking = new SteinTexture[MAX_SLOTS];
+
     private final SteinVkSampler[] samplers = new SteinVkSampler[MAX_SLOTS];
     private final SteinBuffer[] uniforms = new SteinBuffer[MAX_SLOTS];
     private final long[] uniformOffset = new long[MAX_SLOTS];
@@ -111,6 +133,13 @@ final class SteinVkCommands extends SteinCommands {
 
     /** null = the whole target. */
     private int[] scissor;
+
+    private boolean biasOn;
+    private float biasFactor;
+    private float biasUnits;
+
+    /** The line width last emitted (the game's, read at each draw: glLineWidth is global). */
+    private float lineWidth = -1f;
 
     private boolean dynDirty = true;
 
@@ -125,6 +154,11 @@ final class SteinVkCommands extends SteinCommands {
         this.formats = t.formats();
         if (pass.viewport != null) {
             System.arraycopy(pass.viewport, 0, viewport, 0, 4);
+        } else if (SteinGlTrack.viewport()[2] > 0
+                && SteinGameFramebuffers.isGameTarget(pass.target)) {
+            // like OpenGL, a pass on the game's target draws in the game's viewport (before the
+            // game's first glViewport, the whole target: OpenGL's default)
+            System.arraycopy(SteinGlTrack.viewport(), 0, viewport, 0, 4);
         } else {
             viewport[2] = t.width();
             viewport[3] = t.height();
@@ -216,17 +250,11 @@ final class SteinVkCommands extends SteinCommands {
             VkRenderingInfo info =
                     VkRenderingInfo.calloc(stack)
                             .sType$Default()
-                            .renderArea(
-                                    r ->
-                                            r.offset(o -> o.set(0, 0))
-                                                    .extent(
-                                                            e ->
-                                                                    e.set(
-                                                                            target.width(),
-                                                                            target.height())))
                             .layerCount(1)
                             .pColorAttachments(ca)
                             .pDepthAttachment(da);
+            info.renderArea().offset().set(0, 0);
+            info.renderArea().extent().set(target.width(), target.height());
             device.beginRendering(c, info);
         }
         rendering = true;
@@ -321,7 +349,7 @@ final class SteinVkCommands extends SteinCommands {
         if (slot < 0 || slot >= MAX_SLOTS) {
             throw new IllegalArgumentException("texture slot out of range: " + slot);
         }
-        textures[slot] = (SteinVkTexture) texture;
+        textures[slot] = texture;
         samplers[slot] = (SteinVkSampler) sampler;
         descDirty = true;
     }
@@ -372,10 +400,21 @@ final class SteinVkCommands extends SteinCommands {
                         .descriptorType(SteinVkPipeline.descriptorType(b.kind()));
                 int slot = b.slot();
                 if (b.kind() == SteinShader.Resource.Kind.TEXTURE) {
-                    SteinVkTexture t = slot >= 0 ? textures[slot] : null;
+                    SteinTexture bound = slot >= 0 ? textures[slot] : null;
                     SteinVkSampler smp = slot >= 0 ? samplers[slot] : null;
+                    if (bound instanceof SteinGameTexture g) {
+                        gameSlots |= 1L << slot;
+                        gameSampler[slot] = g.sampler();
+                        gameBacking[slot] = g.backing();
+                        if (smp == null) {
+                            smp = (SteinVkSampler) g.sampler(); // the game's texture parameters
+                        }
+                    } else if (slot >= 0) {
+                        gameSlots &= ~(1L << slot);
+                    }
+                    SteinVkTexture t = bound == null ? null : SteinVkDevice.resolve(bound);
                     if (t == null) {
-                        t = device.emptyTexture(b.arrayed());
+                        t = device.defaults.emptyTexture(b.arrayed());
                     } else if (isAttachment(t)) {
                         throw new IllegalStateException(
                                 "pass '"
@@ -385,7 +424,7 @@ final class SteinVkCommands extends SteinCommands {
                                         + "')");
                     }
                     if (smp == null) {
-                        smp = device.defaultSampler(t);
+                        smp = device.defaults.defaultSampler(t);
                     }
                     VkDescriptorImageInfo.Buffer ii = VkDescriptorImageInfo.calloc(1, stack);
                     ii.get(0)
@@ -399,9 +438,9 @@ final class SteinVkCommands extends SteinCommands {
                     VkDescriptorBufferInfo.Buffer bi = VkDescriptorBufferInfo.calloc(1, stack);
                     if (buf == null) {
                         bi.get(0)
-                                .buffer(device.emptyBuffer().handle())
+                                .buffer(device.defaults.emptyBuffer().handle())
                                 .offset(0L)
-                                .range(SteinVkDevice.EMPTY_BUFFER);
+                                .range(SteinVkDefaults.EMPTY_BUFFER);
                     } else {
                         bi.get(0)
                                 .buffer(buf.handle())
@@ -423,6 +462,24 @@ final class SteinVkCommands extends SteinCommands {
                 vkCmdBindDescriptorSets(c, bindPoint, p.layout(), 0, stack.longs(set), null);
             }
         }
+    }
+
+    /**
+     * The sampler or the pixels of a bound game texture changed since the descriptors were written
+     * (the game switched its filter, or reallocated it, between two draws of the pass).
+     */
+    private boolean gameSamplerChanged() {
+        if (gameSlots == 0) {
+            return false;
+        }
+        for (int slot = 0; slot < MAX_SLOTS; slot++) {
+            if ((gameSlots & 1L << slot) != 0
+                    && textures[slot] instanceof SteinGameTexture g
+                    && (g.sampler() != gameSampler[slot] || g.backing() != gameBacking[slot])) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private boolean isAttachment(SteinVkTexture t) {
@@ -471,18 +528,22 @@ final class SteinVkCommands extends SteinCommands {
             vkCmdSetViewport(c, 0, v);
             VkRect2D.Buffer s = VkRect2D.calloc(1, stack);
             if (scissor == null) {
-                s.get(0)
-                        .offset(o -> o.set(0, 0))
-                        .extent(e -> e.set(target.width(), target.height()));
+                s.get(0).offset().set(0, 0);
+                s.get(0).extent().set(target.width(), target.height());
             } else {
                 int x = Math.max(0, scissor[0]);
                 int y = Math.max(0, scissor[1]);
-                int w = Math.max(0, scissor[2] - (x - scissor[0]));
-                int h = Math.max(0, scissor[3] - (y - scissor[1]));
-                s.get(0).offset(o -> o.set(x, y)).extent(e -> e.set(w, h));
+                s.get(0).offset().set(x, y);
+                s.get(0)
+                        .extent()
+                        .set(
+                                Math.max(0, scissor[2] - (x - scissor[0])),
+                                Math.max(0, scissor[3] - (y - scissor[1])));
             }
             vkCmdSetScissor(c, 0, s);
         }
+        vkCmdSetDepthBias(c, biasOn ? biasUnits : 0f, 0f, biasOn ? biasFactor : 0f);
+        lineWidth = -1f;
         dynDirty = false;
     }
 
@@ -492,6 +553,9 @@ final class SteinVkCommands extends SteinCommands {
     private VkCommandBuffer prepareDraw() {
         check();
         SteinVkPipeline p = pipeline;
+        if (SteinVkDebug.logging() && p != null) {
+            SteinVkDebug.draw(pass.name, p.desc(), viewport, textures, uniforms, uniformOffset);
+        }
         if (p == null) {
             return null;
         }
@@ -515,6 +579,13 @@ final class SteinVkCommands extends SteinCommands {
         if (dynDirty) {
             applyDynamic(c);
         }
+        if (device.wideLines) {
+            float w = Math.max(1f, SteinGlTrack.lineWidth());
+            if (w != lineWidth) {
+                vkCmdSetLineWidth(c, w);
+                lineWidth = w;
+            }
+        }
         if (vbDirty != 0) {
             try (MemoryStack stack = MemoryStack.stackPush()) {
                 for (int i = 0; i < MAX_BINDINGS; i++) {
@@ -530,9 +601,15 @@ final class SteinVkCommands extends SteinCommands {
             vkCmdBindIndexBuffer(c, indexBuffer, 0L, indexType);
             indexDirty = false;
         }
-        if (descDirty) {
+        if (descDirty || gameSamplerChanged()) {
             writeDescriptors(c, VK_PIPELINE_BIND_POINT_GRAPHICS, p);
             descDirty = false;
+        }
+        if (!rendering) {
+            // a texture created right now for the descriptors (a game texture's first pixels, the
+            // empty texture) recorded its layout outside the render: open it again before the
+            // draw; what was bound stays bound in the command buffer
+            ensureRendering(c);
         }
         return c;
     }
@@ -632,6 +709,77 @@ final class SteinVkCommands extends SteinCommands {
         SteinVkBarriers.memoryBarrier(c);
     }
 
+    @Override
+    public void setDepthBias(boolean on, float factor, float units) {
+        check();
+        if (on != biasOn || factor != biasFactor || units != biasUnits) {
+            biasOn = on;
+            biasFactor = factor;
+            biasUnits = units;
+            dynDirty = true;
+        }
+    }
+
+    @Override
+    public void clear(
+            boolean color,
+            float r,
+            float g,
+            float b,
+            float a,
+            boolean clearDepth,
+            float depth,
+            int[] rect) {
+        check();
+        SteinVkTexture[] colors = target.colors();
+        boolean doColor = color && colors.length > 0;
+        boolean doDepth = clearDepth && target.depthTexture() != null;
+        if (!doColor && !doDepth || target.width() == 0 || target.height() == 0) {
+            return;
+        }
+        int x = 0;
+        int y = 0;
+        int w = target.width();
+        int h = target.height();
+        if (rect != null) {
+            x = Math.max(0, rect[0]);
+            y = Math.max(0, rect[1]);
+            w = Math.min(target.width(), rect[0] + rect[2]) - x;
+            h = Math.min(target.height(), rect[1] + rect[3]) - y;
+            if (w <= 0 || h <= 0) {
+                return;
+            }
+        }
+        VkCommandBuffer c = current();
+        ensureRendering(c);
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            int n = (doColor ? colors.length : 0) + (doDepth ? 1 : 0);
+            VkClearAttachment.Buffer at = VkClearAttachment.calloc(n, stack);
+            int i = 0;
+            if (doColor) {
+                for (int k = 0; k < colors.length; k++, i++) {
+                    at.get(i).aspectMask(VK_IMAGE_ASPECT_COLOR_BIT).colorAttachment(k);
+                    at.get(i)
+                            .clearValue()
+                            .color()
+                            .float32(0, r)
+                            .float32(1, g)
+                            .float32(2, b)
+                            .float32(3, a);
+                }
+            }
+            if (doDepth) {
+                at.get(i).aspectMask(VK_IMAGE_ASPECT_DEPTH_BIT);
+                at.get(i).clearValue().depthStencil().depth(depth).stencil(0);
+            }
+            VkClearRect.Buffer cr = VkClearRect.calloc(1, stack);
+            cr.get(0).rect().offset().set(x, y);
+            cr.get(0).rect().extent().set(w, h);
+            cr.get(0).baseArrayLayer(0).layerCount(1);
+            vkCmdClearAttachments(c, at, cr);
+        }
+    }
+
     // ---- end ----
 
     @Override
@@ -640,5 +788,9 @@ final class SteinVkCommands extends SteinCommands {
         suspend();
         ended = true;
         device.passEnded(this);
+        if (SteinVkOptions.SYNC_EACH_PASS) {
+            // diagnostics: the GPU runs the pass before the CPU writes anything else
+            device.waitValue(device.recordingValue(), Long.MAX_VALUE);
+        }
     }
 }

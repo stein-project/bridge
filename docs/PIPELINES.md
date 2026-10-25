@@ -5,7 +5,8 @@ to rendering does not break the one you are not looking at.
 
 - **Stein GFX** (the default): the game's drawing is captured and drawn by `dev.xavier.stein.gfx`
   in an OpenGL 4.1+ core context (4.6 when available). The driver has no fixed-function pipeline
-  there, so nothing may draw through it, not even by mistake.
+  there, so nothing may draw through it, not even by mistake. Stein GFX draws with OpenGL (the
+  default) or, when the player picks it in the video options, with Vulkan (see below).
 - **Fixed-function pipeline** (the fallback): the game draws with its own fixed-function calls in a
   compatibility context, still with the engine's optimizations.
 
@@ -74,13 +75,25 @@ call in the fallback.
 `gl.SteinGlPassCheck`, `gl.SteinGlPassTiming`, `gl.SteinGlTimestampRing`, `gl.SteinGlOptions`:
 self-tests, per-pass timing and the `-Dsteinbridge.gfx.*Check` verification modes.
 
-### Vulkan (experimental)
+### Vulkan
 
-`vk.SteinVkDevice`, `vk.SteinVkProbe`, `vk.SteinVkBarriers`, `vk.SteinVkStaging`, `vk.SteinVkDescriptors`,
-`vk.SteinVkBuffer`, `vk.SteinVkCommands`, `vk.SteinVkFence`, `vk.SteinVkFormats`, `vk.SteinVkOptions`,
-`vk.SteinVkPipeline`, `vk.SteinVkRenderTarget`, `vk.SteinVkSampler`, `vk.SteinVkTexture`: a second backend
-of the same device API. It runs the Stein GFX self-tests, but the game does not run on it and nothing outside
-the package selects it.
+Stein GFX with the second backend of the same device API, chosen by `SteinBackend` (the "API" row of the
+video options, saved in `config/stein-graphics.properties`; `-Dsteinbridge.gfx.api` for a session). OpenGL
+stays the default; when Vulkan does not start, or the last start with it died in its first seconds, the game
+falls back to OpenGL and the video options say why.
+
+- The backend, `gfx/vk`: `SteinVkDevice` (with `SteinVkInstance`, `SteinVkProbe`, `SteinVkMemory`,
+  `SteinVkDefaults`, `SteinVkStaging`, `SteinVkDescriptors`, `SteinVkTransfers`, `SteinVkPipelineCacheFile`),
+  `SteinVkBuffer`, `SteinVkTexture`, `SteinVkSampler`, `SteinVkPipeline`, `SteinVkRenderTarget`,
+  `SteinVkCommands`, `SteinVkFence`, `SteinVkBarriers`, `SteinVkFormats`, `SteinVkOptions`, `SteinVkDebug`.
+- The window, `vk.SteinVkWindow` and `vk.SteinVkSwapchain`: no OpenGL context in the game's window (a hidden
+  one absorbs the OpenGL calls of mods that call it directly), the frame presented at `Display.update`.
+- The game's OpenGL objects on the API, `gfx/game`: `SteinGameGl` (the entry points), `SteinGameTextures`,
+  `SteinGameTexture`, `SteinGameSamplers`, `SteinGameFramebuffers` (with the window's framebuffer 0). On
+  OpenGL every entry point is the original call.
+- Classes shared with OpenGL take a `SteinGfxOptions.VULKAN` branch where they would reach the driver
+  (`SteinCoreGl`, `SteinLazyGl`, `SteinGlTrack`, `GLCompat`, `CloudCache`, `FontBatch`, `SteinTextureArrays`,
+  `SteinTextureFilters`, `GLMatrix`, `GLContext`, `Display`).
 
 ## Fixed-function pipeline only
 
@@ -139,9 +152,12 @@ runs the `HudBatch` check in the fixed run.
 - **Never call fixed-function GL directly from Stein GFX code.** In the core context LWJGL does not
   load those functions and calling one aborts the JVM. Go through `SteinCoreGl`.
 - **Verify both.** Build the Loader next to this repository and run `./gradlew verify -Pstein.world=<world>` in the loader.
-  It plays the world three times: `gfx` (Stein GFX with every engine and Stein GFX check), `gpu`
-  (the GPU pose against the CPU one) and `fixed` (`-Dsteinbridge.gfx=false`, with the checks of that
-  pipeline only: `checkMatrix`, `checkHudBatch`). A change is not done until all three pass.
+  It plays the world four times: `gfx` (Stein GFX with every engine and Stein GFX check), `gpu`
+  (the GPU pose against the CPU one), `vulkan` (Stein GFX on Vulkan, with the checks that do not read the
+  OpenGL driver and without the hidden OpenGL context) and `fixed` (`-Dsteinbridge.gfx=false`, with the
+  checks of that pipeline only: `checkMatrix`, `checkHudBatch`). A change is not done until all four pass.
+- **No OpenGL call outside the backend and `SteinGameGl`.** With Vulkan there is no OpenGL context; a
+  call that reaches LWJGL's OpenGL there aborts the JVM (the `vulkan` run of verify finds it).
 - **Keep the Pipeline line in the class Javadoc up to date**, and this page with it, when a class
   starts or stops serving a pipeline.
 - **Patcher rules apply to both pipelines**: the game is patched once and the class a rule points to
@@ -152,7 +168,9 @@ runs the `HudBatch` check in the fixed run.
     `SteinEntityDeferred`, `SteinLazyGl`, `SteinGlTrack`, `SteinTessCapture`, `SteinPlayerPose`,
     `SteinSky`, `SteinParticles`, `SteinTextCache`, `SteinGameState`, `SteinTextureArrays` serve
     Stein GFX (they forward to the original call, or do nothing, in the fallback); the `Chunk*`,
-    `DataWatchers`, `NameCache` and similar rules are pipeline-independent.
+    `DataWatchers`, `NameCache` and similar rules are pipeline-independent. The rules to
+    `gfx/game/SteinGameGl` (the game's remaining OpenGL calls: textures, framebuffers, buffers, shaders,
+    queries) are not optimizations: on OpenGL each is the original call, and on Vulkan the emulation.
   - `redirects-batch.tsv` (generated by `tools/gen-batch-rules.sh`): the flush/restore hooks before
     every game OpenGL call, and the capture rules for model-part lists, serve the fixed pipeline's
     `ModelBatch` (they are inert in a core context); the `bct.a` rule to `SteinEntityInstancer`

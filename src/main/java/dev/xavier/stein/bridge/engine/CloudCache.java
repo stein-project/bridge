@@ -268,14 +268,17 @@ public final class CloudCache {
         cache.put(0, captureBuf, 0, half);
         cache.limit(half);
         vertices = half / STRIDE;
-        // The VBO is always filled: it is the fixed-function draw, and Stein GFX's fallback when
-        // its copy cannot be drawn (see drawCopy).
-        if (vbo == 0) {
-            vbo = GL15.glGenBuffers();
+        // The VBO is filled whenever there is OpenGL: it is the fixed-function draw, and Stein
+        // GFX's fallback when its copy cannot be drawn (see drawCopy). With Vulkan there is only
+        // the copy.
+        if (!SteinGfxOptions.VULKAN) {
+            if (vbo == 0) {
+                vbo = GL15.glGenBuffers();
+            }
+            GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
+            GL15.glBufferData(GL15.GL_ARRAY_BUFFER, cache, GL15.GL_STATIC_DRAW);
+            GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
         }
-        GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, vbo);
-        GL15.glBufferData(GL15.GL_ARRAY_BUFFER, cache, GL15.GL_STATIC_DRAW);
-        GL15.glBindBuffer(GL15.GL_ARRAY_BUFFER, 0);
         if (SteinGfxOptions.ENABLED) {
             // The same copy in Stein GFX's fixed geometry, drawn by the API.
             SteinTessCapture.slot(
@@ -394,6 +397,8 @@ public final class CloudCache {
         GlStateManager.enableCull();
     }
 
+    private static boolean warnedNoCopy;
+
     /** Owner of the copy in the Stein renderer's fixed geometry. */
     private static final Object SLOT = new Object();
 
@@ -408,6 +413,13 @@ public final class CloudCache {
     private static void drawCopy() {
         if (SteinTessCapture.drawSlot(SLOT)) {
             GlStateManager.resetColor();
+            return;
+        }
+        if (SteinGfxOptions.VULKAN) {
+            if (!warnedNoCopy) {
+                warnedNoCopy = true;
+                Log.warn("clouds", "vulkan: the cloud copy was refused, clouds skipped this frame");
+            }
             return;
         }
         GLMatrix.flush();

@@ -106,12 +106,25 @@ public abstract class SteinDevice {
      */
     public abstract SteinCommands beginPass(SteinRenderPass pass);
 
+    /**
+     * Puts {@code color} (the game's screen, in OpenGL's row order) on the window and ends the
+     * frame. Vulkan submits the frame's work and presents it; OpenGL copies it to the window's
+     * framebuffer, and Display swaps.
+     */
+    public abstract void present(SteinTexture color);
+
+    /**
+     * VSync for the following frames. Vulkan picks the swapchain's present mode; OpenGL's swap
+     * interval belongs to Display.
+     */
+    public void vsync(boolean on) {}
+
     /** A fence at the current point of the GPU queue. */
     public abstract SteinFence fence();
 
     /**
-     * Reads pixels of a color texture (RGBA8) to the CPU: only for tests and capture, never in the
-     * frame.
+     * Reads pixels of a color texture (RGBA8 or BGRA8, the bytes in the texture's own order) of
+     * level 0 to the CPU: only for tests and capture, never in the frame.
      */
     public abstract void readPixels(
             SteinTexture texture, int x, int y, int w, int h, ByteBuffer out);

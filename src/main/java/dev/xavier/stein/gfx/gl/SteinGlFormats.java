@@ -11,6 +11,7 @@ package dev.xavier.stein.gfx.gl;
 import dev.xavier.stein.gfx.SteinFormat;
 
 import org.lwjgl.opengl.GL11;
+import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL14;
 import org.lwjgl.opengl.GL30;
 
@@ -28,7 +29,7 @@ public final class SteinGlFormats {
     /** The texture's internal format. */
     public static int internalFormat(SteinFormat f) {
         return switch (f) {
-            case RGBA8 -> GL11.GL_RGBA8;
+            case RGBA8, BGRA8 -> GL11.GL_RGBA8;
             case R8 -> GL30.GL_R8;
             case RG8 -> GL30.GL_RG8;
             case RGBA16F -> GL30.GL_RGBA16F;
@@ -43,6 +44,7 @@ public final class SteinGlFormats {
     public static int pixelFormat(SteinFormat f) {
         return switch (f) {
             case RGBA8, RGBA16F -> GL11.GL_RGBA;
+            case BGRA8 -> GL12.GL_BGRA;
             case R8, R32F -> GL11.GL_RED;
             case RG8 -> GL30.GL_RG;
             case DEPTH24, DEPTH32F -> GL11.GL_DEPTH_COMPONENT;
@@ -53,7 +55,7 @@ public final class SteinGlFormats {
     /** The type of the pixels uploaded to the texture. */
     public static int pixelType(SteinFormat f) {
         return switch (f) {
-            case RGBA8, R8, RG8 -> GL11.GL_UNSIGNED_BYTE;
+            case RGBA8, BGRA8, R8, RG8 -> GL11.GL_UNSIGNED_BYTE;
             case RGBA16F -> GL30.GL_HALF_FLOAT;
             case R32F, DEPTH32F -> GL11.GL_FLOAT;
             case DEPTH24 -> GL11.GL_UNSIGNED_INT;

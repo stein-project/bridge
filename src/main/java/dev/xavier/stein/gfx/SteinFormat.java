@@ -17,6 +17,11 @@ package dev.xavier.stein.gfx;
 public enum SteinFormat {
     // ---- texture ----
     RGBA8(4),
+    /**
+     * The game's textures: 8 bits per channel with the bytes in memory as B, G, R, A (OpenGL's BGRA
+     * with UNSIGNED_INT_8_8_8_8_REV on a little-endian machine). Sampled as RGBA like any other.
+     */
+    BGRA8(4),
     R8(1),
     RG8(2),
     RGBA16F(8),

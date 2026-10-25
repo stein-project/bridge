@@ -546,7 +546,8 @@ public final class GLMatrix {
         if (identity ? texLoadedIdentity : Arrays.equals(want, TLOADED)) {
             return;
         }
-        boolean other = !unit0();
+        // with Vulkan there is no driver unit to switch (the matrix is only tracked)
+        boolean other = !unit0() && !SteinGfxOptions.VULKAN;
         int unit = 0;
         if (other) {
             unit = activeUnit();

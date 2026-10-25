@@ -223,6 +223,109 @@ public class ContextCapabilities {
     }
 
     /**
+     * Without an OpenGL context (the Vulkan backend): exactly the names in {@code on} are true —
+     * what the game's objects on the API emulate ({@code GLContext}).
+     */
+    ContextCapabilities(Set<String> on) {
+        this.GL_ARB_arrays_of_arrays = on.contains("GL_ARB_arrays_of_arrays");
+        this.GL_ARB_base_instance = on.contains("GL_ARB_base_instance");
+        this.GL_ARB_blend_func_extended = on.contains("GL_ARB_blend_func_extended");
+        this.GL_ARB_clear_buffer_object = on.contains("GL_ARB_clear_buffer_object");
+        this.GL_ARB_color_buffer_float = on.contains("GL_ARB_color_buffer_float");
+        this.GL_ARB_compatibility = on.contains("GL_ARB_compatibility");
+        this.GL_ARB_compressed_texture_pixel_storage =
+                on.contains("GL_ARB_compressed_texture_pixel_storage");
+        this.GL_ARB_compute_shader = on.contains("GL_ARB_compute_shader");
+        this.GL_ARB_copy_buffer = on.contains("GL_ARB_copy_buffer");
+        this.GL_ARB_copy_image = on.contains("GL_ARB_copy_image");
+        this.GL_ARB_depth_buffer_float = on.contains("GL_ARB_depth_buffer_float");
+        this.GL_ARB_depth_clamp = on.contains("GL_ARB_depth_clamp");
+        this.GL_ARB_depth_texture = on.contains("GL_ARB_depth_texture");
+        this.GL_ARB_draw_buffers = on.contains("GL_ARB_draw_buffers");
+        this.GL_ARB_draw_buffers_blend = on.contains("GL_ARB_draw_buffers_blend");
+        this.GL_ARB_draw_elements_base_vertex = on.contains("GL_ARB_draw_elements_base_vertex");
+        this.GL_ARB_draw_indirect = on.contains("GL_ARB_draw_indirect");
+        this.GL_ARB_draw_instanced = on.contains("GL_ARB_draw_instanced");
+        this.GL_ARB_explicit_attrib_location = on.contains("GL_ARB_explicit_attrib_location");
+        this.GL_ARB_explicit_uniform_location = on.contains("GL_ARB_explicit_uniform_location");
+        this.GL_ARB_fragment_layer_viewport = on.contains("GL_ARB_fragment_layer_viewport");
+        this.GL_ARB_fragment_program = on.contains("GL_ARB_fragment_program");
+        this.GL_ARB_fragment_program_shadow = on.contains("GL_ARB_fragment_program_shadow");
+        this.GL_ARB_fragment_shader = on.contains("GL_ARB_fragment_shader");
+        this.GL_ARB_framebuffer_object = on.contains("GL_ARB_framebuffer_object");
+        this.GL_ARB_framebuffer_sRGB = on.contains("GL_ARB_framebuffer_sRGB");
+        this.GL_ARB_geometry_shader4 = on.contains("GL_ARB_geometry_shader4");
+        this.GL_ARB_gpu_shader5 = on.contains("GL_ARB_gpu_shader5");
+        this.GL_ARB_half_float_pixel = on.contains("GL_ARB_half_float_pixel");
+        this.GL_ARB_half_float_vertex = on.contains("GL_ARB_half_float_vertex");
+        this.GL_ARB_instanced_arrays = on.contains("GL_ARB_instanced_arrays");
+        this.GL_ARB_map_buffer_alignment = on.contains("GL_ARB_map_buffer_alignment");
+        this.GL_ARB_map_buffer_range = on.contains("GL_ARB_map_buffer_range");
+        this.GL_ARB_multisample = on.contains("GL_ARB_multisample");
+        this.GL_ARB_multitexture = on.contains("GL_ARB_multitexture");
+        this.GL_ARB_occlusion_query2 = on.contains("GL_ARB_occlusion_query2");
+        this.GL_ARB_pixel_buffer_object = on.contains("GL_ARB_pixel_buffer_object");
+        this.GL_ARB_seamless_cube_map = on.contains("GL_ARB_seamless_cube_map");
+        this.GL_ARB_shader_objects = on.contains("GL_ARB_shader_objects");
+        this.GL_ARB_shader_stencil_export = on.contains("GL_ARB_shader_stencil_export");
+        this.GL_ARB_shader_texture_lod = on.contains("GL_ARB_shader_texture_lod");
+        this.GL_ARB_shadow = on.contains("GL_ARB_shadow");
+        this.GL_ARB_shadow_ambient = on.contains("GL_ARB_shadow_ambient");
+        this.GL_ARB_stencil_texturing = on.contains("GL_ARB_stencil_texturing");
+        this.GL_ARB_sync = on.contains("GL_ARB_sync");
+        this.GL_ARB_tessellation_shader = on.contains("GL_ARB_tessellation_shader");
+        this.GL_ARB_texture_border_clamp = on.contains("GL_ARB_texture_border_clamp");
+        this.GL_ARB_texture_buffer_object = on.contains("GL_ARB_texture_buffer_object");
+        this.GL_ARB_texture_cube_map = on.contains("GL_ARB_texture_cube_map");
+        this.GL_ARB_texture_cube_map_array = on.contains("GL_ARB_texture_cube_map_array");
+        this.GL_ARB_texture_env_combine = on.contains("GL_ARB_texture_env_combine");
+        this.GL_ARB_texture_non_power_of_two = on.contains("GL_ARB_texture_non_power_of_two");
+        this.GL_ARB_uniform_buffer_object = on.contains("GL_ARB_uniform_buffer_object");
+        this.GL_ARB_vertex_blend = on.contains("GL_ARB_vertex_blend");
+        this.GL_ARB_vertex_buffer_object = on.contains("GL_ARB_vertex_buffer_object");
+        this.GL_ARB_vertex_program = on.contains("GL_ARB_vertex_program");
+        this.GL_ARB_vertex_shader = on.contains("GL_ARB_vertex_shader");
+        this.GL_EXT_bindable_uniform = on.contains("GL_EXT_bindable_uniform");
+        this.GL_EXT_blend_equation_separate = on.contains("GL_EXT_blend_equation_separate");
+        this.GL_EXT_blend_func_separate = on.contains("GL_EXT_blend_func_separate");
+        this.GL_EXT_blend_minmax = on.contains("GL_EXT_blend_minmax");
+        this.GL_EXT_blend_subtract = on.contains("GL_EXT_blend_subtract");
+        this.GL_EXT_draw_instanced = on.contains("GL_EXT_draw_instanced");
+        this.GL_EXT_framebuffer_multisample = on.contains("GL_EXT_framebuffer_multisample");
+        this.GL_EXT_framebuffer_object = on.contains("GL_EXT_framebuffer_object");
+        this.GL_EXT_framebuffer_sRGB = on.contains("GL_EXT_framebuffer_sRGB");
+        this.GL_EXT_geometry_shader4 = on.contains("GL_EXT_geometry_shader4");
+        this.GL_EXT_gpu_program_parameters = on.contains("GL_EXT_gpu_program_parameters");
+        this.GL_EXT_gpu_shader4 = on.contains("GL_EXT_gpu_shader4");
+        this.GL_EXT_packed_depth_stencil = on.contains("GL_EXT_packed_depth_stencil");
+        this.GL_EXT_separate_shader_objects = on.contains("GL_EXT_separate_shader_objects");
+        this.GL_EXT_shader_image_load_store = on.contains("GL_EXT_shader_image_load_store");
+        this.GL_EXT_shadow_funcs = on.contains("GL_EXT_shadow_funcs");
+        this.GL_EXT_shared_texture_palette = on.contains("GL_EXT_shared_texture_palette");
+        this.GL_EXT_stencil_clear_tag = on.contains("GL_EXT_stencil_clear_tag");
+        this.GL_EXT_stencil_two_side = on.contains("GL_EXT_stencil_two_side");
+        this.GL_EXT_stencil_wrap = on.contains("GL_EXT_stencil_wrap");
+        this.GL_EXT_texture_array = on.contains("GL_EXT_texture_array");
+        this.GL_EXT_texture_buffer_object = on.contains("GL_EXT_texture_buffer_object");
+        this.GL_EXT_texture_integer = on.contains("GL_EXT_texture_integer");
+        this.GL_EXT_texture_sRGB = on.contains("GL_EXT_texture_sRGB");
+        this.GL_NV_fog_distance = on.contains("GL_NV_fog_distance");
+        this.OpenGL13 = on.contains("OpenGL13");
+        this.OpenGL14 = on.contains("OpenGL14");
+        this.OpenGL15 = on.contains("OpenGL15");
+        this.OpenGL20 = on.contains("OpenGL20");
+        this.OpenGL21 = on.contains("OpenGL21");
+        this.OpenGL30 = on.contains("OpenGL30");
+        this.GL_EXT_multi_draw_arrays = on.contains("GL_EXT_multi_draw_arrays");
+        this.GL_EXT_paletted_texture = on.contains("GL_EXT_paletted_texture");
+        this.GL_EXT_rescale_normal = on.contains("GL_EXT_rescale_normal");
+        this.GL_EXT_texture_3d = on.contains("GL_EXT_texture_3d");
+        this.GL_EXT_texture_lod_bias = on.contains("GL_EXT_texture_lod_bias");
+        this.GL_EXT_vertex_shader = on.contains("GL_EXT_vertex_shader");
+        this.GL_EXT_vertex_weighting = on.contains("GL_EXT_vertex_weighting");
+    }
+
+    /**
      * Compatibility context (what 1.8.9 requires) accepts the legacy query. In a core profile it
      * fails, so we fall back to GL30's indexed enumeration.
      */

@@ -487,6 +487,38 @@ public final class SteinGlDevice extends SteinDevice {
     }
 
     @Override
+    public void present(SteinTexture color) {
+        SteinGlFrame.sync("API present");
+        int prevRead = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int prevDraw = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        boolean scissor = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
+        if (blitRead == 0) {
+            blitRead = GL30.glGenFramebuffers();
+            blitDraw = GL30.glGenFramebuffers();
+        }
+        try {
+            if (scissor) {
+                GL11.glDisable(GL11.GL_SCISSOR_TEST);
+            }
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, blitRead);
+            attachLayer(GL30.GL_READ_FRAMEBUFFER, (int) color.handle(), GL11.GL_TEXTURE_2D, 0);
+            GL11.glReadBuffer(GL30.GL_COLOR_ATTACHMENT0);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, 0);
+            int w = color.width();
+            int h = color.height();
+            GL30.glBlitFramebuffer(
+                    0, 0, w, h, 0, 0, w, h, GL11.GL_COLOR_BUFFER_BIT, GL11.GL_NEAREST);
+            attachLayer(GL30.GL_READ_FRAMEBUFFER, 0, GL11.GL_TEXTURE_2D, 0);
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevRead);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, prevDraw);
+            if (scissor) {
+                GL11.glEnable(GL11.GL_SCISSOR_TEST);
+            }
+        }
+    }
+
+    @Override
     public SteinFence fence() {
         return new SteinGlFence();
     }
@@ -522,7 +554,14 @@ public final class SteinGlDevice extends SteinDevice {
                 GL15.glBindBuffer(GL21.GL_PIXEL_PACK_BUFFER, 0);
             }
             GL11.glPixelStorei(GL11.GL_PACK_ALIGNMENT, 1);
-            GL11.glReadPixels(x, y, w, h, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, out);
+            GL11.glReadPixels(
+                    x,
+                    y,
+                    w,
+                    h,
+                    texture.desc().format == SteinFormat.BGRA8 ? GL12.GL_BGRA : GL11.GL_RGBA,
+                    GL11.GL_UNSIGNED_BYTE,
+                    out);
         } finally {
             GL11.glPixelStorei(GL11.GL_PACK_ALIGNMENT, previousAlign);
             if (previousPack != 0) {
