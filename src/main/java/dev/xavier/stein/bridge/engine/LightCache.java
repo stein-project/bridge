@@ -166,6 +166,25 @@ public final class LightCache {
     }
 
     /**
+     * The last class {@link Bright#PLAIN} answered true for. A crowd is one class (the other
+     * players), and the ClassValue lookup showed in the profile at every layer of every player; the
+     * answer never changes for a class, and a single reference is read and written atomically, so
+     * any thread may use it.
+     */
+    private static Class<?> lastPlain;
+
+    private static boolean plain(Class<?> c) {
+        if (c == lastPlain) {
+            return true;
+        }
+        if (Bright.PLAIN.get(c)) {
+            lastPlain = c;
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Entity.getBrightness inside RendererLivingEntity.setBrightness (patcher rule), called on
      * every layer of every living entity per frame: a new BlockPos, the chunk lookup, the block
      * (for the neighbors' light) and the two light layers. With the Stein renderer on, stored per
@@ -177,7 +196,7 @@ public final class LightCache {
      */
     public static float entityBrightness(Object entity, float partialTicks) {
         Entity e = (Entity) entity;
-        if (VANILLA || !SteinGfxOptions.ENABLED || !Bright.PLAIN.get(entity.getClass())) {
+        if (VANILLA || !SteinGfxOptions.ENABLED || !plain(entity.getClass())) {
             return e.getBrightness(partialTicks);
         }
         World world = e.worldObj;
