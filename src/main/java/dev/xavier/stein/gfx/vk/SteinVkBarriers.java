@@ -8,9 +8,32 @@
 
 package dev.xavier.stein.gfx.vk;
 
+import static org.lwjgl.vulkan.KHRSwapchain.VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+import static org.lwjgl.vulkan.VK10.VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+import static org.lwjgl.vulkan.VK10.VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+import static org.lwjgl.vulkan.VK10.VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+import static org.lwjgl.vulkan.VK10.VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
 import static org.lwjgl.vulkan.VK10.VK_ACCESS_MEMORY_READ_BIT;
 import static org.lwjgl.vulkan.VK10.VK_ACCESS_MEMORY_WRITE_BIT;
+import static org.lwjgl.vulkan.VK10.VK_ACCESS_SHADER_READ_BIT;
+import static org.lwjgl.vulkan.VK10.VK_ACCESS_TRANSFER_READ_BIT;
+import static org.lwjgl.vulkan.VK10.VK_ACCESS_TRANSFER_WRITE_BIT;
+import static org.lwjgl.vulkan.VK10.VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+import static org.lwjgl.vulkan.VK10.VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+import static org.lwjgl.vulkan.VK10.VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+import static org.lwjgl.vulkan.VK10.VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+import static org.lwjgl.vulkan.VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+import static org.lwjgl.vulkan.VK10.VK_IMAGE_LAYOUT_UNDEFINED;
 import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_ALL_COMMANDS_BIT;
+import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_TRANSFER_BIT;
+import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_VERTEX_SHADER_BIT;
 import static org.lwjgl.vulkan.VK10.VK_QUEUE_FAMILY_IGNORED;
 import static org.lwjgl.vulkan.VK10.vkCmdPipelineBarrier;
 
@@ -51,7 +74,12 @@ final class SteinVkBarriers {
         }
     }
 
-    /** Changes the layout of {@code mips} levels (from {@code mip}) of all the image's layers. */
+    /**
+     * Changes the layout of {@code mips} levels (from {@code mip}) of all the image's layers. The
+     * stages and accesses come from the two layouts: the work that uses the old layout finishes
+     * before the transition, the next use waits for it. Anything else (an unknown layout) falls
+     * back to all commands.
+     */
     static void layout(
             VkCommandBuffer c,
             long image,
@@ -61,12 +89,32 @@ final class SteinVkBarriers {
             int layers,
             int from,
             int to) {
+        layout(c, image, aspect, mip, mips, layers, from, to, from);
+    }
+
+    /**
+     * As {@link #layout(VkCommandBuffer, long, int, int, int, int, int, int)}, declared from {@code
+     * from} but waiting for the users of {@code after}. A transition from UNDEFINED (contents
+     * discarded) still has to wait for whoever used the image before: the pass that sampled a
+     * target, or the presentation engine for a swapchain image (its acquire semaphore is waited at
+     * the transfer stage). Without it the new writes race with them — what the wide barriers hid.
+     */
+    static void layout(
+            VkCommandBuffer c,
+            long image,
+            int aspect,
+            int mip,
+            int mips,
+            int layers,
+            int from,
+            int to,
+            int after) {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             VkImageMemoryBarrier.Buffer b = VkImageMemoryBarrier.calloc(1, stack);
             b.get(0)
                     .sType$Default()
-                    .srcAccessMask(VK_ACCESS_MEMORY_WRITE_BIT)
-                    .dstAccessMask(VK_ACCESS_MEMORY_READ_BIT | VK_ACCESS_MEMORY_WRITE_BIT)
+                    .srcAccessMask(access(after, true))
+                    .dstAccessMask(access(to, false))
                     .oldLayout(from)
                     .newLayout(to)
                     .srcQueueFamilyIndex(VK_QUEUE_FAMILY_IGNORED)
@@ -80,13 +128,57 @@ final class SteinVkBarriers {
                                             .baseArrayLayer(0)
                                             .layerCount(layers));
             vkCmdPipelineBarrier(
-                    c,
-                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-                    0,
-                    null,
-                    null,
-                    b);
+                    c, stage(after, aspect, true), stage(to, aspect, false), 0, null, null, b);
         }
+    }
+
+    /**
+     * The stages that use an image in a layout, before it (src) or after it (dst) the transition.
+     */
+    private static int stage(int layout, int aspect, boolean src) {
+        return switch (layout) {
+            case VK_IMAGE_LAYOUT_UNDEFINED -> src ? VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT : 0;
+            case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL ->
+                    VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL ->
+                    VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT
+                            | VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+            case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL ->
+                    VK_PIPELINE_STAGE_VERTEX_SHADER_BIT
+                            | VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT
+                            | VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+            case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL ->
+                    VK_PIPELINE_STAGE_TRANSFER_BIT;
+            case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR ->
+                    src ? VK_PIPELINE_STAGE_TRANSFER_BIT : VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+            default ->
+                    VK_PIPELINE_STAGE_ALL_COMMANDS_BIT; // GENERAL and anything else: wait for all
+        };
+    }
+
+    /**
+     * The accesses of a layout: what the previous use wrote (src) or what the next one may read or
+     * write.
+     */
+    private static int access(int layout, boolean src) {
+        return switch (layout) {
+            case VK_IMAGE_LAYOUT_UNDEFINED -> 0;
+            case VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL ->
+                    src
+                            ? VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT
+                            : VK_ACCESS_COLOR_ATTACHMENT_READ_BIT
+                                    | VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            case VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL ->
+                    src
+                            ? VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT
+                            : VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT
+                                    | VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+            case VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL -> VK_ACCESS_SHADER_READ_BIT;
+            case VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL -> VK_ACCESS_TRANSFER_READ_BIT;
+            case VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL -> VK_ACCESS_TRANSFER_WRITE_BIT;
+            case VK_IMAGE_LAYOUT_PRESENT_SRC_KHR -> 0;
+            default ->
+                    VK_ACCESS_MEMORY_WRITE_BIT | VK_ACCESS_MEMORY_READ_BIT; // GENERAL: everything
+        };
     }
 }

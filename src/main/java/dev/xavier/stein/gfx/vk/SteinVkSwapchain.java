@@ -221,7 +221,9 @@ final class SteinVkSwapchain {
                 1,
                 1,
                 VK_IMAGE_LAYOUT_UNDEFINED,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                // after the presentation engine: chained to the acquire wait (transfer stage)
+                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
         int sw = screen.width();
         int sh = screen.height();
         try (MemoryStack stack = MemoryStack.stackPush()) {
