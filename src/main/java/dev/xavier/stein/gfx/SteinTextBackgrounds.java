@@ -42,7 +42,32 @@ final class SteinTextBackgrounds {
                     ? (int) (0.25F * 255F) << 24
                     : (int) (0.25F * 255F);
 
+    /**
+     * Goes up on every {@link #clear}: the table forgets its keys there without invalidating the
+     * runs, so a run remembered by size is only trusted within the same epoch.
+     */
+    private static int epoch;
+
+    // The resident background by label size: (j, top, bottom) fully determines the quad's 48 key
+    // ints (the color is a constant), so within one epoch a run that is still valid is exactly what
+    // the quad lookup would return — its slot is only rewritten when the run there is invalid, and
+    // keys only leave the table in clear(). Saves writing, re-reading and hashing 192 bytes and
+    // the key comparison for every name in every frame.
+    private static final boolean BY_SIZE = SteinGfxOptions.LABEL_BACKGROUND_CACHE;
+    private static final boolean CHECK = BY_SIZE && SteinGfxOptions.LABEL_BACKGROUND_CHECK;
+    private static final int SIZE_SLOTS = 512;
+    private static final int[] sizeJ = new int[SIZE_SLOTS];
+    private static final int[] sizeTop = new int[SIZE_SLOTS];
+    private static final int[] sizeBottom = new int[SIZE_SLOTS];
+    private static final int[] sizeEpoch = new int[SIZE_SLOTS];
+    private static final SteinTextGpu.Alloc[] sizeRun = new SteinTextGpu.Alloc[SIZE_SLOTS];
+
     private SteinTextBackgrounds() {}
+
+    /** Whether {@code -Dsteinbridge.gfx.labelBackgroundCheck=true} is on (for the report). */
+    static boolean checking() {
+        return CHECK;
+    }
 
     /**
      * The background of a label assembled directly ({@link SteinNameLabels}): the same quad the
@@ -52,6 +77,39 @@ final class SteinTextBackgrounds {
      * game path, which uploads it).
      */
     static SteinTextGpu.Alloc labelBackground(int j, int top, int bottom) {
+        if (!BY_SIZE) {
+            return quadBackground(j, top, bottom);
+        }
+        int s = (j * 0x9E3779B9 + top * 31 + bottom) >>> 23 & SIZE_SLOTS - 1;
+        SteinTextGpu.Alloc a = sizeRun[s];
+        if (a != null
+                && a.valid
+                && sizeEpoch[s] == epoch
+                && sizeJ[s] == j
+                && sizeTop[s] == top
+                && sizeBottom[s] == bottom) {
+            if (CHECK) {
+                if (quadBackground(j, top, bottom) == a) {
+                    SteinLabelStats.backgroundSame++;
+                } else {
+                    SteinLabelStats.backgroundDifferent++;
+                }
+            }
+            return a;
+        }
+        a = quadBackground(j, top, bottom);
+        if (a != null) {
+            sizeRun[s] = a;
+            sizeJ[s] = j;
+            sizeTop[s] = top;
+            sizeBottom[s] = bottom;
+            sizeEpoch[s] = epoch;
+        }
+        return a;
+    }
+
+    /** The background through the quad itself: the key built and looked up in the table. */
+    private static SteinTextGpu.Alloc quadBackground(int j, int top, int bottom) {
         long tmp = SteinTextGpu.quadScratch();
         float x0 = (float) (-j - 1);
         float x1 = (float) (j + 1);
@@ -139,5 +197,6 @@ final class SteinTextBackgrounds {
             runs[i] = null;
         }
         count = 0;
+        epoch++;
     }
 }

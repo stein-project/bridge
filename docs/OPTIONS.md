@@ -194,6 +194,10 @@ listed at the end.
 - `-Dsteinbridge.gfx.gpuHeldItemCheck=...`: (diagnostics) compares the GPU held item with the game's (default: off).
 - `-Dsteinbridge.gfx.gpuLabel=...`: name labels on the GPU (default: on).
 - `-Dsteinbridge.gfx.gpuLabelCheck=...`: (diagnostics) compares the GPU name labels with the game's (default: off).
+- `-Dsteinbridge.gfx.nameTextCache=...`: the GPU label keeps each entity's formatted name while its plain text and formatting code stay the same (default: on).
+- `-Dsteinbridge.gfx.nameTextCheck=...`: (diagnostics) compares every kept formatted name with the game's getFormattedText (default: off).
+- `-Dsteinbridge.gfx.labelBackgroundCache=...`: the GPU label finds its resident background by size instead of hashing the quad every time (default: on).
+- `-Dsteinbridge.gfx.labelBackgroundCheck=...`: (diagnostics) compares every background found by size with the quad lookup (default: off).
 - `-Dsteinbridge.gfx.ownTextCache=...`: Stein's own text cache (default: on).
 - `-Dsteinbridge.gfx.particles=false`: the particles drawn call by call, as the game does: no fast particle path and no recorded particle pass (default: on).
 - `-Dsteinbridge.gfx.particleCheck=...`: (diagnostics) checks the fast particle path against the game's (default: off).

@@ -27,7 +27,6 @@ import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.scoreboard.Score;
 import net.minecraft.scoreboard.ScoreObjective;
 import net.minecraft.scoreboard.Scoreboard;
-import net.minecraft.util.IChatComponent;
 
 /**
  * The whole label without the surrounding game code: in the name drain ({@link
@@ -176,10 +175,11 @@ public final class SteinNameLabels {
         if (d >= (double) (f * f)) {
             return true;
         }
-        String name = ((IChatComponent) GameHooks.nametag(entity)).getFormattedText();
+        Object component = GameHooks.nametag(entity);
+        Slot slot = SteinLabelSlots.slot(entity);
+        String name = SteinLabelSlots.formatted(slot, component);
         // From here on the name has already been computed (the mods' hooks ran): the game, if
         // needed, continues with it.
-        Slot slot = SteinLabelSlots.slot(entity);
         boolean unicode = SteinTextCache.unicode(font);
         SteinLabelContext.set(kind, sneak, render, entity, rm, font, unicode, name, x, y, z, d);
         int n = prepare(slot);

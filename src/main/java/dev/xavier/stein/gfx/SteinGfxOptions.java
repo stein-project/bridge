@@ -163,6 +163,30 @@ public final class SteinGfxOptions {
      */
     static final boolean GPU_LABEL_CHECK = Opt.flag("steinbridge.gfx.gpuLabelCheck");
 
+    /**
+     * {@code -Dsteinbridge.gfx.nameTextCache=...}: the GPU label keeps each entity's formatted name
+     * while its plain text and formatting code stay the same (default: on).
+     */
+    static final boolean NAME_TEXT_CACHE = feature("nameTextCache", true);
+
+    /**
+     * {@code -Dsteinbridge.gfx.nameTextCheck=...}: (diagnostics) compares every kept formatted name
+     * with the game's getFormattedText (default: off).
+     */
+    static final boolean NAME_TEXT_CHECK = Opt.flag("steinbridge.gfx.nameTextCheck");
+
+    /**
+     * {@code -Dsteinbridge.gfx.labelBackgroundCache=...}: the GPU label finds its resident
+     * background by size instead of hashing the quad every time (default: on).
+     */
+    static final boolean LABEL_BACKGROUND_CACHE = feature("labelBackgroundCache", true);
+
+    /**
+     * {@code -Dsteinbridge.gfx.labelBackgroundCheck=...}: (diagnostics) compares every background
+     * found by size with the quad lookup (default: off).
+     */
+    static final boolean LABEL_BACKGROUND_CHECK = Opt.flag("steinbridge.gfx.labelBackgroundCheck");
+
     /** {@code -Dsteinbridge.gfx.ownTextCache=...}: Stein's own text cache (default: on). */
     static final boolean OWN_TEXT_CACHE = feature("ownTextCache", true);
 

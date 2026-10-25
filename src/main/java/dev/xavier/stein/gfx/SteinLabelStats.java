@@ -28,12 +28,25 @@ final class SteinLabelStats {
     static long checkedBad;
     static long checkedSkip;
     static int reported;
+
+    /** {@code -Dsteinbridge.gfx.nameTextCheck}: kept formatted names equal / different. */
+    static long nameSame;
+
+    static long nameDifferent;
+
+    /** {@code -Dsteinbridge.gfx.labelBackgroundCheck}: backgrounds by size equal / different. */
+    static long backgroundSame;
+
+    static long backgroundDifferent;
+
     private static long statsAt = System.nanoTime();
 
     private SteinLabelStats() {}
 
     static void report() {
-        if (!STATS && !SteinNameLabels.CHECK) {
+        boolean names = SteinLabelSlots.checkingNames();
+        boolean backgrounds = SteinTextBackgrounds.checking();
+        if (!STATS && !SteinNameLabels.CHECK && !names && !backgrounds) {
             return;
         }
         long now = System.nanoTime();
@@ -41,6 +54,31 @@ final class SteinLabelStats {
             return;
         }
         statsAt = now;
+        if (names) {
+            Log.info(
+                    "gfx",
+                    "name text check (5 s): "
+                            + nameSame
+                            + " equal, "
+                            + nameDifferent
+                            + " different");
+            nameSame = 0;
+            nameDifferent = 0;
+        }
+        if (backgrounds) {
+            Log.info(
+                    "gfx",
+                    "label background check (5 s): "
+                            + backgroundSame
+                            + " equal, "
+                            + backgroundDifferent
+                            + " different");
+            backgroundSame = 0;
+            backgroundDifferent = 0;
+        }
+        if (!STATS && !SteinNameLabels.CHECK) {
+            return;
+        }
         Log.info(
                 "gfx",
                 "labels (5 s): "
