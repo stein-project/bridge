@@ -46,12 +46,6 @@ final class LensOptions {
     static final int BLOOM = Opt.integer("steinlens.bloom", -1);
 
     /**
-     * {@code -Dsteinlens.vividColors=true|false}: overrides the file's vivid colours setting
-     * without saving (default: unset, the file decides).
-     */
-    static final String VIVID_COLORS = Opt.text("steinlens.vividColors", null);
-
-    /**
      * {@code -Dsteinlens.smoothEdges=true|false}: overrides the file's edge smoothing setting
      * without saving (default: unset, the file decides).
      */

@@ -230,11 +230,6 @@ final class VideoOptions {
                 "steinlens.bloom.hint",
                 post);
         toggle(
-                "steinlens.vividColors",
-                () -> c.vividColors,
-                () -> c.vividColors = !c.vividColors,
-                post);
-        toggle(
                 "steinlens.smoothEdges",
                 () -> c.smoothEdges,
                 () -> c.smoothEdges = !c.smoothEdges,

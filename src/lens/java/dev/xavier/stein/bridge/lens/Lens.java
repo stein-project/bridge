@@ -421,7 +421,7 @@ public final class Lens implements HookSink {
         ChunkKeep.setMode(config.keepChunks, config.keepChunksMb);
         Rain.setHidden(!config.rain);
         OldAnimations.set(config.oldAnimations, oldAnimationParts(config));
-        SteinPostFx.configure(config.bloom, config.vividColors, config.smoothEdges);
+        SteinPostFx.configure(config.bloom, config.smoothEdges);
         SteinHdr.configure(config.hdr, config.hdrWhite, config.hdrPeak);
     }
 

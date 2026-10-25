@@ -16,9 +16,9 @@ import org.lwjgl.opengl.GL11;
 import org.lwjgl.system.MemoryUtil;
 
 /**
- * Stein's post-processing of the world's image (the Lens "Image" options): bloom, vivid colours and
- * edge smoothing. It runs right after EntityRenderer.renderWorld in updateCameraAndRender — the
- * world and the hand are done, the HUD and the screens come after, untouched — where the game's own
+ * Stein's post-processing of the world's image (the Lens "Image" options): bloom and edge
+ * smoothing. It runs right after EntityRenderer.renderWorld in updateCameraAndRender — the world
+ * and the hand are done, the HUD and the screens come after, untouched — where the game's own
  * shader group (spectator, F4) also runs.
  *
  * <p>Each frame with something on: the game's target (colour and, for the edges, depth) is copied
@@ -68,9 +68,6 @@ public final class SteinPostFx {
     /** The edge smoothing fades out between half of this and this, in blocks. */
     private static final float EDGE_DISTANCE = 32f;
 
-    private static final float VIVID_SATURATION = 1.15f;
-    private static final float VIVID_CONTRAST = 0.12f;
-
     /** Bytes of one pass's Post block (five vec4). */
     private static final int BLOCK_BYTES = 80;
 
@@ -83,7 +80,6 @@ public final class SteinPostFx {
     private static final int RING_REGIONS = 4;
 
     private static volatile int bloom;
-    private static volatile boolean vivid;
     private static volatile boolean edges;
     private static boolean failed;
 
@@ -137,9 +133,8 @@ public final class SteinPostFx {
     }
 
     /** The Lens options (any thread; read on the render thread at the next frame). */
-    public static void configure(int bloomLevel, boolean vividColors, boolean smoothEdges) {
+    public static void configure(int bloomLevel, boolean smoothEdges) {
         bloom = Math.max(BLOOM_OFF, Math.min(BLOOM_HIGH, bloomLevel));
-        vivid = vividColors;
         edges = smoothEdges;
     }
 
@@ -173,22 +168,20 @@ public final class SteinPostFx {
     public static void afterWorld() {
         long thisFrame = frame++;
         int level = bloom;
-        boolean colors = vivid;
         boolean smooth = edges && !noDepth;
         boolean hdr = SteinHdr.active();
-        if (!available() || level == BLOOM_OFF && !colors && !smooth && !hdr) {
+        if (!available() || level == BLOOM_OFF && !smooth && !hdr) {
             return;
         }
         try {
-            run(level, colors, smooth, hdr, worldFrame == thisFrame);
+            run(level, smooth, hdr, worldFrame == thisFrame);
         } catch (RuntimeException | LinkageError e) {
             failed = true;
             Log.warn("gfx", "post-processing turned off for this session: " + e);
         }
     }
 
-    private static void run(
-            int level, boolean colors, boolean smooth, boolean hdr, boolean worldCopied) {
+    private static void run(int level, boolean smooth, boolean hdr, boolean worldCopied) {
         SteinDevice dev = SteinDevice.get();
         if (composite == null) {
             create(dev);
@@ -212,7 +205,7 @@ public final class SteinPostFx {
         }
         // with HDR the bloom is always built: it says where the lights are, even when not added
         int levels = level == BLOOM_OFF && !hdr ? 0 : BLOOM.levels();
-        writeBlocks(dev, w, h, levels, level, colors, smooth, hdr);
+        writeBlocks(dev, w, h, levels, level, smooth, hdr);
         if (levels > 0 || hdr) {
             draw(dev, "post luma", lumaTarget, luma, AT[0], sceneColor, null, null, null);
             lumaTarget.color(0).generateMips();
@@ -323,14 +316,7 @@ public final class SteinPostFx {
      * / size drawn), params, params2, params3 (see the shaders).
      */
     private static void writeBlocks(
-            SteinDevice dev,
-            int w,
-            int h,
-            int levels,
-            int level,
-            boolean colors,
-            boolean smooth,
-            boolean hdr) {
+            SteinDevice dev, int w, int h, int levels, int level, boolean smooth, boolean hdr) {
         int align = dev.caps().uniformAlignment;
         texel(w, h, LUMA_SIZE, LUMA_SIZE);
         AT[0] = block(align);
@@ -358,8 +344,6 @@ public final class SteinPostFx {
                         : BLOOM_STRENGTH[level]
                                 * (float) SteinGfxOptions.POST_BLOOM_STRENGTH
                                 / levels;
-        B[5] = colors ? VIVID_SATURATION : 1f;
-        B[6] = colors ? VIVID_CONTRAST : 0f;
         B[7] = smooth ? 1f : 0f;
         B[8] = SteinGfxOptions.POST_EDGE_VIEW ? 1f : 0f;
         B[9] = (float) SteinGfxOptions.POST_EDGE_RATIO;

@@ -102,9 +102,6 @@ final class LensConfig {
     /** Bloom: 0 off, 1 low, 2 high (the SteinPostFx.BLOOM_*). */
     int bloom = 0;
 
-    /** More saturated colours with a little more contrast. */
-    boolean vividColors = false;
-
     /** Smoothing of object outlines (where the depth breaks; textures stay sharp). */
     boolean smoothEdges = false;
 
@@ -162,7 +159,6 @@ final class LensConfig {
             oldBlockPose = bool(o, "oldBlockPose", oldBlockPose);
             oldArmorHurt = bool(o, "oldArmorHurt", oldArmorHurt);
             bloom = integer(o, "bloom", bloom, 0, 2);
-            vividColors = bool(o, "vividColors", vividColors);
             smoothEdges = bool(o, "smoothEdges", smoothEdges);
             hdr = bool(o, "hdr", hdr);
             hdrWhite = integer(o, "hdrWhite", hdrWhite, 80, 1000);
@@ -187,9 +183,6 @@ final class LensConfig {
         }
         if (LensOptions.BLOOM >= 0) {
             bloom = Math.min(2, LensOptions.BLOOM);
-        }
-        if (LensOptions.VIVID_COLORS != null) {
-            vividColors = Boolean.parseBoolean(LensOptions.VIVID_COLORS);
         }
         if (LensOptions.SMOOTH_EDGES != null) {
             smoothEdges = Boolean.parseBoolean(LensOptions.SMOOTH_EDGES);
@@ -229,7 +222,6 @@ final class LensConfig {
         o.addProperty("oldBlockPose", oldBlockPose);
         o.addProperty("oldArmorHurt", oldArmorHurt);
         o.addProperty("bloom", bloom);
-        o.addProperty("vividColors", vividColors);
         o.addProperty("smoothEdges", smoothEdges);
         o.addProperty("hdr", hdr);
         o.addProperty("hdrWhite", hdrWhite);

@@ -14,7 +14,6 @@ listed at the end.
 - `-Dsteinlens.customItems=true|false`: overrides the file's custom items setting without saving (default: unset, the file decides).
 - `-Dsteinlens.connectedTextures=true|false`: overrides the file's connected textures setting without saving (default: unset, the file decides).
 - `-Dsteinlens.bloom=0|1|2`: overrides the file's bloom (off, low, high) without saving (default: unset, the file decides).
-- `-Dsteinlens.vividColors=true|false`: overrides the file's vivid colours setting without saving (default: unset, the file decides).
 - `-Dsteinlens.smoothEdges=true|false`: overrides the file's edge smoothing setting without saving (default: unset, the file decides).
 - `-Dsteinlens.hdr=true|false`: overrides the file's HDR output setting without saving (default: unset, the file decides).
 - `-Dsteinlens.debug=true`: zoom state (every 2 s and on every change) and custom items lookups, recomputed choices and enchantment version steps (every 2 s) in the log (default: off).

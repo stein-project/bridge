@@ -35,10 +35,13 @@ public final class SteinHdr {
 
     private static volatile boolean requested;
 
-    /** The Lens calibration: the paper white and the screen's peak, in nits. */
-    private static volatile float paperWhite = (float) SteinGfxOptions.HDR_PAPER_WHITE;
+    /**
+     * The Lens calibration: the paper white and the screen's peak, in nits. Plain numbers: the Lens
+     * configures before the window exists, when SteinGfxOptions must not load yet.
+     */
+    private static volatile int whiteNits = 200;
 
-    private static volatile float peak = (float) SteinGfxOptions.HDR_PEAK;
+    private static volatile int peakNits = 1000;
 
     /** The window offers scRGB (the swapchain says so at each recreation). */
     private static volatile boolean supported;
@@ -61,16 +64,10 @@ public final class SteinHdr {
      * The Lens options (any thread; take effect at the next frame): on/off, and the calibration in
      * nits. The {@code -D} keys of {@link SteinGfxOptions}, when given, win over the calibration.
      */
-    public static void configure(boolean on, int paperWhiteNits, int peakNits) {
+    public static void configure(boolean on, int paperWhite, int peak) {
         requested = on;
-        float white =
-                SteinGfxOptions.HDR_PAPER_WHITE_SET
-                        ? (float) SteinGfxOptions.HDR_PAPER_WHITE
-                        : Math.max(80, paperWhiteNits);
-        float top = SteinGfxOptions.HDR_PEAK_SET ? (float) SteinGfxOptions.HDR_PEAK : peakNits;
-        // the curve towards the peak needs room above the white
-        peak = Math.max(top, white * 1.5f);
-        paperWhite = white;
+        whiteNits = paperWhite;
+        peakNits = peak;
     }
 
     /** Whether the option can act: Vulkan draws and the window offers scRGB. */
@@ -145,8 +142,15 @@ public final class SteinHdr {
                 at = block.reserve(16, dev.caps().uniformAlignment);
             }
             long p = block.address(at);
-            MemoryUtil.memPutFloat(p, paperWhite / 80f);
-            MemoryUtil.memPutFloat(p + 4, peak / 80f);
+            float white =
+                    SteinGfxOptions.HDR_PAPER_WHITE_SET
+                            ? (float) SteinGfxOptions.HDR_PAPER_WHITE
+                            : Math.max(80, whiteNits);
+            float top = SteinGfxOptions.HDR_PEAK_SET ? (float) SteinGfxOptions.HDR_PEAK : peakNits;
+            // the curve towards the peak needs room above the white
+            top = Math.max(top, white * 1.5f);
+            MemoryUtil.memPutFloat(p, white / 80f);
+            MemoryUtil.memPutFloat(p + 4, top / 80f);
             MemoryUtil.memPutFloat(p + 8, 0f);
             MemoryUtil.memPutFloat(p + 12, 0f);
             block.commitRing();

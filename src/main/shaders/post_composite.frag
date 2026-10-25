@@ -11,12 +11,11 @@
 //    as large as the first difference. There the pixel is averaged along the edge (the luma gradient's normal).
 //    It fades out with distance (params4.z blocks, from half of it): far away the outlines are dense and averaging
 //    them only makes the distance look soft.
-//  - colour: saturation and an S-shaped contrast curve;
 //  - bloom, added by "screen" (never past white). With HDR output the world gets darker (a power of params4.x on
 //    its colour: Stein's gloomy look) and, only in the dark, a light rises above the paper white (up to 1 +
 //    params2.w times) where the pixel is bright AND the bloom says the area around it glows (params4.y times the
 //    bloom's luma): a white speck in sand or a flower is not a light and stays as it is. The bloom is added as is.
-// params: x bloom strength (0 off), y saturation (1 unchanged), z contrast (0 unchanged), w edges (0 off).
+// params: x bloom strength (0 off), w edges (0 off).
 // params2: x debug (1: edges in red), y edge ratio, z smallest depth step that counts, w HDR boost (0: SDR).
 // params3: the light threshold (post.glsl). params4: x HDR darkness power, y glow gain, z edge distance (blocks).
 #include "common/post.glsl"
@@ -82,10 +81,7 @@ void main() {
         }
         c = mix(c, smoothEdge(p, uv, c), near);
     }
-    float l = luma(c);
-    c = max(mix(vec3(l), c, params.y), vec3(0.0));
     c = min(c, vec3(1.0));
-    c = mix(c, c * c * (3.0 - 2.0 * c), params.z);
     vec3 glow = finite(texture(bloom, uv).rgb);
     vec3 b = glow * params.x;
     if (params2.w > 0.0) {
