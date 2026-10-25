@@ -30,7 +30,11 @@ import java.nio.FloatBuffer;
  * <p>The GlStateManager state objects are fixed (created once), so they are kept at startup and
  * read field by field on every query. The state classes are nested and closed in the game
  * (GlStateManager$BooleanState and the like are package-private), which the compile jar does not
- * open, so those reads stay reflective.
+ * open, so those reads stay reflective. Each accessor invokes its own static final handle on its
+ * own static final object: the JIT folds that into a plain field read even when the accessor is
+ * compiled on its own (not inlined into a large caller such as the pose collection). A shared
+ * helper taking the handle as a parameter only folds when inlined, and otherwise pays a generic
+ * method-handle call per read, which the crowd profile showed in the pose's colour reads.
  *
  * <p>Pipeline: Stein GFX only.
  */
@@ -292,85 +296,104 @@ public final class SteinGameState {
         return out;
     }
 
-    private static Object readObject(MethodHandle h, Object o) {
-        try {
-            return (Object) h.invokeExact(o);
-        } catch (Throwable e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    private static int readInt(MethodHandle h, Object o) {
-        try {
-            return (int) h.invokeExact(o);
-        } catch (Throwable e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    private static float readFloat(MethodHandle h, Object o) {
-        try {
-            return (float) h.invokeExact(o);
-        } catch (Throwable e) {
-            throw new IllegalStateException(e);
-        }
-    }
-
-    private static boolean readBoolean(MethodHandle h, Object o) {
-        try {
-            return (boolean) h.invokeExact(o);
-        } catch (Throwable e) {
-            throw new IllegalStateException(e);
-        }
+    /**
+     * A read failed: the handles are exact getters of fields that exist, so this does not happen.
+     */
+    private static IllegalStateException readFailed(Throwable e) {
+        return new IllegalStateException(e);
     }
 
     public static boolean alphaTest() {
-        return readBoolean(BOOL, readObject(ALPHA_TEST, ALPHA));
+        try {
+            return (boolean) BOOL.invokeExact((Object) ALPHA_TEST.invokeExact(ALPHA));
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static int alphaFunc() {
-        return readInt(ALPHA_FUNC, ALPHA);
+        try {
+            return (int) ALPHA_FUNC.invokeExact(ALPHA);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static float alphaRef() {
-        return readFloat(ALPHA_REF, ALPHA);
+        try {
+            return (float) ALPHA_REF.invokeExact(ALPHA);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static boolean lighting() {
-        return readBoolean(BOOL, LIGHTING);
+        try {
+            return (boolean) BOOL.invokeExact(LIGHTING);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static boolean colorMaterial() {
-        return readBoolean(BOOL, COLOR_MATERIAL);
+        try {
+            return (boolean) BOOL.invokeExact(COLOR_MATERIAL);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     /**
      * GL_LIGHT0 + {@code i} enabled (from the cache: with deferred state the driver may be behind).
      */
     public static boolean light(int i) {
-        return i < LIGHTS.length && readBoolean(BOOL, LIGHTS[i]);
+        try {
+            return i < LIGHTS.length && (boolean) BOOL.invokeExact(LIGHTS[i]);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     /** GL_NORMALIZE enabled. */
     public static boolean normalize() {
-        return readBoolean(BOOL, NORMALIZE);
+        try {
+            return (boolean) BOOL.invokeExact(NORMALIZE);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     /** GL_RESCALE_NORMAL enabled. */
     public static boolean rescaleNormal() {
-        return readBoolean(BOOL, RESCALE);
+        try {
+            return (boolean) BOOL.invokeExact(RESCALE);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static boolean blend() {
-        return readBoolean(BOOL, readObject(BLEND_ON, BLEND));
+        try {
+            return (boolean) BOOL.invokeExact((Object) BLEND_ON.invokeExact(BLEND));
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static int blendSrc() {
-        return readInt(BLEND_SRC, BLEND);
+        try {
+            return (int) BLEND_SRC.invokeExact(BLEND);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static int blendDst() {
-        return readInt(BLEND_DST, BLEND);
+        try {
+            return (int) BLEND_DST.invokeExact(BLEND);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     /**
@@ -379,71 +402,135 @@ public final class SteinGameState {
      * update the alpha ones in that case).
      */
     public static int blendSrcAlpha() {
-        return SteinGlTrack.blendSeparate() ? readInt(BLEND_SRC_A, BLEND) : blendSrc();
+        try {
+            return SteinGlTrack.blendSeparate() ? (int) BLEND_SRC_A.invokeExact(BLEND) : blendSrc();
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static int blendDstAlpha() {
-        return SteinGlTrack.blendSeparate() ? readInt(BLEND_DST_A, BLEND) : blendDst();
+        try {
+            return SteinGlTrack.blendSeparate() ? (int) BLEND_DST_A.invokeExact(BLEND) : blendDst();
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static boolean depthTest() {
-        return readBoolean(BOOL, readObject(DEPTH_TEST, DEPTH));
+        try {
+            return (boolean) BOOL.invokeExact((Object) DEPTH_TEST.invokeExact(DEPTH));
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static boolean depthMask() {
-        return readBoolean(DEPTH_MASK, DEPTH);
+        try {
+            return (boolean) DEPTH_MASK.invokeExact(DEPTH);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static int depthFunc() {
-        return readInt(DEPTH_FUNC, DEPTH);
+        try {
+            return (int) DEPTH_FUNC.invokeExact(DEPTH);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static boolean fog() {
-        return readBoolean(BOOL, readObject(FOG_ON, FOG));
+        try {
+            return (boolean) BOOL.invokeExact((Object) FOG_ON.invokeExact(FOG));
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static int fogMode() {
-        return readInt(FOG_MODE, FOG);
+        try {
+            return (int) FOG_MODE.invokeExact(FOG);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static float fogDensity() {
-        return readFloat(FOG_DENSITY, FOG);
+        try {
+            return (float) FOG_DENSITY.invokeExact(FOG);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static float fogStart() {
-        return readFloat(FOG_START, FOG);
+        try {
+            return (float) FOG_START.invokeExact(FOG);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static float fogEnd() {
-        return readFloat(FOG_END, FOG);
+        try {
+            return (float) FOG_END.invokeExact(FOG);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static boolean cull() {
-        return readBoolean(BOOL, readObject(CULL_ON, CULL));
+        try {
+            return (boolean) BOOL.invokeExact((Object) CULL_ON.invokeExact(CULL));
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static int cullMode() {
-        return readInt(CULL_MODE, CULL);
+        try {
+            return (int) CULL_MODE.invokeExact(CULL);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static boolean polygonOffsetFill() {
-        return readBoolean(BOOL, readObject(OFFSET_FILL, POLYGON_OFFSET));
+        try {
+            return (boolean) BOOL.invokeExact((Object) OFFSET_FILL.invokeExact(POLYGON_OFFSET));
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     /** glPolygonOffset: factor and units (the GlStateManager cache). */
     public static float polygonOffsetFactor() {
-        return readFloat(OFFSET_FACTOR, POLYGON_OFFSET);
+        try {
+            return (float) OFFSET_FACTOR.invokeExact(POLYGON_OFFSET);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static float polygonOffsetUnits() {
-        return readFloat(OFFSET_UNITS, POLYGON_OFFSET);
+        try {
+            return (float) OFFSET_UNITS.invokeExact(POLYGON_OFFSET);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     /**
      * Texture coordinate generation enabled on coordinate {@code c} (0 = S, 1 = T, 2 = R, 3 = Q).
      */
     public static boolean texGen(int c) {
-        return readBoolean(BOOL, TEXGEN_ON[c]);
+        try {
+            return (boolean) BOOL.invokeExact(TEXGEN_ON[c]);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     /**
@@ -451,23 +538,40 @@ public final class SteinGameState {
      * cache stores it.
      */
     public static int texGenMode(int c) {
-        return readInt(TEXGEN_MODE, TEXGEN[c]);
+        try {
+            return (int) TEXGEN_MODE.invokeExact(TEXGEN[c]);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static boolean logicOp() {
-        return readBoolean(BOOL, LOGIC);
+        try {
+            return (boolean) BOOL.invokeExact(LOGIC);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     /** glLogicOp's operation as the cache stores it (GL_COPY until the game sets another). */
     public static int logicOpMode() {
-        return readInt(LOGIC_MODE, LOGIC_STATE);
+        try {
+            return (int) LOGIC_MODE.invokeExact(LOGIC_STATE);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     /**
      * 2D texture enabled on unit {@code unit} (0 = the textures one, 1 = lightmap, 2 = the glint).
      */
     public static boolean texture2D(int unit) {
-        return unit < TEXTURES.length && readBoolean(BOOL, readObject(TEX_ON, TEXTURES[unit]));
+        try {
+            return unit < TEXTURES.length
+                    && (boolean) BOOL.invokeExact((Object) TEX_ON.invokeExact(TEXTURES[unit]));
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     /**
@@ -475,7 +579,11 @@ public final class SteinGameState {
      * not know which one is left).
      */
     public static int textureName(int unit) {
-        return unit < TEXTURES.length ? readInt(TEX_NAME, TEXTURES[unit]) : 0;
+        try {
+            return unit < TEXTURES.length ? (int) TEX_NAME.invokeExact(TEXTURES[unit]) : 0;
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static int activeUnit() {
@@ -489,50 +597,82 @@ public final class SteinGameState {
 
     /** Color mask from the cache, channel by channel (0 = R, 1 = G, 2 = B, 3 = A). */
     public static boolean colorMask(int channel) {
-        return switch (channel) {
-            case 0 -> readBoolean(MASK_R, MASK);
-            case 1 -> readBoolean(MASK_G, MASK);
-            case 2 -> readBoolean(MASK_B, MASK);
-            default -> readBoolean(MASK_A, MASK);
-        };
+        try {
+            return switch (channel) {
+                case 0 -> (boolean) MASK_R.invokeExact(MASK);
+                case 1 -> (boolean) MASK_G.invokeExact(MASK);
+                case 2 -> (boolean) MASK_B.invokeExact(MASK);
+                default -> (boolean) MASK_A.invokeExact(MASK);
+            };
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static boolean colorMaskAll() {
-        return readBoolean(MASK_R, MASK)
-                && readBoolean(MASK_G, MASK)
-                && readBoolean(MASK_B, MASK)
-                && readBoolean(MASK_A, MASK);
+        try {
+            return (boolean) MASK_R.invokeExact(MASK)
+                    && (boolean) MASK_G.invokeExact(MASK)
+                    && (boolean) MASK_B.invokeExact(MASK)
+                    && (boolean) MASK_A.invokeExact(MASK);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     /** Only alpha off in the mask (the menu panorama and its blur). */
     public static boolean colorMaskRgb() {
-        return readBoolean(MASK_R, MASK)
-                && readBoolean(MASK_G, MASK)
-                && readBoolean(MASK_B, MASK)
-                && !readBoolean(MASK_A, MASK);
+        try {
+            return (boolean) MASK_R.invokeExact(MASK)
+                    && (boolean) MASK_G.invokeExact(MASK)
+                    && (boolean) MASK_B.invokeExact(MASK)
+                    && !(boolean) MASK_A.invokeExact(MASK);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     /** Color mask fully off (depth only: the first cloud pass). */
     public static boolean colorMaskNone() {
-        return !readBoolean(MASK_R, MASK)
-                && !readBoolean(MASK_G, MASK)
-                && !readBoolean(MASK_B, MASK)
-                && !readBoolean(MASK_A, MASK);
+        try {
+            return !(boolean) MASK_R.invokeExact(MASK)
+                    && !(boolean) MASK_G.invokeExact(MASK)
+                    && !(boolean) MASK_B.invokeExact(MASK)
+                    && !(boolean) MASK_A.invokeExact(MASK);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static float colorR() {
-        return readFloat(COLOR_R, COLOR);
+        try {
+            return (float) COLOR_R.invokeExact(COLOR);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static float colorG() {
-        return readFloat(COLOR_G, COLOR);
+        try {
+            return (float) COLOR_G.invokeExact(COLOR);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static float colorB() {
-        return readFloat(COLOR_B, COLOR);
+        try {
+            return (float) COLOR_B.invokeExact(COLOR);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 
     public static float colorA() {
-        return readFloat(COLOR_A, COLOR);
+        try {
+            return (float) COLOR_A.invokeExact(COLOR);
+        } catch (Throwable e) {
+            throw readFailed(e);
+        }
     }
 }
