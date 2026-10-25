@@ -51,7 +51,12 @@ final class ShowcaseWorld {
     /** The camera's eye above the ground, and where it looks: west, a little up. */
     private static final double EYE_ABOVE = 3.4;
 
-    private static final float YAW_WEST = 90f;
+    /**
+     * West, turned a little to the left: the video settings' panel covers the left of the screen,
+     * so the lake, the sun and the moon sit in the part that shows.
+     */
+    private static final float YAW_WEST = 72f;
+
     private static final float PITCH_UP = -3f;
 
     final WorldClient world;

@@ -12,8 +12,8 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.GameSettings;
 
 /**
- * The two positions of the graphics selector ({@link GraphicsSlider}), which also apply to the
- * game's own options:
+ * The two positions of the graphics selector ({@link VideoModel}), which also apply to the game's
+ * own options:
  *
  * <ul>
  *   <li><b>Fast</b>: the lightest the game can be — fast graphics, no clouds, few particles, no

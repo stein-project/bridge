@@ -297,11 +297,11 @@ final class DiagWorldScenes {
      * The showcase scenes ({@link DiagOptions#SHOWCASE_AT}, {@link DiagOptions#SHOWCASE_NIGHT_AT}).
      */
     static void showcaseFrame() {
-        if (DiagOptions.SHOWCASE_AT < 0) {
+        if (DiagOptions.SHOWCASE_AT < 0 && DiagOptions.SHOWCASE_NIGHT_AT < 0) {
             return;
         }
         long sec = Scenes.elapsed() / 1_000_000_000L;
-        if (!showcaseOpened && sec >= DiagOptions.SHOWCASE_AT) {
+        if (DiagOptions.SHOWCASE_AT >= 0 && !showcaseOpened && sec >= DiagOptions.SHOWCASE_AT) {
             Showcase.open();
             showcaseOpened = Showcase.active();
             if (showcaseOpened) {
@@ -309,7 +309,8 @@ final class DiagWorldScenes {
             }
         }
         long n = DiagOptions.SHOWCASE_NIGHT_AT;
-        if (showcaseOpened && n > 0 && sec >= n) {
+        // also with the showcase opened by the video settings (videoAtSec)
+        if (Showcase.active() && n > 0 && sec >= n) {
             boolean night = (sec / n) % 2 == 1;
             if (night != Showcase.night()) {
                 Showcase.setNight(night);

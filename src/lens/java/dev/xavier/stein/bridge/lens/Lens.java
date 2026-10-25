@@ -19,6 +19,7 @@ import dev.xavier.stein.bridge.engine.Rain;
 import dev.xavier.stein.bridge.engine.Visuals;
 import dev.xavier.stein.bridge.hooks.GameHooks;
 import dev.xavier.stein.bridge.hooks.HookSink;
+import dev.xavier.stein.bridge.showcase.VideoSettings;
 import dev.xavier.stein.gfx.SteinHdr;
 import dev.xavier.stein.gfx.SteinPostFx;
 
@@ -56,10 +57,10 @@ import java.util.Map;
  * (ServiceLoader of {@link HookSink}) and works without the Stein Loader installed.
  *
  * <ul>
- *   <li><b>Graphics</b> in a single selector ({@link GraphicsSlider}) in place of the game's
- *       Fast/Fancy, which also applies to the game's performance options ({@link Presets}), and the
- *       whole video screen reorganized by topic, with the game's options and ours side by side
- *       ({@link VideoOptions});
+ *   <li><b>Graphics</b> in a single selector ({@link Presets}) in place of the game's Fast/Fancy,
+ *       which also applies to the game's performance options ({@link Presets}), and the whole video
+ *       screen reorganized by topic, with the game's options and ours side by side ({@link
+ *       VideoOptions});
  *   <li><b>Dynamic FOV</b> on/off: the game changes the field of view with speed (running, the
  *       Speed effect) and with a drawn bow. Off, the player's factor stays at 1 — the field of view
  *       is the option's —, and the game eases it there, as it does with any change of that factor;
@@ -106,6 +107,8 @@ public final class Lens implements HookSink {
      */
     @Override
     public void beforeStartGame() {
+        // every image option as data, for the Stein Loader's video settings and ours
+        VideoSettings.provide(new VideoModel(this));
         addResourcePack();
         configFile = configFile();
         config.load(configFile);
