@@ -69,6 +69,11 @@ final class VideoOptions {
     /** Chunks sent per frame; 0 = as in the game. */
     private static final int[] UPLOAD_STEPS = {0, 1, 2, 4, 8};
 
+    /** HDR calibration steps, in nits: the white of the menus and the screen's peak. */
+    private static final int[] HDR_WHITE_STEPS = {100, 150, 200, 250, 300, 400};
+
+    private static final int[] HDR_PEAK_STEPS = {400, 600, 800, 1000, 1400, 2000};
+
     /** Limits of the stored terrain, in MB. */
     private static final int[] KEEP_STEPS = {256, 512, 1024, 2048};
 
@@ -235,6 +240,19 @@ final class VideoOptions {
                 () -> c.smoothEdges = !c.smoothEdges,
                 post);
         toggle("steinlens.hdr", () -> c.hdr, () -> c.hdr = !c.hdr, SteinHdr::available);
+        BooleanSupplier hdrOn = () -> c.hdr && SteinHdr.available();
+        add(
+                "steinlens.hdrWhite",
+                () -> tr("steinlens.nits", c.hdrWhite),
+                () -> c.hdrWhite = next(HDR_WHITE_STEPS, c.hdrWhite),
+                "steinlens.hdrWhite.hint",
+                hdrOn);
+        add(
+                "steinlens.hdrPeak",
+                () -> tr("steinlens.nits", c.hdrPeak),
+                () -> c.hdrPeak = next(HDR_PEAK_STEPS, c.hdrPeak),
+                "steinlens.hdrPeak.hint",
+                hdrOn);
     }
 
     private void buildSky() {

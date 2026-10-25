@@ -369,17 +369,25 @@ public final class SteinGfxOptions {
 
     /**
      * {@code -Dsteinbridge.gfx.hdrPaperWhite=NITS}: with the Lens HDR output, how bright the game's
-     * white (HUD, menus, a white wall in daylight) is on the screen (default 200).
+     * white (HUD, menus, a white wall in daylight) is on the screen, over the Lens calibration
+     * (default: unset, the calibration's; 200 without one).
      */
     public static final double HDR_PAPER_WHITE =
             Math.max(80.0, Opt.decimal("steinbridge.gfx.hdrPaperWhite", 200.0));
 
+    /** {@code hdrPaperWhite} was given: it wins over the Lens calibration. */
+    static final boolean HDR_PAPER_WHITE_SET =
+            System.getProperty("steinbridge.gfx.hdrPaperWhite") != null;
+
     /**
      * {@code -Dsteinbridge.gfx.hdrPeak=NITS}: with the Lens HDR output, the brightest the screen is
-     * asked for (default 1000).
+     * asked for, over the Lens calibration (default: unset, the calibration's; 1000 without one).
      */
     public static final double HDR_PEAK =
             Math.max(HDR_PAPER_WHITE, Opt.decimal("steinbridge.gfx.hdrPeak", 1000.0));
+
+    /** {@code hdrPeak} was given: it wins over the Lens calibration. */
+    static final boolean HDR_PEAK_SET = System.getProperty("steinbridge.gfx.hdrPeak") != null;
 
     /**
      * {@code -Dsteinbridge.gfx.hdrDarkness=P}: with the Lens HDR output, the world's colours are

@@ -21,9 +21,8 @@ import org.lwjgl.system.MemoryUtil;
  * the light sources above the paper white, and the bloom adds instead of blending.
  *
  * <p>Everything up to the screen stays in the game's own terms: 1 is the white of the HUD and the
- * menus (the paper white, {@link SteinGfxOptions#HDR_PAPER_WHITE} nits) and more than 1 is a light.
- * Only at the end ({@link #encode}) the image becomes scRGB — linear, 1 = 80 nits — for the
- * swapchain.
+ * menus (the paper white, in nits, from the Lens calibration) and more than 1 is a light. Only at
+ * the end ({@link #encode}) the image becomes scRGB — linear, 1 = 80 nits — for the swapchain.
  *
  * <p>What changes with it: the game's framebuffer colour and the window's screen are RGBA16F (the
  * game recreates its framebuffer when the option changes), and the swapchain is R16G16B16A16_SFLOAT
@@ -35,6 +34,11 @@ import org.lwjgl.system.MemoryUtil;
 public final class SteinHdr {
 
     private static volatile boolean requested;
+
+    /** The Lens calibration: the paper white and the screen's peak, in nits. */
+    private static volatile float paperWhite = (float) SteinGfxOptions.HDR_PAPER_WHITE;
+
+    private static volatile float peak = (float) SteinGfxOptions.HDR_PEAK;
 
     /** The window offers scRGB (the swapchain says so at each recreation). */
     private static volatile boolean supported;
@@ -53,9 +57,20 @@ public final class SteinHdr {
 
     private SteinHdr() {}
 
-    /** The Lens option (any thread; takes effect at the next frame). */
-    public static void configure(boolean on) {
+    /**
+     * The Lens options (any thread; take effect at the next frame): on/off, and the calibration in
+     * nits. The {@code -D} keys of {@link SteinGfxOptions}, when given, win over the calibration.
+     */
+    public static void configure(boolean on, int paperWhiteNits, int peakNits) {
         requested = on;
+        float white =
+                SteinGfxOptions.HDR_PAPER_WHITE_SET
+                        ? (float) SteinGfxOptions.HDR_PAPER_WHITE
+                        : Math.max(80, paperWhiteNits);
+        float top = SteinGfxOptions.HDR_PEAK_SET ? (float) SteinGfxOptions.HDR_PEAK : peakNits;
+        // the curve towards the peak needs room above the white
+        peak = Math.max(top, white * 1.5f);
+        paperWhite = white;
     }
 
     /** Whether the option can act: Vulkan draws and the window offers scRGB. */
@@ -99,8 +114,8 @@ public final class SteinHdr {
 
     /**
      * The screen (RGBA16F, 1 = paper white, gamma-encoded like the game's colours) as scRGB for the
-     * swapchain: linear, 1 = 80 nits, never past the peak ({@link SteinGfxOptions#HDR_PEAK}).
-     * Returns {@code screen} itself when the pass cannot run (HDR then turns off).
+     * swapchain: linear, 1 = 80 nits, bending softly towards the screen's peak instead of clipping
+     * at it. Returns {@code screen} itself when the pass cannot run (HDR then turns off).
      */
     public static SteinTexture encode(SteinTexture screen) {
         try {
@@ -130,8 +145,8 @@ public final class SteinHdr {
                 at = block.reserve(16, dev.caps().uniformAlignment);
             }
             long p = block.address(at);
-            MemoryUtil.memPutFloat(p, (float) (SteinGfxOptions.HDR_PAPER_WHITE / 80.0));
-            MemoryUtil.memPutFloat(p + 4, (float) (SteinGfxOptions.HDR_PEAK / 80.0));
+            MemoryUtil.memPutFloat(p, paperWhite / 80f);
+            MemoryUtil.memPutFloat(p + 4, peak / 80f);
             MemoryUtil.memPutFloat(p + 8, 0f);
             MemoryUtil.memPutFloat(p + 12, 0f);
             block.commitRing();

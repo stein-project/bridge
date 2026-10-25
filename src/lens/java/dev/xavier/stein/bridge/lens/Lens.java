@@ -422,7 +422,7 @@ public final class Lens implements HookSink {
         Rain.setHidden(!config.rain);
         OldAnimations.set(config.oldAnimations, oldAnimationParts(config));
         SteinPostFx.configure(config.bloom, config.vividColors, config.smoothEdges);
-        SteinHdr.configure(config.hdr);
+        SteinHdr.configure(config.hdr, config.hdrWhite, config.hdrPeak);
     }
 
     /** The enabled parts of the 1.7 animations, in OldAnimations' bits. */

@@ -111,6 +111,12 @@ final class LensConfig {
     /** HDR output (Vulkan with an HDR screen): lights brighter than the white of the menus. */
     boolean hdr = false;
 
+    /** HDR calibration: the white of the menus and the world, in nits. */
+    int hdrWhite = 200;
+
+    /** HDR calibration: the screen's peak brightness, in nits. */
+    int hdrPeak = 1000;
+
     void load(File file) {
         if (!file.isFile()) {
             save(file);
@@ -159,6 +165,8 @@ final class LensConfig {
             vividColors = bool(o, "vividColors", vividColors);
             smoothEdges = bool(o, "smoothEdges", smoothEdges);
             hdr = bool(o, "hdr", hdr);
+            hdrWhite = integer(o, "hdrWhite", hdrWhite, 80, 1000);
+            hdrPeak = integer(o, "hdrPeak", hdrPeak, 200, 10000);
         } catch (Exception e) {
             Log.info("lens", file + " unreadable, using defaults: " + e);
         }
@@ -224,6 +232,8 @@ final class LensConfig {
         o.addProperty("vividColors", vividColors);
         o.addProperty("smoothEdges", smoothEdges);
         o.addProperty("hdr", hdr);
+        o.addProperty("hdrWhite", hdrWhite);
+        o.addProperty("hdrPeak", hdrPeak);
         file.getAbsoluteFile().getParentFile().mkdirs();
         try (Writer w =
                 new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8)) {
