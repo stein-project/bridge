@@ -58,6 +58,12 @@ final class LensOptions {
     static final String SMOOTH_EDGES = Opt.text("steinlens.smoothEdges", null);
 
     /**
+     * {@code -Dsteinlens.hdr=true|false}: overrides the file's HDR output setting without saving
+     * (default: unset, the file decides).
+     */
+    static final String HDR = Opt.text("steinlens.hdr", null);
+
+    /**
      * {@code -Dsteinlens.debug=true}: zoom state (every 2 s and on every change) and custom items
      * lookups, recomputed choices and enchantment version steps (every 2 s) in the log (default:
      * off).

@@ -10,6 +10,7 @@ package dev.xavier.stein.gfx.game;
 
 import dev.xavier.stein.gfx.SteinDevice;
 import dev.xavier.stein.gfx.SteinFormat;
+import dev.xavier.stein.gfx.SteinHdr;
 import dev.xavier.stein.gfx.SteinSampler;
 import dev.xavier.stein.gfx.SteinTexture;
 
@@ -269,7 +270,13 @@ public final class SteinGameTexture extends SteinTexture {
     private Desc desc(int mips) {
         String label = "game texture " + name;
         if (attached) {
-            return new Desc(label, Kind.TEXTURE_2D, format, width, height, 1, mips, true);
+            // a framebuffer's colour holds the lights above white with HDR output (SteinHdr: the
+            // game recreates its framebuffer when that changes)
+            SteinFormat f =
+                    SteinHdr.active() && format != SteinFormat.DEPTH24
+                            ? SteinFormat.RGBA16F
+                            : format;
+            return new Desc(label, Kind.TEXTURE_2D, f, width, height, 1, mips, true);
         }
         return SteinTexture.Desc.texture2D(label, format, width, height, mips);
     }

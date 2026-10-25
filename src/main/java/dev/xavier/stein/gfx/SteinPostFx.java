@@ -27,6 +27,9 @@ import org.lwjgl.system.MemoryUtil;
  * everything off nothing runs and nothing is allocated; the composite with neutral settings gives
  * back the game's pixels unchanged.
  *
+ * <p>With HDR output ({@link SteinHdr}) the composite always runs: the light sources (what passes
+ * the bloom's threshold) rise above the paper white, and the bloom adds instead of blending.
+ *
  * <p>Any failure turns it off for the session with one line in the log, instead of taking the game
  * down.
  *
@@ -58,8 +61,11 @@ public final class SteinPostFx {
     private static final float VIVID_SATURATION = 1.15f;
     private static final float VIVID_CONTRAST = 0.12f;
 
-    /** Bytes of one pass's Post block (three vec4). */
-    private static final int BLOCK_BYTES = 48;
+    /** Bytes of one pass's Post block (four vec4). */
+    private static final int BLOCK_BYTES = 64;
+
+    /** One block being written (reused: no allocation per frame). */
+    private static final float[] B = new float[BLOCK_BYTES / 4];
 
     /** Passes per frame at most: the mean luma, the bloom's way down and up, and the composite. */
     private static final int MAX_PASSES = 2 * SteinBloom.MAX_LEVELS + 2;
@@ -159,18 +165,20 @@ public final class SteinPostFx {
         int level = bloom;
         boolean colors = vivid;
         boolean smooth = edges && !noDepth;
-        if (!available() || level == BLOOM_OFF && !colors && !smooth) {
+        boolean hdr = SteinHdr.active();
+        if (!available() || level == BLOOM_OFF && !colors && !smooth && !hdr) {
             return;
         }
         try {
-            run(level, colors, smooth, worldFrame == thisFrame);
+            run(level, colors, smooth, hdr, worldFrame == thisFrame);
         } catch (RuntimeException | LinkageError e) {
             failed = true;
             Log.warn("gfx", "post-processing turned off for this session: " + e);
         }
     }
 
-    private static void run(int level, boolean colors, boolean smooth, boolean worldCopied) {
+    private static void run(
+            int level, boolean colors, boolean smooth, boolean hdr, boolean worldCopied) {
         SteinDevice dev = SteinDevice.get();
         if (composite == null) {
             create(dev);
@@ -193,8 +201,8 @@ public final class SteinPostFx {
             BLOOM.size(dev, w, h);
         }
         int levels = level == BLOOM_OFF ? 0 : BLOOM.levels();
-        writeBlocks(dev, w, h, levels, level, colors, smooth);
-        if (levels > 0) {
+        writeBlocks(dev, w, h, levels, level, colors, smooth, hdr);
+        if (levels > 0 || hdr) {
             draw(dev, "post luma", lumaTarget, luma, AT[0], sceneColor, null, null, null);
             lumaTarget.color(0).generateMips();
         }
@@ -235,14 +243,12 @@ public final class SteinPostFx {
                 sceneColor,
                 bloomed,
                 smooth ? worldDepth : sceneColor,
-                smooth ? sceneDepth : sceneColor);
+                smooth ? sceneDepth : sceneColor,
+                // (only read with HDR; never bound before it was first drawn)
+                levels > 0 || hdr ? lumaTarget.color(0) : sceneColor);
     }
 
-    /**
-     * One full-screen pass: {@code a} in slot 0 (linear), {@code b} in slot 1 (linear), {@code c}
-     * and {@code d} in slots 2 and 3 (per pixel: the depths). The composite keeps the target's
-     * alpha.
-     */
+    /** One full-screen pass with up to four textures (see the five-texture one). */
     private static void draw(
             SteinDevice dev,
             String name,
@@ -253,6 +259,26 @@ public final class SteinPostFx {
             SteinTexture b,
             SteinTexture c,
             SteinTexture d) {
+        draw(dev, name, target, pipeline, at, a, b, c, d, null);
+    }
+
+    /**
+     * One full-screen pass: {@code a} in slot 0 (linear), {@code b} in slot 1 (linear; the mean
+     * luma's mipmaps for the bloom's first level), {@code c} and {@code d} in slots 2 and 3 (per
+     * pixel: the depths), {@code e} in slot 4 (the mean luma's mipmaps). The composite keeps the
+     * target's alpha.
+     */
+    private static void draw(
+            SteinDevice dev,
+            String name,
+            SteinRenderTarget target,
+            SteinPipeline pipeline,
+            long at,
+            SteinTexture a,
+            SteinTexture b,
+            SteinTexture c,
+            SteinTexture d,
+            SteinTexture e) {
         SteinRenderPass pass =
                 pipeline == composite
                         ? SteinRenderPass.keep(name, target)
@@ -271,6 +297,9 @@ public final class SteinPostFx {
             if (d != null) {
                 cmd.bindTexture(3, d, nearest);
             }
+            if (e != null) {
+                cmd.bindTexture(4, e, mipmapped);
+            }
             cmd.draw(3, 1, 0, 0);
         } finally {
             cmd.end();
@@ -278,122 +307,88 @@ public final class SteinPostFx {
     }
 
     /**
-     * The frame's Post blocks, all written before the first pass: bloom down (one per level), bloom
-     * up (one per level but the smallest), composite.
+     * The frame's Post blocks, all written before the first pass: mean luma, bloom down (one per
+     * level), bloom up (one per level but the smallest), composite. Each is texel (1 / size read, 1
+     * / size drawn), params, params2, params3 (see the shaders).
      */
     private static void writeBlocks(
-            SteinDevice dev, int w, int h, int levels, int level, boolean colors, boolean smooth) {
+            SteinDevice dev,
+            int w,
+            int h,
+            int levels,
+            int level,
+            boolean colors,
+            boolean smooth,
+            boolean hdr) {
         int align = dev.caps().uniformAlignment;
-        AT[0] =
-                block(
-                        align,
-                        1f / w,
-                        1f / h,
-                        1f / LUMA_SIZE,
-                        1f / LUMA_SIZE,
-                        0f,
-                        0f,
-                        0f,
-                        0f,
-                        0f,
-                        0f,
-                        0f,
-                        0f);
+        texel(w, h, LUMA_SIZE, LUMA_SIZE);
+        AT[0] = block(align);
         int sw = w;
         int sh = h;
         for (int i = 0; i < levels; i++) {
             SteinTexture d = BLOOM.down(i).color(0);
-            AT[1 + i] =
-                    block(
-                            align,
-                            1f / sw,
-                            1f / sh,
-                            1f / d.width(),
-                            1f / d.height(),
-                            BLOOM_MIN_THRESHOLD,
-                            BLOOM_KNEE,
-                            BLOOM_MEAN_FACTOR,
-                            BLOOM_MAX_THRESHOLD,
-                            LUMA_MIPS - 1,
-                            0f,
-                            0f,
-                            0f);
+            texel(sw, sh, d.width(), d.height());
+            threshold(4);
+            B[8] = BLOOM_KNEE;
+            AT[1 + i] = block(align);
             sw = d.width();
             sh = d.height();
         }
         for (int i = 0; i < levels - 1; i++) {
             SteinTexture below = BLOOM.down(i + 1).color(0);
             SteinTexture here = BLOOM.down(i).color(0);
-            AT[1 + levels + i] =
-                    block(
-                            align,
-                            1f / below.width(),
-                            1f / below.height(),
-                            1f / here.width(),
-                            1f / here.height(),
-                            0f,
-                            0f,
-                            0f,
-                            0f,
-                            0f,
-                            0f,
-                            0f,
-                            0f);
+            texel(below.width(), below.height(), here.width(), here.height());
+            AT[1 + levels + i] = block(align);
         }
-        AT[1 + 2 * levels] =
-                block(
-                        align,
-                        1f / w,
-                        1f / h,
-                        1f / w,
-                        1f / h,
-                        levels == 0
-                                ? 0f
-                                : BLOOM_STRENGTH[level]
-                                        * (float) SteinGfxOptions.POST_BLOOM_STRENGTH
-                                        / levels,
-                        colors ? VIVID_SATURATION : 1f,
-                        colors ? VIVID_CONTRAST : 0f,
-                        smooth ? 1f : 0f,
-                        SteinGfxOptions.POST_EDGE_VIEW ? 1f : 0f,
-                        (float) SteinGfxOptions.POST_EDGE_RATIO,
-                        (float) SteinGfxOptions.POST_EDGE_FLOOR,
-                        0f);
+        texel(w, h, w, h);
+        B[4] =
+                levels == 0
+                        ? 0f
+                        : BLOOM_STRENGTH[level]
+                                * (float) SteinGfxOptions.POST_BLOOM_STRENGTH
+                                / levels;
+        B[5] = colors ? VIVID_SATURATION : 1f;
+        B[6] = colors ? VIVID_CONTRAST : 0f;
+        B[7] = smooth ? 1f : 0f;
+        B[8] = SteinGfxOptions.POST_EDGE_VIEW ? 1f : 0f;
+        B[9] = (float) SteinGfxOptions.POST_EDGE_RATIO;
+        B[10] = (float) SteinGfxOptions.POST_EDGE_FLOOR;
+        B[11] = hdr ? (float) SteinGfxOptions.HDR_BOOST : 0f;
+        threshold(12);
+        AT[1 + 2 * levels] = block(align);
         blocks.commitRing();
     }
 
-    private static long block(
-            int align,
-            float tx,
-            float ty,
-            float tz,
-            float tw,
-            float p0,
-            float p1,
-            float p2,
-            float p3,
-            float q0,
-            float q1,
-            float q2,
-            float q3) {
+    private static void texel(int readW, int readH, int drawW, int drawH) {
+        B[0] = 1f / readW;
+        B[1] = 1f / readH;
+        B[2] = 1f / drawW;
+        B[3] = 1f / drawH;
+    }
+
+    /**
+     * The adaptive threshold at {@code B[at..at+3]}: the lowest, the factor on the mean luma, the
+     * highest, and the mean's mipmap level.
+     */
+    private static void threshold(int at) {
+        B[at] = BLOOM_MIN_THRESHOLD;
+        B[at + 1] = BLOOM_MEAN_FACTOR;
+        B[at + 2] = BLOOM_MAX_THRESHOLD;
+        B[at + 3] = LUMA_MIPS - 1;
+    }
+
+    /** Writes {@link #B} as one block in the ring, clears it and returns the block's offset. */
+    private static long block(int align) {
         long at = blocks.reserve(BLOCK_BYTES, align);
         if (at == -2) {
             blocks.nextRegion();
             at = blocks.reserve(BLOCK_BYTES, align);
         }
         long p = blocks.address(at);
-        MemoryUtil.memPutFloat(p, tx);
-        MemoryUtil.memPutFloat(p + 4, ty);
-        MemoryUtil.memPutFloat(p + 8, tz);
-        MemoryUtil.memPutFloat(p + 12, tw);
-        MemoryUtil.memPutFloat(p + 16, p0);
-        MemoryUtil.memPutFloat(p + 20, p1);
-        MemoryUtil.memPutFloat(p + 24, p2);
-        MemoryUtil.memPutFloat(p + 28, p3);
-        MemoryUtil.memPutFloat(p + 32, q0);
-        MemoryUtil.memPutFloat(p + 36, q1);
-        MemoryUtil.memPutFloat(p + 40, q2);
-        MemoryUtil.memPutFloat(p + 44, q3);
+        for (int i = 0; i < B.length; i++) {
+            MemoryUtil.memPutFloat(p + 4L * i, B[i]);
+            B[i] = 0f;
+        }
         return at;
     }
 
@@ -461,7 +456,8 @@ public final class SteinPostFx {
                         "scene",
                         "bloom",
                         "depth",
-                        "handDepth");
+                        "handDepth",
+                        "average");
         luma = pipeline(dev, "post luma", vertex, "post_luma.frag", false, "src");
         SteinTexture lumaTexture =
                 dev.createTexture(
@@ -497,7 +493,7 @@ public final class SteinPostFx {
                         .ring(RING_REGIONS);
     }
 
-    /** A full-screen pipeline whose samplers take slots 0, 1, 2, 3 in the order given. */
+    /** A full-screen pipeline whose samplers take slots 0, 1, 2... in the order given. */
     private static SteinPipeline pipeline(
             SteinDevice dev,
             String name,

@@ -108,6 +108,9 @@ final class LensConfig {
     /** Smoothing of object outlines (where the depth breaks; textures stay sharp). */
     boolean smoothEdges = false;
 
+    /** HDR output (Vulkan with an HDR screen): lights brighter than the white of the menus. */
+    boolean hdr = false;
+
     void load(File file) {
         if (!file.isFile()) {
             save(file);
@@ -155,6 +158,7 @@ final class LensConfig {
             bloom = integer(o, "bloom", bloom, 0, 2);
             vividColors = bool(o, "vividColors", vividColors);
             smoothEdges = bool(o, "smoothEdges", smoothEdges);
+            hdr = bool(o, "hdr", hdr);
         } catch (Exception e) {
             Log.info("lens", file + " unreadable, using defaults: " + e);
         }
@@ -181,6 +185,9 @@ final class LensConfig {
         }
         if (LensOptions.SMOOTH_EDGES != null) {
             smoothEdges = Boolean.parseBoolean(LensOptions.SMOOTH_EDGES);
+        }
+        if (LensOptions.HDR != null) {
+            hdr = Boolean.parseBoolean(LensOptions.HDR);
         }
     }
 
@@ -216,6 +223,7 @@ final class LensConfig {
         o.addProperty("bloom", bloom);
         o.addProperty("vividColors", vividColors);
         o.addProperty("smoothEdges", smoothEdges);
+        o.addProperty("hdr", hdr);
         file.getAbsoluteFile().getParentFile().mkdirs();
         try (Writer w =
                 new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8)) {

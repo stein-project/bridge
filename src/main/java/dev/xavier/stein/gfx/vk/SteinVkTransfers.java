@@ -222,6 +222,20 @@ final class SteinVkTransfers {
             return;
         }
         SteinFormat f = t.desc().format;
+        if (f == SteinFormat.RGBA16F) {
+            // the screen with HDR output (a screenshot): through an RGBA8 copy, clipped at white
+            SteinTexture bytes8 =
+                    dev.createTexture(
+                            SteinTexture.Desc.target(
+                                    "readback", SteinFormat.RGBA8, t.width(), t.height()));
+            try {
+                copyTexture(dev, t, 0, bytes8, 0, t.width(), t.height());
+                readPixels(dev, bytes8, x, y, w, h, out);
+            } finally {
+                bytes8.destroy();
+            }
+            return;
+        }
         if (f != SteinFormat.RGBA8 && f != SteinFormat.BGRA8) {
             throw new IllegalArgumentException("readPixels supports RGBA8 and BGRA8 only: " + f);
         }

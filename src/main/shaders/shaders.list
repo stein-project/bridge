@@ -27,3 +27,4 @@ post_bloom_down.frag  frag     post_bloom_down.frag
 post_bloom_up.frag    frag     post_bloom_up.frag
 post_composite.frag   frag     post_composite.frag
 post_luma.frag        frag     post_luma.frag
+hdr_encode.frag       frag     hdr_encode.frag

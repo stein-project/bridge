@@ -13,6 +13,7 @@ import dev.xavier.stein.gfx.SteinBackend;
 import dev.xavier.stein.gfx.SteinCommands;
 import dev.xavier.stein.gfx.SteinDevice;
 import dev.xavier.stein.gfx.SteinFormat;
+import dev.xavier.stein.gfx.SteinHdr;
 import dev.xavier.stein.gfx.SteinRenderPass;
 import dev.xavier.stein.gfx.SteinRenderTarget;
 import dev.xavier.stein.gfx.SteinTexture;
@@ -299,18 +300,24 @@ public final class SteinGameFramebuffers {
         return fb.target;
     }
 
-    /** The window's framebuffer: ours, the size the game sees (Display.getWidth/getHeight). */
+    /**
+     * The window's framebuffer: ours, the size the game sees (Display.getWidth/getHeight); RGBA16F
+     * with HDR output ({@link SteinHdr}), so the lights above white reach the present.
+     */
     private static SteinRenderTarget screen() {
         int w = Math.max(1, Display.getWidth());
         int h = Math.max(1, Display.getHeight());
-        if (screen == null || screenColor.width() != w || screenColor.height() != h) {
+        SteinFormat format = SteinHdr.active() ? SteinFormat.RGBA16F : SteinFormat.RGBA8;
+        if (screen == null
+                || screenColor.width() != w
+                || screenColor.height() != h
+                || screenColor.desc().format != format) {
             if (screenColor != null) {
                 screenColor.destroy();
                 screenDepth.destroy();
             }
             SteinDevice dev = SteinDevice.get();
-            screenColor =
-                    dev.createTexture(SteinTexture.Desc.target("screen", SteinFormat.RGBA8, w, h));
+            screenColor = dev.createTexture(SteinTexture.Desc.target("screen", format, w, h));
             screenDepth =
                     dev.createTexture(
                             SteinTexture.Desc.target("screen depth", SteinFormat.DEPTH24, w, h));
@@ -323,10 +330,15 @@ public final class SteinGameFramebuffers {
         return screen;
     }
 
-    /** End of the frame: the screen goes to the window. */
+    /**
+     * End of the frame: the screen goes to the window (as scRGB with HDR output); then the HDR
+     * option is followed for the next frame.
+     */
     public static void present() {
-        SteinDevice.get().present(screen().color(0));
+        SteinTexture color = screen().color(0);
+        SteinDevice.get().present(SteinHdr.active() ? SteinHdr.encode(color) : color);
         SteinBackend.vulkanPresented();
+        SteinHdr.betweenFrames();
     }
 
     // ---- clear and read ----

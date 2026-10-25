@@ -8,10 +8,9 @@
 // Bloom, going down: each pixel of the half-size level averages 13 bilinear taps of the level above (five overlapping
 // 2x2 boxes: the middle one weighs half, the four corners an eighth each), wide enough that no pixel is skipped and
 // nothing shimmers as the camera moves.
-// FIRST (the scene into the first level): only what is brighter than a threshold passes, with a soft knee of params.y,
-// and each box is weighted by 1 / (1 + luma) so a single bright pixel cannot become a flickering blob. The threshold
-// follows the scene's mean luma (mipmap params2.x of `average`, its last): mean * params.z, between params.x and
-// params.w.
+// FIRST (the scene into the first level): only what is brighter than the light threshold (params, see post.glsl)
+// passes, with a soft knee of params2.x, and each box is weighted by 1 / (1 + luma) so a single bright pixel cannot
+// become a flickering blob.
 #include "common/post.glsl"
 layout(set = 0, binding = 1) uniform sampler2D src;
 #ifdef FIRST
@@ -32,10 +31,9 @@ vec3 box(vec3 a, vec3 b, vec3 c, vec3 d) {
 
 // By luma, not the brightest channel: the game's blue sky has a full blue channel and must not glow.
 vec3 bright(vec3 c) {
-    float mean = textureLod(average, vec2(0.5), params2.x).r;
-    float threshold = clamp(mean * params.z, params.x, params.w);
+    float threshold = lightThreshold(average, params);
     float l = luma(c);
-    float knee = params.y;
+    float knee = params2.x;
     float soft = clamp(l - threshold + knee, 0.0, 2.0 * knee);
     soft = soft * soft / (4.0 * knee + 1e-4);
     return c * (max(soft, l - threshold) / max(l, 1e-4));

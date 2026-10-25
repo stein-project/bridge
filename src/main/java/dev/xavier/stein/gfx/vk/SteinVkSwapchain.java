@@ -9,6 +9,7 @@
 package dev.xavier.stein.gfx.vk;
 
 import static org.lwjgl.glfw.GLFW.glfwGetFramebufferSize;
+import static org.lwjgl.vulkan.EXTSwapchainColorspace.VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT;
 import static org.lwjgl.vulkan.KHRSurface.VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
 import static org.lwjgl.vulkan.KHRSurface.VK_PRESENT_MODE_FIFO_KHR;
 import static org.lwjgl.vulkan.KHRSurface.VK_PRESENT_MODE_FIFO_RELAXED_KHR;
@@ -29,6 +30,7 @@ import static org.lwjgl.vulkan.VK10.VK_FILTER_LINEAR;
 import static org.lwjgl.vulkan.VK10.VK_FILTER_NEAREST;
 import static org.lwjgl.vulkan.VK10.VK_FORMAT_B8G8R8A8_UNORM;
 import static org.lwjgl.vulkan.VK10.VK_FORMAT_FEATURE_BLIT_DST_BIT;
+import static org.lwjgl.vulkan.VK10.VK_FORMAT_R16G16B16A16_SFLOAT;
 import static org.lwjgl.vulkan.VK10.VK_FORMAT_R8G8B8A8_UNORM;
 import static org.lwjgl.vulkan.VK10.VK_FORMAT_UNDEFINED;
 import static org.lwjgl.vulkan.VK10.VK_IMAGE_ASPECT_COLOR_BIT;
@@ -49,6 +51,7 @@ import static org.lwjgl.vulkan.VK10.vkGetPhysicalDeviceFormatProperties;
 
 import dev.xavier.stein.bridge.core.CoreOptions;
 import dev.xavier.stein.bridge.core.Log;
+import dev.xavier.stein.gfx.SteinHdr;
 
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.vulkan.VkCommandBuffer;
@@ -107,7 +110,11 @@ final class SteinVkSwapchain {
     private int width;
     private int height;
     private int format;
+    private int colorSpace;
     private boolean blitLinear;
+
+    /** Built for HDR output (scRGB, {@link SteinHdr}). */
+    private boolean hdr;
 
     private final long[] acquired = new long[FRAMES];
     private final long[] frameValue = new long[FRAMES];
@@ -142,6 +149,9 @@ final class SteinVkSwapchain {
             for (int i = 0; i < FRAMES; i++) {
                 acquired[i] = semaphore(stack);
             }
+            // whether the window offers HDR, known from the start (a minimized window builds no
+            // swapchain, and the option would stay unavailable)
+            surfaceFormat(stack);
         }
     }
 
@@ -160,7 +170,7 @@ final class SteinVkSwapchain {
         SteinVkDebug.frame();
         // the slot's previous frame must be done before its semaphore is used again
         device.waitValue(frameValue[slot], Long.MAX_VALUE);
-        if (stale || sizeChanged()) {
+        if (stale || hdr != SteinHdr.active() || sizeChanged()) {
             if (!recreate()) {
                 frameValue[slot] = device.submit(VK_NULL_HANDLE, 0, VK_NULL_HANDLE);
                 return;
@@ -334,7 +344,7 @@ final class SteinVkSwapchain {
                             .surface(surface)
                             .minImageCount(count)
                             .imageFormat(format)
-                            .imageColorSpace(0) // SRGB_NONLINEAR, as the window's OpenGL buffer
+                            .imageColorSpace(colorSpace)
                             .imageArrayLayers(1)
                             .imageUsage(
                                     VK_IMAGE_USAGE_TRANSFER_DST_BIT
@@ -369,8 +379,10 @@ final class SteinVkSwapchain {
                 images[i] = list.get(i);
                 presentReady[i] = semaphore(stack);
             }
-            // the screen is RGBA8: linear when scaling only if that format filters linearly
-            blitLinear = device.linearFilter(VK_FORMAT_R8G8B8A8_UNORM);
+            // the screen is RGBA8 (RGBA16F with HDR): linear when scaling only if it filters so
+            blitLinear =
+                    device.linearFilter(
+                            hdr ? VK_FORMAT_R16G16B16A16_SFLOAT : VK_FORMAT_R8G8B8A8_UNORM);
             stale = false;
             return true;
         }
@@ -378,7 +390,9 @@ final class SteinVkSwapchain {
 
     /**
      * BGRA8 or RGBA8 UNORM, like the window's OpenGL buffer (no sRGB conversion); otherwise any
-     * format that accepts the blit; {@code VK_FORMAT_UNDEFINED} if none does.
+     * format that accepts the blit; {@code VK_FORMAT_UNDEFINED} if none does. With HDR output on
+     * and offered, R16G16B16A16_SFLOAT in scRGB (EXTENDED_SRGB_LINEAR). Sets {@link #colorSpace}
+     * and {@link #hdr}, and tells {@link SteinHdr} whether the window offers scRGB.
      */
     private int surfaceFormat(MemoryStack stack) {
         IntBuffer n = stack.mallocInt(1);
@@ -386,6 +400,22 @@ final class SteinVkSwapchain {
         VkSurfaceFormatKHR.Buffer list = VkSurfaceFormatKHR.malloc(n.get(0), stack);
         vkGetPhysicalDeviceSurfaceFormatsKHR(device.physical(), surface, n, list);
         VkFormatProperties fp = VkFormatProperties.calloc(stack);
+        boolean scRgb = false;
+        for (VkSurfaceFormatKHR f : list) {
+            if (SteinVkInstance.colorSpaces
+                    && f.colorSpace() == VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT
+                    && f.format() == VK_FORMAT_R16G16B16A16_SFLOAT) {
+                vkGetPhysicalDeviceFormatProperties(device.physical(), f.format(), fp);
+                scRgb = (fp.optimalTilingFeatures() & VK_FORMAT_FEATURE_BLIT_DST_BIT) != 0;
+            }
+        }
+        SteinHdr.surfaceSupports(scRgb);
+        hdr = scRgb && SteinHdr.active();
+        if (hdr) {
+            colorSpace = VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT;
+            return VK_FORMAT_R16G16B16A16_SFLOAT;
+        }
+        colorSpace = 0; // SRGB_NONLINEAR, as the window's OpenGL buffer
         int fallback = VK_FORMAT_UNDEFINED;
         for (VkSurfaceFormatKHR f : list) {
             vkGetPhysicalDeviceFormatProperties(device.physical(), f.format(), fp);

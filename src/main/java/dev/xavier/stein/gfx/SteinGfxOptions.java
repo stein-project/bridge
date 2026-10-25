@@ -367,6 +367,26 @@ public final class SteinGfxOptions {
      */
     static final double POST_BLOOM_STRENGTH = Opt.decimal("steinbridge.gfx.postBloomStrength", 1.0);
 
+    /**
+     * {@code -Dsteinbridge.gfx.hdrPaperWhite=NITS}: with the Lens HDR output, how bright the game's
+     * white (HUD, menus, a white wall in daylight) is on the screen (default 200).
+     */
+    public static final double HDR_PAPER_WHITE =
+            Math.max(80.0, Opt.decimal("steinbridge.gfx.hdrPaperWhite", 200.0));
+
+    /**
+     * {@code -Dsteinbridge.gfx.hdrPeak=NITS}: with the Lens HDR output, the brightest the screen is
+     * asked for (default 1000).
+     */
+    public static final double HDR_PEAK =
+            Math.max(HDR_PAPER_WHITE, Opt.decimal("steinbridge.gfx.hdrPeak", 1000.0));
+
+    /**
+     * {@code -Dsteinbridge.gfx.hdrBoost=X}: with the Lens HDR output, a light source rises up to 1
+     * + X times the paper white (default 3).
+     */
+    static final double HDR_BOOST = Math.max(0.0, Opt.decimal("steinbridge.gfx.hdrBoost", 3.0));
+
     private static final Pattern GL_VERSION = Pattern.compile("^(\\d+\\.\\d+)");
 
     /** Cached F3 line; written and read on the render thread only. */

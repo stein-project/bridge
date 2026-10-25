@@ -9,15 +9,18 @@
 //  - edge smoothing only where the DEPTH breaks (an object's outline against what is behind it): textures keep every
 //    pixel sharp. A plane's depth is affine on the screen, so its second difference is ~0; at an outline it is about
 //    as large as the first difference. There the pixel is averaged along the edge (the luma gradient's normal).
-//  - bloom, added by "screen" (never past white);
-//  - colour: saturation and an S-shaped contrast curve.
+//  - colour: saturation and an S-shaped contrast curve;
+//  - bloom, added by "screen" (never past white); with HDR output, the lights (above the light threshold) rise up to
+//    1 + params2.w times the paper white and the bloom is added as it is.
 // params: x bloom strength (0 off), y saturation (1 unchanged), z contrast (0 unchanged), w edges (0 off).
-// params2: x debug (1: edges in red), y edge ratio, z smallest depth step that counts.
+// params2: x debug (1: edges in red), y edge ratio, z smallest depth step that counts, w HDR boost (0: SDR).
+// params3: the light threshold (post.glsl).
 #include "common/post.glsl"
 layout(set = 0, binding = 1) uniform sampler2D scene;
 layout(set = 0, binding = 2) uniform sampler2D bloom;
 layout(set = 0, binding = 3) uniform sampler2D depth;      // the world's, before the game cleared it for the hand
 layout(set = 0, binding = 4) uniform sampler2D handDepth;  // after the hand: 1 wherever there is no hand
+layout(set = 0, binding = 5) uniform sampler2D average;    // the scene's mean luma in its last mipmap
 layout(location = 0) out vec4 color;
 
 // The hand where it was drawn, the world elsewhere (the hand's depth is from its own projection: always a step).
@@ -71,13 +74,17 @@ void main() {
         }
         c = smoothEdge(p, uv, c);
     }
-    if (params.x > 0.0) {
-        vec3 b = min(finite(texture(bloom, uv).rgb) * params.x, vec3(1.0));
-        c = 1.0 - (1.0 - min(c, vec3(1.0))) * (1.0 - b);
-    }
     float l = luma(c);
     c = max(mix(vec3(l), c, params.y), vec3(0.0));
     c = min(c, vec3(1.0));
     c = mix(c, c * c * (3.0 - 2.0 * c), params.z);
+    vec3 b = params.x > 0.0 ? finite(texture(bloom, uv).rgb) * params.x : vec3(0.0);
+    if (params2.w > 0.0) {
+        float t = lightThreshold(average, params3);
+        c *= 1.0 + params2.w * smoothstep(t, 1.0, luma(c));
+        c += b;
+    } else if (params.x > 0.0) {
+        c = 1.0 - (1.0 - c) * (1.0 - min(b, vec3(1.0)));
+    }
     color = vec4(c, base.a);
 }

@@ -12,6 +12,7 @@ import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.bridge.engine.ChunkKeep;
 import dev.xavier.stein.bridge.engine.Visuals;
 import dev.xavier.stein.gfx.SteinBackend;
+import dev.xavier.stein.gfx.SteinHdr;
 import dev.xavier.stein.gfx.SteinPostFx;
 
 import net.minecraft.client.Minecraft;
@@ -233,6 +234,7 @@ final class VideoOptions {
                 () -> c.smoothEdges,
                 () -> c.smoothEdges = !c.smoothEdges,
                 post);
+        toggle("steinlens.hdr", () -> c.hdr, () -> c.hdr = !c.hdr, SteinHdr::available);
     }
 
     private void buildSky() {

@@ -16,6 +16,7 @@ listed at the end.
 - `-Dsteinlens.bloom=0|1|2`: overrides the file's bloom (off, low, high) without saving (default: unset, the file decides).
 - `-Dsteinlens.vividColors=true|false`: overrides the file's vivid colours setting without saving (default: unset, the file decides).
 - `-Dsteinlens.smoothEdges=true|false`: overrides the file's edge smoothing setting without saving (default: unset, the file decides).
+- `-Dsteinlens.hdr=true|false`: overrides the file's HDR output setting without saving (default: unset, the file decides).
 - `-Dsteinlens.debug=true`: zoom state (every 2 s and on every change) and custom items lookups, recomputed choices and enchantment version steps (every 2 s) in the log (default: off).
 
 ## CoreOptions
@@ -232,6 +233,9 @@ listed at the end.
 - `-Dsteinbridge.gfx.postEdgeRatio=R`: the edge smoothing treats a pixel as an outline when the depth's second difference passes R times its first difference (default 0.5).
 - `-Dsteinbridge.gfx.postEdgeFloor=D`: the smallest depth step (in the depth buffer's 0..1) the edge smoothing counts as an outline, above its rounding (default 4e-7).
 - `-Dsteinbridge.gfx.postBloomStrength=X`: multiplies the strength of the Lens bloom, for tuning (default 1).
+- `-Dsteinbridge.gfx.hdrPaperWhite=NITS`: with the Lens HDR output, how bright the game's white (HUD, menus, a white wall in daylight) is on the screen (default 200).
+- `-Dsteinbridge.gfx.hdrPeak=NITS`: with the Lens HDR output, the brightest the screen is asked for (default 1000).
+- `-Dsteinbridge.gfx.hdrBoost=X`: with the Lens HDR output, a light source rises up to 1 + X times the paper white (default 3).
 
 ## SteinGlOptions
 
