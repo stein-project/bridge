@@ -26,7 +26,7 @@ listed at the end.
 - `-Dsteinbridge.diag.background=true`: test bench only; the window appears minimized and without focus (default: off).
 - `-Dsteinbridge.gfx.glDebug=true`: asks GLFW for an OpenGL debug context (default: off).
 - `-Dsteinbridge.perf.timeSwap=true`: times the buffer swap and the event queue and prints the worst case and average per second (default: off).
-- `-Dsteinbridge.perf.frameStats=true`: every 5 seconds, prints the frame count, the average, p50 and p99 frame times and the 1% low (the average FPS of the slowest 1% of frames), to compare the graphics APIs on the bench (default: off).
+- `-Dsteinbridge.perf.frameStats=true`: every 5 seconds, prints the frame count, the average, p50 and p99 frame times and the 1% low (the average FPS of the slowest 1% of frames), plus the average of the frames that ran a game tick and of the others, and how many of the slowest frames had a tick, to compare the graphics APIs on the bench (default: off).
 
 ## DiagOptions
 
