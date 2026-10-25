@@ -16,6 +16,7 @@ import static dev.xavier.stein.gfx.SteinPlayerPoseModels.*;
 
 import dev.xavier.stein.bridge.engine.GLMatrix;
 import dev.xavier.stein.bridge.engine.Mat4;
+import dev.xavier.stein.bridge.engine.NameCache;
 import dev.xavier.stein.bridge.engine.OldAnimations;
 import dev.xavier.stein.bridge.engine.Visuals;
 import dev.xavier.stein.bridge.hooks.GameHooks;
@@ -31,7 +32,6 @@ import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemArmor;
 import net.minecraft.item.ItemStack;
-import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.ResourceLocation;
 
 import org.lwjgl.opengl.GL11;
@@ -280,7 +280,8 @@ final class SteinPlayerPoseCollect {
                     deathFallProgress(deathTime, pt)
                             * ((RendererLivingEntity) render).getDeathMaxRotation(p);
         } else {
-            String plain = EnumChatFormatting.getTextWithoutFormattingCodes(name);
+            // as rotateCorpse (NameCache.stripFormatting: without a '§' the name is already plain)
+            String plain = NameCache.stripFormatting(name);
             if (plain != null
                     && ("Dinnerbone".equals(plain) || "Grumm".equals(plain))
                     && p.isWearing(CAPE_PART)) {
