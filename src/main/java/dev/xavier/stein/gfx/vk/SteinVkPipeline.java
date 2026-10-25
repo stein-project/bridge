@@ -358,7 +358,7 @@ final class SteinVkPipeline extends SteinPipeline {
      * OpenGL).
      */
     long handle(SteinVkRenderTarget.Formats formats) {
-        if (formats == lastFormats) {
+        if (formats == lastFormats && !destroyed) {
             return lastHandle; // the same target as the last draw: no lookup
         }
         if (!valid()) {

@@ -138,7 +138,6 @@ final class SteinVkCommands extends SteinCommands {
     private float biasFactor;
     private float biasUnits;
 
-    /** The line width last emitted (the game's, read at each draw: glLineWidth is global). */
     private boolean dynDirty = true;
 
     SteinVkCommands(SteinVkDevice device, SteinRenderPass pass) {
