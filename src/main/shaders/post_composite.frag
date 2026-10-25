@@ -9,12 +9,16 @@
 //  - edge smoothing only where the DEPTH breaks (an object's outline against what is behind it): textures keep every
 //    pixel sharp. A plane's depth is affine on the screen, so its second difference is ~0; at an outline it is about
 //    as large as the first difference. There the pixel is averaged along the edge (the luma gradient's normal).
+//    It fades out with distance (params4.z blocks, from half of it): far away the outlines are dense and averaging
+//    them only makes the distance look soft.
 //  - colour: saturation and an S-shaped contrast curve;
-//  - bloom, added by "screen" (never past white); with HDR output, the lights (above the light threshold) rise up to
-//    1 + params2.w times the paper white and the bloom is added as it is.
+//  - bloom, added by "screen" (never past white). With HDR output the world gets darker (a power of params4.x on
+//    its colour: Stein's gloomy look) and, only in the dark, a light rises above the paper white (up to 1 +
+//    params2.w times) where the pixel is bright AND the bloom says the area around it glows (params4.y times the
+//    bloom's luma): a white speck in sand or a flower is not a light and stays as it is. The bloom is added as is.
 // params: x bloom strength (0 off), y saturation (1 unchanged), z contrast (0 unchanged), w edges (0 off).
 // params2: x debug (1: edges in red), y edge ratio, z smallest depth step that counts, w HDR boost (0: SDR).
-// params3: the light threshold (post.glsl).
+// params3: the light threshold (post.glsl). params4: x HDR darkness power, y glow gain, z edge distance (blocks).
 #include "common/post.glsl"
 layout(set = 0, binding = 1) uniform sampler2D scene;
 layout(set = 0, binding = 2) uniform sampler2D bloom;
@@ -67,21 +71,30 @@ void main() {
     vec2 uv = gl_FragCoord.xy * texel.xy;
     vec4 base = texelFetch(scene, p, 0);
     vec3 c = finite(base.rgb);
-    if (params.w > 0.0 && outline(p, textureSize(depth, 0) - 1)) {
+    ivec2 last = textureSize(depth, 0) - 1;
+    if (params.w > 0.0 && outline(p, last)) {
+        // distance from the depth (the game's near plane is 0.05; the far plane barely counts)
+        float z = 0.05 / max(1.0 - depthAt(p, last), 1e-7);
+        float near = 1.0 - smoothstep(params4.z * 0.5, params4.z, z);
         if (params2.x > 0.0) {
-            color = vec4(1.0, 0.0, 0.0, base.a);
+            color = vec4(near, 0.0, 0.0, base.a);
             return;
         }
-        c = smoothEdge(p, uv, c);
+        c = mix(c, smoothEdge(p, uv, c), near);
     }
     float l = luma(c);
     c = max(mix(vec3(l), c, params.y), vec3(0.0));
     c = min(c, vec3(1.0));
     c = mix(c, c * c * (3.0 - 2.0 * c), params.z);
-    vec3 b = params.x > 0.0 ? finite(texture(bloom, uv).rgb) * params.x : vec3(0.0);
+    vec3 glow = finite(texture(bloom, uv).rgb);
+    vec3 b = glow * params.x;
     if (params2.w > 0.0) {
-        float t = lightThreshold(average, params3);
-        c *= 1.0 + params2.w * smoothstep(t, 1.0, luma(c));
+        float mean = textureLod(average, vec2(0.5), params3.w).r;
+        float dark = 1.0 - smoothstep(0.15, 0.35, mean);
+        float lit = smoothstep(lightThreshold(average, params3), 1.0, luma(c));
+        float area = clamp(luma(glow) * params4.y, 0.0, 1.0);
+        c = pow(c, vec3(params4.x));
+        c *= 1.0 + params2.w * dark * lit * area;
         c += b;
     } else if (params.x > 0.0) {
         c = 1.0 - (1.0 - c) * (1.0 - min(b, vec3(1.0)));

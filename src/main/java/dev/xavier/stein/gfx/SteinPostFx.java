@@ -58,11 +58,21 @@ public final class SteinPostFx {
     private static final int LUMA_SIZE = 64;
 
     private static final int LUMA_MIPS = 7;
+
+    /**
+     * How much bloom luma around a pixel makes it a full light with HDR output: a lone bright texel
+     * spreads to almost nothing, a glowing block to well past this.
+     */
+    private static final float HDR_GLOW_GAIN = 4f;
+
+    /** The edge smoothing fades out between half of this and this, in blocks. */
+    private static final float EDGE_DISTANCE = 32f;
+
     private static final float VIVID_SATURATION = 1.15f;
     private static final float VIVID_CONTRAST = 0.12f;
 
-    /** Bytes of one pass's Post block (four vec4). */
-    private static final int BLOCK_BYTES = 64;
+    /** Bytes of one pass's Post block (five vec4). */
+    private static final int BLOCK_BYTES = 80;
 
     /** One block being written (reused: no allocation per frame). */
     private static final float[] B = new float[BLOCK_BYTES / 4];
@@ -197,10 +207,11 @@ public final class SteinPostFx {
             // no hand this frame (no clear before it): the depth now is the world's
             dev.copyTarget(game, world, true);
         }
-        if (level != BLOOM_OFF) {
+        if (level != BLOOM_OFF || hdr) {
             BLOOM.size(dev, w, h);
         }
-        int levels = level == BLOOM_OFF ? 0 : BLOOM.levels();
+        // with HDR the bloom is always built: it says where the lights are, even when not added
+        int levels = level == BLOOM_OFF && !hdr ? 0 : BLOOM.levels();
         writeBlocks(dev, w, h, levels, level, colors, smooth, hdr);
         if (levels > 0 || hdr) {
             draw(dev, "post luma", lumaTarget, luma, AT[0], sceneColor, null, null, null);
@@ -342,7 +353,7 @@ public final class SteinPostFx {
         }
         texel(w, h, w, h);
         B[4] =
-                levels == 0
+                levels == 0 || level == BLOOM_OFF
                         ? 0f
                         : BLOOM_STRENGTH[level]
                                 * (float) SteinGfxOptions.POST_BLOOM_STRENGTH
@@ -355,6 +366,9 @@ public final class SteinPostFx {
         B[10] = (float) SteinGfxOptions.POST_EDGE_FLOOR;
         B[11] = hdr ? (float) SteinGfxOptions.HDR_BOOST : 0f;
         threshold(12);
+        B[16] = hdr ? (float) SteinGfxOptions.HDR_DARKNESS : 1f;
+        B[17] = HDR_GLOW_GAIN;
+        B[18] = EDGE_DISTANCE;
         AT[1 + 2 * levels] = block(align);
         blocks.commitRing();
     }
