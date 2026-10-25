@@ -250,6 +250,7 @@ listed at the end.
 - `-Dsteinbridge.gfx.vkGameCopy=false` (diagnostics): the game's textures are not copied into the renderer's texture arrays; entities and the HUD draw with the game's texture itself (default: copied).
 - `-Dsteinbridge.gfx.vkDebugDrawsAtSec=N` (diagnostics): logs every draw of one frame, N seconds after startup — pass, pipeline state, textures and the start of the uniforms (default: off).
 - `-Dsteinbridge.gfx.vkSyncEachPass=true` (diagnostics): submits and waits for the GPU at the end of every pass, so nothing the CPU writes afterwards can reach a pass already recorded (default: off).
+- `-Dsteinbridge.gfx.vkPipelineStats=true` (diagnostics): every 5 s, how many draw pipelines were compiled on the render thread and how long they took (total and worst): the hitches a new pipeline costs in the middle of a frame (default: off).
 
 ## Removed options
 
