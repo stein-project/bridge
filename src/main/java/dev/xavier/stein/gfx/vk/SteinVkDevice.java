@@ -206,6 +206,12 @@ public final class SteinVkDevice extends SteinDevice {
     private final long pipelineCache;
     private final Path pipelineCacheFile;
     private SteinVkCommands openPass;
+
+    /** The pass with its render open, possibly already ended (see {@code SteinVkCommands#end}). */
+    private SteinVkCommands renderOwner;
+
+    private final SteinVkDynamic dynamic = new SteinVkDynamic();
+
     private boolean destroyed;
 
     private record Pending(long value, VkCommandBuffer cmd, Runnable action) {}
@@ -589,6 +595,7 @@ public final class SteinVkDevice extends SteinDevice {
                             "command buffer");
                     c = new VkCommandBuffer(pp.get(0), device);
                 }
+                dynamic.forget(); // a begun command buffer holds no dynamic state yet
                 check(
                         vkBeginCommandBuffer(
                                 c,
@@ -611,7 +618,24 @@ public final class SteinVkDevice extends SteinDevice {
         if (openPass != null) {
             openPass.suspend();
         }
+        if (renderOwner != null) {
+            renderOwner.suspend(); // the render left open by the last pass
+        }
         return cmd();
+    }
+
+    /** The dynamic state the command buffer holds, for {@code c}. */
+    SteinVkDynamic dynamic(VkCommandBuffer c) {
+        return dynamic.of(c);
+    }
+
+    /** The pass whose render is open now (its target's images are attachments), or null. */
+    SteinVkCommands renderOwner() {
+        return renderOwner;
+    }
+
+    void renderOwnerIs(SteinVkCommands pass) {
+        renderOwner = pass;
     }
 
     /** The value that the submission being recorded will signal. */
@@ -637,6 +661,9 @@ public final class SteinVkDevice extends SteinDevice {
     long submit(long wait, int waitStage, long signal) {
         if (openPass != null) {
             openPass.suspendForSubmit();
+        }
+        if (renderOwner != null) {
+            renderOwner.suspendForSubmit();
         }
         VkCommandBuffer c = cmd();
         check(vkEndCommandBuffer(c), "end command buffer");

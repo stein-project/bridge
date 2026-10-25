@@ -139,8 +139,6 @@ final class SteinVkCommands extends SteinCommands {
     private float biasUnits;
 
     /** The line width last emitted (the game's, read at each draw: glLineWidth is global). */
-    private float lineWidth = -1f;
-
     private boolean dynDirty = true;
 
     SteinVkCommands(SteinVkDevice device, SteinRenderPass pass) {
@@ -164,10 +162,19 @@ final class SteinVkCommands extends SteinCommands {
             viewport[3] = t.height();
         }
         device.passOpened(this);
-        if ((pass.colorLoad == SteinRenderPass.Load.CLEAR
-                        || pass.depthLoad == SteinRenderPass.Load.CLEAR)
-                && t.width() > 0
-                && t.height() > 0) {
+        boolean clears =
+                pass.colorLoad == SteinRenderPass.Load.CLEAR
+                        || pass.depthLoad == SteinRenderPass.Load.CLEAR;
+        SteinVkCommands owner = device.renderOwner();
+        if (owner != null && owner.target == t && !clears) {
+            // the previous pass left its render open on this same target and nothing clears: this
+            // pass keeps drawing into it (no end and begin of the render, no transitions)
+            owner.rendering = false;
+            rendering = true;
+            begunOnce = true;
+            dynDirty = true;
+            device.renderOwnerIs(this);
+        } else if (clears && t.width() > 0 && t.height() > 0) {
             // clears now, like OpenGL: a copy or read before the first draw sees the cleared target
             ensureRendering(current());
         }
@@ -199,6 +206,10 @@ final class SteinVkCommands extends SteinCommands {
     private void ensureRendering(VkCommandBuffer c) {
         if (rendering) {
             return;
+        }
+        SteinVkCommands owner = device.renderOwner();
+        if (owner != null) {
+            owner.suspend(); // one render open at a time: the other pass's target goes to rest
         }
         boolean first = !begunOnce;
         SteinVkTexture[] colors = target.colors();
@@ -260,6 +271,7 @@ final class SteinVkCommands extends SteinCommands {
         rendering = true;
         begunOnce = true;
         dynDirty = true;
+        device.renderOwnerIs(this);
     }
 
     /**
@@ -279,6 +291,19 @@ final class SteinVkCommands extends SteinCommands {
             target.depthTexture().toRest(c);
         }
         rendering = false;
+        device.renderOwnerIs(null);
+    }
+
+    /**
+     * Whether this pass's render is open on {@code t} (a colour or depth attachment of its target).
+     */
+    boolean drawsInto(SteinVkTexture t) {
+        return rendering && isAttachment(t);
+    }
+
+    /** The target this pass draws into. */
+    SteinVkRenderTarget target() {
+        return target;
     }
 
     /**
@@ -349,9 +374,13 @@ final class SteinVkCommands extends SteinCommands {
         if (slot < 0 || slot >= MAX_SLOTS) {
             throw new IllegalArgumentException("texture slot out of range: " + slot);
         }
-        textures[slot] = texture;
-        samplers[slot] = (SteinVkSampler) sampler;
-        descDirty = true;
+        SteinVkSampler smp = (SteinVkSampler) sampler;
+        if (textures[slot] != texture || samplers[slot] != smp) {
+            textures[slot] = texture;
+            samplers[slot] = smp;
+            descDirty =
+                    true; // only a change rewrites the descriptors: the same texture again is free
+        }
     }
 
     @Override
@@ -360,10 +389,14 @@ final class SteinVkCommands extends SteinCommands {
         if (slot < 0 || slot >= MAX_SLOTS) {
             throw new IllegalArgumentException("uniforms slot out of range: " + slot);
         }
-        uniforms[slot] = buffer;
-        uniformOffset[slot] = offset;
-        uniformSize[slot] = size;
-        descDirty = true;
+        if (uniforms[slot] != buffer
+                || uniformOffset[slot] != offset
+                || uniformSize[slot] != size) {
+            uniforms[slot] = buffer;
+            uniformOffset[slot] = offset;
+            uniformSize[slot] = size;
+            descDirty = true;
+        }
     }
 
     @Override
@@ -372,10 +405,12 @@ final class SteinVkCommands extends SteinCommands {
         if (slot < 0 || slot >= MAX_SLOTS) {
             throw new IllegalArgumentException("storage slot out of range: " + slot);
         }
-        storage[slot] = buffer;
-        storageOffset[slot] = offset;
-        storageSize[slot] = size;
-        descDirty = true;
+        if (storage[slot] != buffer || storageOffset[slot] != offset || storageSize[slot] != size) {
+            storage[slot] = buffer;
+            storageOffset[slot] = offset;
+            storageSize[slot] = size;
+            descDirty = true;
+        }
     }
 
     /**
@@ -413,6 +448,20 @@ final class SteinVkCommands extends SteinCommands {
                         gameSlots &= ~(1L << slot);
                     }
                     SteinVkTexture t = bound == null ? null : SteinVkDevice.resolve(bound);
+                    SteinVkCommands owner = device.renderOwner();
+                    if (t != null && owner != null && owner.drawsInto(t)) {
+                        if (owner == this) {
+                            throw new IllegalStateException(
+                                    "pass '"
+                                            + pass.name
+                                            + "' samples its own target ('"
+                                            + t.desc().name
+                                            + "')");
+                        }
+                        // another pass left its render open on this texture: close it, the texture
+                        // rests
+                        owner.suspend();
+                    }
                     if (t == null) {
                         t = device.defaults.emptyTexture(b.arrayed());
                     } else if (isAttachment(t)) {
@@ -514,36 +563,45 @@ final class SteinVkCommands extends SteinCommands {
     }
 
     private void applyDynamic(VkCommandBuffer c) {
-        try (MemoryStack stack = MemoryStack.stackPush()) {
-            // same row order as OpenGL (see SteinVkDevice): the viewport and scissor numbers apply
-            // unchanged
-            VkViewport.Buffer v = VkViewport.calloc(1, stack);
-            v.get(0)
-                    .x(viewport[0])
-                    .y(viewport[1])
-                    .width(viewport[2])
-                    .height(viewport[3])
-                    .minDepth(0f)
-                    .maxDepth(1f);
-            vkCmdSetViewport(c, 0, v);
-            VkRect2D.Buffer s = VkRect2D.calloc(1, stack);
-            if (scissor == null) {
-                s.get(0).offset().set(0, 0);
-                s.get(0).extent().set(target.width(), target.height());
-            } else {
-                int x = Math.max(0, scissor[0]);
-                int y = Math.max(0, scissor[1]);
-                s.get(0).offset().set(x, y);
-                s.get(0)
-                        .extent()
-                        .set(
-                                Math.max(0, scissor[2] - (x - scissor[0])),
-                                Math.max(0, scissor[3] - (y - scissor[1])));
+        SteinVkDynamic d = device.dynamic(c);
+        // same row order as OpenGL (see SteinVkDevice): the viewport and scissor numbers apply
+        // unchanged
+        if (d.viewport(viewport[0], viewport[1], viewport[2], viewport[3])) {
+            try (MemoryStack stack = MemoryStack.stackPush()) {
+                VkViewport.Buffer v = VkViewport.calloc(1, stack);
+                v.get(0)
+                        .x(viewport[0])
+                        .y(viewport[1])
+                        .width(viewport[2])
+                        .height(viewport[3])
+                        .minDepth(0f)
+                        .maxDepth(1f);
+                vkCmdSetViewport(c, 0, v);
             }
-            vkCmdSetScissor(c, 0, s);
         }
-        vkCmdSetDepthBias(c, biasOn ? biasUnits : 0f, 0f, biasOn ? biasFactor : 0f);
-        lineWidth = -1f;
+        int sx = 0;
+        int sy = 0;
+        int sw = target.width();
+        int sh = target.height();
+        if (scissor != null) {
+            sx = Math.max(0, scissor[0]);
+            sy = Math.max(0, scissor[1]);
+            sw = Math.max(0, scissor[2] - (sx - scissor[0]));
+            sh = Math.max(0, scissor[3] - (sy - scissor[1]));
+        }
+        if (d.scissor(sx, sy, sw, sh)) {
+            try (MemoryStack stack = MemoryStack.stackPush()) {
+                VkRect2D.Buffer s = VkRect2D.calloc(1, stack);
+                s.get(0).offset().set(sx, sy);
+                s.get(0).extent().set(sw, sh);
+                vkCmdSetScissor(c, 0, s);
+            }
+        }
+        float units = biasOn ? biasUnits : 0f;
+        float factor = biasOn ? biasFactor : 0f;
+        if (d.bias(units, factor)) {
+            vkCmdSetDepthBias(c, units, 0f, factor);
+        }
         dynDirty = false;
     }
 
@@ -581,9 +639,8 @@ final class SteinVkCommands extends SteinCommands {
         }
         if (device.wideLines) {
             float w = Math.max(1f, SteinGlTrack.lineWidth());
-            if (w != lineWidth) {
+            if (device.dynamic(c).lineWidth(w)) {
                 vkCmdSetLineWidth(c, w);
-                lineWidth = w;
             }
         }
         if (vbDirty != 0) {
@@ -785,12 +842,14 @@ final class SteinVkCommands extends SteinCommands {
     @Override
     public void end() {
         check();
-        suspend();
         ended = true;
         device.passEnded(this);
         if (SteinVkOptions.SYNC_EACH_PASS) {
             // diagnostics: the GPU runs the pass before the CPU writes anything else
+            suspend();
             device.waitValue(device.recordingValue(), Long.MAX_VALUE);
         }
+        // otherwise the render stays open: the next pass on the same target keeps it, anything
+        // else (a copy, another target, the submission) closes it
     }
 }

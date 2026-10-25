@@ -121,6 +121,13 @@ final class SteinVkPipeline extends SteinPipeline {
     private boolean push;
 
     private final Map<SteinVkRenderTarget.Formats, Long> variants = new HashMap<>();
+
+    /**
+     * The last target's formats and the pipeline made for them: a draw usually repeats the last.
+     */
+    private SteinVkRenderTarget.Formats lastFormats;
+
+    private long lastHandle = VK_NULL_HANDLE;
     private long computePipeline = VK_NULL_HANDLE;
     private boolean valid;
     private boolean destroyed;
@@ -351,6 +358,9 @@ final class SteinVkPipeline extends SteinPipeline {
      * OpenGL).
      */
     long handle(SteinVkRenderTarget.Formats formats) {
+        if (formats == lastFormats) {
+            return lastHandle; // the same target as the last draw: no lookup
+        }
         if (!valid()) {
             return VK_NULL_HANDLE;
         }
@@ -369,6 +379,8 @@ final class SteinVkPipeline extends SteinPipeline {
             }
             variants.put(formats, p);
         }
+        lastFormats = formats;
+        lastHandle = p;
         return p;
     }
 
