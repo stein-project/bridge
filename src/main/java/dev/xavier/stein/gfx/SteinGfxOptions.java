@@ -390,16 +390,8 @@ public final class SteinGfxOptions {
     static final boolean HDR_PEAK_SET = System.getProperty("steinbridge.gfx.hdrPeak") != null;
 
     /**
-     * {@code -Dsteinbridge.gfx.hdrDarkness=P}: with the Lens HDR output, the world's colours are
-     * raised to this power, darker in the shadows and half-tones (Stein's gloomy look; 1 leaves
-     * them; default 1.35).
-     */
-    static final double HDR_DARKNESS =
-            Math.max(1.0, Opt.decimal("steinbridge.gfx.hdrDarkness", 1.35));
-
-    /**
-     * {@code -Dsteinbridge.gfx.hdrBoost=X}: with the Lens HDR output, a light source rises up to 1
-     * + X times the paper white (default 3).
+     * {@code -Dsteinbridge.gfx.hdrBoost=X}: with the Lens HDR output, a light source gets up to 1 +
+     * X times brighter than without HDR, in linear light (default 3).
      */
     static final double HDR_BOOST = Math.max(0.0, Opt.decimal("steinbridge.gfx.hdrBoost", 3.0));
 

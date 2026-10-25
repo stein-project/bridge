@@ -19,6 +19,16 @@ float lightThreshold(sampler2D average, vec4 t) {
     return clamp(textureLod(average, vec2(0.5), t.w).r * t.y, t.x, t.z);
 }
 
+// The game's colours are sRGB-encoded; light adds and multiplies only in linear. Past 1 both curves go on as the same
+// power, so a light above white decodes and encodes back to itself (hdr_encode.frag decodes the same way).
+vec3 srgbToLinear(vec3 c) {
+    return mix(c / 12.92, pow((c + 0.055) / 1.055, vec3(2.4)), step(vec3(0.04045), c));
+}
+
+vec3 linearToSrgb(vec3 l) {
+    return mix(l * 12.92, 1.055 * pow(l, vec3(1.0 / 2.4)) - 0.055, step(vec3(0.0031308), l));
+}
+
 float luma(vec3 c) {
     return dot(c, vec3(0.2126, 0.7152, 0.0722));
 }

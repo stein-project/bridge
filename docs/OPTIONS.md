@@ -234,8 +234,7 @@ listed at the end.
 - `-Dsteinbridge.gfx.postBloomStrength=X`: multiplies the strength of the Lens bloom, for tuning (default 1).
 - `-Dsteinbridge.gfx.hdrPaperWhite=NITS`: with the Lens HDR output, how bright the game's white (HUD, menus, a white wall in daylight) is on the screen, over the Lens calibration (default: unset, the calibration's; 200 without one).
 - `-Dsteinbridge.gfx.hdrPeak=NITS`: with the Lens HDR output, the brightest the screen is asked for, over the Lens calibration (default: unset, the calibration's; 1000 without one).
-- `-Dsteinbridge.gfx.hdrDarkness=P`: with the Lens HDR output, the world's colours are raised to this power, darker in the shadows and half-tones (Stein's gloomy look; 1 leaves them; default 1.35).
-- `-Dsteinbridge.gfx.hdrBoost=X`: with the Lens HDR output, a light source rises up to 1 + X times the paper white (default 3).
+- `-Dsteinbridge.gfx.hdrBoost=X`: with the Lens HDR output, a light source gets up to 1 + X times brighter than without HDR, in linear light (default 3).
 
 ## SteinGlOptions
 

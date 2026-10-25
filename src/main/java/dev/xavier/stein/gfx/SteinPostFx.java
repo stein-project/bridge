@@ -350,7 +350,6 @@ public final class SteinPostFx {
         B[10] = (float) SteinGfxOptions.POST_EDGE_FLOOR;
         B[11] = hdr ? (float) SteinGfxOptions.HDR_BOOST : 0f;
         threshold(12);
-        B[16] = hdr ? (float) SteinGfxOptions.HDR_DARKNESS : 1f;
         B[17] = HDR_GLOW_GAIN;
         B[18] = EDGE_DISTANCE;
         AT[1 + 2 * levels] = block(align);

@@ -11,13 +11,13 @@
 //    as large as the first difference. There the pixel is averaged along the edge (the luma gradient's normal).
 //    It fades out with distance (params4.z blocks, from half of it): far away the outlines are dense and averaging
 //    them only makes the distance look soft.
-//  - bloom, added by "screen" (never past white). With HDR output the world gets darker (a power of params4.x on
-//    its colour: Stein's gloomy look) and, only in the dark, a light rises above the paper white (up to 1 +
-//    params2.w times) where the pixel is bright AND the bloom says the area around it glows (params4.y times the
-//    bloom's luma): a white speck in sand or a flower is not a light and stays as it is. The bloom is added as is.
+//  - bloom, added by "screen" (never past white). With HDR output the image stays the one without it, and only in
+//    the dark a light rises above the paper white, in linear light, up to 1 + params2.w times, where the pixel is
+//    bright AND the bloom says the area around it glows (params4.y times the bloom's luma): a white speck in sand or
+//    a flower is not a light and stays as it is.
 // params: x bloom strength (0 off), w edges (0 off).
 // params2: x debug (1: edges in red), y edge ratio, z smallest depth step that counts, w HDR boost (0: SDR).
-// params3: the light threshold (post.glsl). params4: x HDR darkness power, y glow gain, z edge distance (blocks).
+// params3: the light threshold (post.glsl). params4: y glow gain, z edge distance (blocks).
 #include "common/post.glsl"
 layout(set = 0, binding = 1) uniform sampler2D scene;
 layout(set = 0, binding = 2) uniform sampler2D bloom;
@@ -83,17 +83,16 @@ void main() {
     }
     c = min(c, vec3(1.0));
     vec3 glow = finite(texture(bloom, uv).rgb);
-    vec3 b = glow * params.x;
+    float lit = smoothstep(lightThreshold(average, params3), 1.0, luma(c));
+    if (params.x > 0.0) {
+        c = 1.0 - (1.0 - c) * (1.0 - min(glow * params.x, vec3(1.0)));
+    }
     if (params2.w > 0.0) {
+        // the same image as without HDR; only a light gets stronger, in linear light
         float mean = textureLod(average, vec2(0.5), params3.w).r;
         float dark = 1.0 - smoothstep(0.15, 0.35, mean);
-        float lit = smoothstep(lightThreshold(average, params3), 1.0, luma(c));
         float area = clamp(luma(glow) * params4.y, 0.0, 1.0);
-        c = pow(c, vec3(params4.x));
-        c *= 1.0 + params2.w * dark * lit * area;
-        c += b;
-    } else if (params.x > 0.0) {
-        c = 1.0 - (1.0 - c) * (1.0 - min(b, vec3(1.0)));
+        c = linearToSrgb(srgbToLinear(c) * (1.0 + params2.w * dark * lit * area));
     }
     color = vec4(c, base.a);
 }
