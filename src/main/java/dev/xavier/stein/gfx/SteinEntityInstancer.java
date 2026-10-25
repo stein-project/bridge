@@ -146,6 +146,13 @@ public final class SteinEntityInstancer {
     private static boolean capture;
     private static int[] capList = new int[64];
     private static float[] capMat = new float[64 * 16];
+
+    /** Per recorded part, the deferred state read for its model ({@link #CAP_STATE} floats). */
+    private static float[] capState = new float[64 * 9];
+
+    /** Texture layer, colour (r, g, b, a) and damage red (r, g, b, a) of a recorded part. */
+    static final int CAP_STATE = 9;
+
     private static int capN;
 
     /**
@@ -172,13 +179,30 @@ public final class SteinEntityInstancer {
         return capMat;
     }
 
+    /** The recorded states, {@link #CAP_STATE} floats per part (see {@link #record}). */
+    static float[] capturedStates() {
+        return capState;
+    }
+
     private static void record(int list, float[] m, int o) {
         if (capN == capList.length) {
             capList = Arrays.copyOf(capList, capN * 2);
             capMat = Arrays.copyOf(capMat, capN * 2 * 16);
+            capState = Arrays.copyOf(capState, capN * 2 * CAP_STATE);
         }
         capList[capN] = list;
         System.arraycopy(m, o, capMat, capN * 16, 16);
+        // the state the deferred part takes (SteinDeferredModel.beginModel read it for the model)
+        int s = capN * CAP_STATE;
+        capState[s] = SteinDeferredModel.curLayer;
+        capState[s + 1] = SteinDeferredModel.curR;
+        capState[s + 2] = SteinDeferredModel.curG;
+        capState[s + 3] = SteinDeferredModel.curB;
+        capState[s + 4] = SteinDeferredModel.curA;
+        capState[s + 5] = SteinDeferredModel.curOvR;
+        capState[s + 6] = SteinDeferredModel.curOvG;
+        capState[s + 7] = SteinDeferredModel.curOvB;
+        capState[s + 8] = SteinDeferredModel.curOvA;
         capN++;
     }
 

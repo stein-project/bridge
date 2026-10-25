@@ -108,6 +108,9 @@ final class SteinPlayerPoseCollect {
     private static boolean bow;
     private static boolean hurtNow;
 
+    /** The armor, its overlay and glint take the damage color (1.7 red armor, see readModel). */
+    private static boolean armorHurt;
+
     /** The draw state read from the game (see {@link #checkDrawState}). */
     private static float alphaRef;
 
@@ -355,14 +358,16 @@ final class SteinPlayerPoseCollect {
         heldRight = gameModel.heldItemRight;
         sneak = gameModel.isSneak;
         bow = gameModel.aimedBow;
-        // 1.7 animations (OldAnimations): the 1.7 block and the red armor on damage are hooks in
-        // the game's path (ModelBiped, LayerHeldItem, renderLayers), which the pose here does not
-        // redo. A player blocking, or in armor and flashing from damage, goes through there for as
-        // long as it lasts.
+        // 1.7 animations (OldAnimations): the 1.7 block is a hook in the game's path (ModelBiped,
+        // LayerHeldItem), which the pose here does not redo: a player blocking goes through there
+        // for as long as it lasts. The red armor on damage is done here (armorHurt).
         hurtNow = ((EntityLivingBase) e).hurtTime > 0 || deathTime > 0;
-        if (OldAnimations.gamePose(heldRight == 3, hurtNow && wearsArmor(e))) {
+        if (OldAnimations.gamePose(heldRight == 3)) {
             return reject(R_OLD_ANIMATIONS);
         }
+        // the armor layer between the game's setBrightness and unsetBrightness, combining the
+        // damage color (OldAnimations.combineTextures): base, leather overlay and glint flush
+        armorHurt = hurtNow && OldAnimations.redArmor();
         return true;
     }
 
@@ -542,7 +547,7 @@ final class SteinPlayerPoseCollect {
                             lmU,
                             lmV,
                             lit,
-                            false,
+                            armorHurt,
                             null);
                     ((Render) render)
                             .bindTexture(
@@ -569,11 +574,23 @@ final class SteinPlayerPoseCollect {
                             lmU,
                             lmV,
                             lit,
-                            false,
+                            armorHurt,
                             null);
                     leather |= 1 << s;
                 } else {
-                    state(st, tex & 0xFFFF, alphaRef, lr, lg, lb, la, lmU, lmV, lit, false, null);
+                    state(
+                            st,
+                            tex & 0xFFFF,
+                            alphaRef,
+                            lr,
+                            lg,
+                            lb,
+                            la,
+                            lmU,
+                            lmV,
+                            lit,
+                            armorHurt,
+                            null);
                 }
                 lastR = lr;
                 lastG = lg;
@@ -639,7 +656,7 @@ final class SteinPlayerPoseCollect {
                         lmU,
                         lmV,
                         unlit,
-                        false,
+                        armorHurt,
                         t);
                 jKey[s0 + ST_GLINT + i] = gkey;
             }
@@ -841,8 +858,8 @@ final class SteinPlayerPoseCollect {
         s[o + 13] = lmV;
         s[o + 14] = flags;
         s[o + 15] = 0f;
-        // The damage red (setDoRenderBrightness): only on the body; the player's layers do not
-        // combine it.
+        // The damage red (setDoRenderBrightness): on the body; on the armor only with the 1.7 red
+        // armor (the other layers of a player do not combine it).
         s[o + 16] = hurt ? 1f : 0f;
         s[o + 17] = 0f;
         s[o + 18] = 0f;
@@ -853,16 +870,6 @@ final class SteinPlayerPoseCollect {
     private static int opaqueKey(int packed, boolean depthTest) {
         return SteinEntityDeferred.poseKey(
                 packed >>> 16, false, 0, 0, 0, 0, depthTest, GL11.GL_LEQUAL, true);
-    }
-
-    /** Something worn (armor, pumpkin, skull): the armor layer has something to paint red. */
-    private static boolean wearsArmor(Object e) {
-        for (int slot = 0; slot < 4; slot++) {
-            if (((EntityLivingBase) e).getCurrentArmor(slot) != null) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private static boolean reject(int why) {

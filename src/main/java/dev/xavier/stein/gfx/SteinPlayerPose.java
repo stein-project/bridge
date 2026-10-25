@@ -406,7 +406,11 @@ public final class SteinPlayerPose {
                     continue;
                 }
                 LayerRenderer layer = (LayerRenderer) list.get(i);
-                boolean bright = renderer.setBrightness(player, pt, layer.shouldCombineTextures());
+                // through SteinGameState, as the patched renderLayers: the deferred parts read the
+                // damage red from there (deadmau5's ears combine it)
+                boolean bright =
+                        SteinGameState.setBrightness(
+                                renderer, player, pt, layer.shouldCombineTextures());
                 boolean record = i == 1 && held == H_RECORD;
                 try {
                     if (record) {
@@ -432,7 +436,7 @@ public final class SteinPlayerPose {
                     ArmorGlint.flushDeferred();
                 } finally {
                     if (bright) {
-                        renderer.unsetBrightness(); // otherwise the damage red stays on
+                        SteinGameState.unsetBrightness(renderer); // otherwise the red stays on
                     }
                 }
             }

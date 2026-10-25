@@ -138,6 +138,7 @@ final class SteinPlayerPoseCheck {
                 break;
             }
             float err = error(w.mats, part * 16, game, c * 16);
+            SteinPlayerPoseStateCheck.compare(st, c);
             checkParts++;
             partsHere++;
             if (err == 0f) {
@@ -629,6 +630,7 @@ final class SteinPlayerPoseCheck {
         printPoseCheck();
         printLayerCheck();
         printStateCheck();
+        SteinPlayerPoseStateCheck.print();
     }
 
     private static void printPoseCheck() {

@@ -152,12 +152,19 @@ public final class OldAnimations {
 
     /**
      * For Stein GFX's own player pose (SteinPlayerPose.collect): does this player need the game's
-     * path, which goes through the hooks here? Blocking (heldItemRight 3) with the 1.7 block, or
-     * with the damage color (hurt or dying, with something worn; the caller checks) with the red
-     * armor — it only lasts as long as the damage flash.
+     * path, which goes through the hooks here? Blocking (heldItemRight 3) with the 1.7 block.
      */
-    public static boolean gamePose(boolean blocking, boolean hurt) {
-        return blocking && active(BLOCK_POSE) || hurt && active(ARMOR_HURT);
+    public static boolean gamePose(boolean blocking) {
+        return blocking && active(BLOCK_POSE);
+    }
+
+    /**
+     * Red armor on damage ({@link #ARMOR_HURT}) in effect: Stein GFX's own player pose paints the
+     * armor, its leather overlay and its glint with the damage color, as the game's renderLayers
+     * does through {@link #combineTextures}.
+     */
+    public static boolean redArmor() {
+        return active(ARMOR_HURT);
     }
 
     // ---- first person (ItemRenderer.renderItemInFirstPerson, bfn.a(F)V) ----
