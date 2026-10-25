@@ -9,6 +9,7 @@
 package dev.xavier.stein.bridge.hooks;
 
 import dev.xavier.stein.bridge.core.Log;
+import dev.xavier.stein.bridge.engine.FrameTime;
 import dev.xavier.stein.gfx.SteinGfxSelfTest;
 
 import org.lwjgl.input.Keyboard;
@@ -114,6 +115,7 @@ public final class GameHooks {
 
     /** After each runTick (ave.s), in runGameLoop. */
     public static void tickEnd() {
+        FrameTime.ticked();
         if (SINK != null) {
             try {
                 SINK.tickEnd();

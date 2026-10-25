@@ -63,7 +63,8 @@ public final class CoreOptions {
     /**
      * {@code -Dsteinbridge.perf.frameStats=true}: every 5 seconds, prints the frame count, the
      * average, p50 and p99 frame times and the 1% low (the average FPS of the slowest 1% of
-     * frames), to compare the graphics APIs on the bench (default: off).
+     * frames), plus the average of the frames that ran a game tick and of the others, and how many
+     * of the slowest frames had a tick, to compare the graphics APIs on the bench (default: off).
      */
     public static final boolean FRAME_STATS = Opt.flag("steinbridge.perf.frameStats");
 }

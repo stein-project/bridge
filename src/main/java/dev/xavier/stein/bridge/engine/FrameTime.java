@@ -41,26 +41,46 @@ public final class FrameTime {
     private static int windowCount;
     private static long windowStart;
 
+    /** The frame being drawn, as a flight recorder event (only while a recording asks for it). */
+    private static FrameEvent event = new FrameEvent();
+
     /** In Display.update, once per frame. */
     public static void tick() {
+        boolean ticked = tickInFrame;
+        tickInFrame = false;
+        if (event.isEnabled()) {
+            event.tick = ticked;
+            event.commit();
+            event = new FrameEvent();
+            event.begin();
+        }
         long now = System.nanoTime();
         if (last != 0L) {
             DURATION[head] = now - last;
             END[head] = now;
             head = (head + 1) & (RING - 1);
             if (STATS) {
-                stats(now, now - last);
+                stats(now, now - last, ticked);
             }
         }
         last = now;
     }
 
-    private static void stats(long now, long frame) {
+    /** A game tick ran in the frame being drawn (GameHooks.tickEnd), for the statistics. */
+    private static boolean tickInFrame;
+
+    /** After each game tick: the frame that ran it is marked in the statistics. */
+    public static void ticked() {
+        tickInFrame = true;
+    }
+
+    private static void stats(long now, long frame, boolean ticked) {
         if (windowStart == 0L) {
             windowStart = now;
         }
         if (windowCount < window.length) {
-            window[windowCount++] = frame;
+            // the lowest bit says whether the frame ran a game tick (sorting by duration keeps it)
+            window[windowCount++] = frame << 1 | (ticked ? 1L : 0L);
         }
         if (now - windowStart < STATS_NANOS) {
             return;
@@ -69,26 +89,42 @@ public final class FrameTime {
         int n = windowCount;
         Arrays.sort(f, 0, n);
         long sum = 0L;
+        long tickSum = 0L;
+        int ticks = 0;
         for (int i = 0; i < n; i++) {
-            sum += f[i];
+            sum += f[i] >> 1;
+            if ((f[i] & 1L) != 0) {
+                tickSum += f[i] >> 1;
+                ticks++;
+            }
         }
         int slow = Math.max(1, n / 100);
         long slowSum = 0L;
+        int slowTicks = 0;
         for (int i = n - slow; i < n; i++) {
-            slowSum += f[i];
+            slowSum += f[i] >> 1;
+            slowTicks += (int) (f[i] & 1L);
         }
+        long otherSum = sum - tickSum;
+        int others = n - ticks;
         Log.info(
                 "frames",
                 "%d frames in %.1f s: fps %.0f | avg %.3f ms, p50 %.3f, p99 %.3f, max %.3f | 1%% low"
-                        + " %.0f fps",
+                        + " %.0f fps | with a tick %d frames avg %.3f ms, without %.3f ms; %d of the"
+                        + " slowest %d had a tick",
                 n,
                 (now - windowStart) / 1e9,
                 n * 1e9 / (now - windowStart),
-                sum / NANOS_PER_MILLI / n,
-                f[n / 2] / NANOS_PER_MILLI,
-                f[Math.min(n - 1, n * 99 / 100)] / NANOS_PER_MILLI,
-                f[n - 1] / NANOS_PER_MILLI,
-                1e9 * slow / slowSum);
+                (sum / NANOS_PER_MILLI) / n,
+                (f[n / 2] >> 1) / NANOS_PER_MILLI,
+                (f[Math.min(n - 1, n * 99 / 100)] >> 1) / NANOS_PER_MILLI,
+                (f[n - 1] >> 1) / NANOS_PER_MILLI,
+                1e9 * slow / slowSum,
+                ticks,
+                ticks > 0 ? tickSum / NANOS_PER_MILLI / ticks : 0.0,
+                others > 0 ? otherSum / NANOS_PER_MILLI / others : 0.0,
+                slowTicks,
+                slow);
         windowCount = 0;
         windowStart = now;
     }
