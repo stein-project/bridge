@@ -276,6 +276,12 @@ final class SteinVkSwapchain {
      * window has no area (minimized): nothing to present until it comes back.
      */
     private boolean recreate() {
+        // minimized: no area to present to, so the surface is not even asked (the query each frame
+        // was most of the Vulkan frame's native time)
+        glfwGetFramebufferSize(window, sizeW, sizeH);
+        if (sizeW[0] <= 0 || sizeH[0] <= 0) {
+            return false;
+        }
         try (MemoryStack stack = MemoryStack.stackPush()) {
             VkSurfaceCapabilitiesKHR caps = VkSurfaceCapabilitiesKHR.calloc(stack);
             int r = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device.physical(), surface, caps);
