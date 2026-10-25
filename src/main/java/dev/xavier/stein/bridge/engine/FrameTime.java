@@ -41,18 +41,18 @@ public final class FrameTime {
     private static int windowCount;
     private static long windowStart;
 
-    /** The frame being drawn, as a flight recorder event (only while a recording asks for it). */
-    private static FrameEvent event = new FrameEvent();
+    /**
+     * The frames go to a flight recording too, when the running Java has the recorder (a full JDK;
+     * not the Stein Client's runtime, where FrameRecording must never load).
+     */
+    private static final boolean RECORDING = ModuleLayer.boot().findModule("jdk.jfr").isPresent();
 
     /** In Display.update, once per frame. */
     public static void tick() {
         boolean ticked = tickInFrame;
         tickInFrame = false;
-        if (event.isEnabled()) {
-            event.tick = ticked;
-            event.commit();
-            event = new FrameEvent();
-            event.begin();
+        if (RECORDING) {
+            FrameRecording.frame(ticked);
         }
         long now = System.nanoTime();
         if (last != 0L) {
