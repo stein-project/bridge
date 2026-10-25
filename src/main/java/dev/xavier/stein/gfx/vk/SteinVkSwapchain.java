@@ -40,6 +40,7 @@ import static org.lwjgl.vulkan.VK10.VK_IMAGE_USAGE_TRANSFER_DST_BIT;
 import static org.lwjgl.vulkan.VK10.VK_NULL_HANDLE;
 import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_TRANSFER_BIT;
 import static org.lwjgl.vulkan.VK10.VK_SHARING_MODE_EXCLUSIVE;
+import static org.lwjgl.vulkan.VK10.VK_SUCCESS;
 import static org.lwjgl.vulkan.VK10.vkCmdBlitImage;
 import static org.lwjgl.vulkan.VK10.vkCreateSemaphore;
 import static org.lwjgl.vulkan.VK10.vkDestroySemaphore;
@@ -115,6 +116,9 @@ final class SteinVkSwapchain {
     private boolean vsync = true;
     private boolean stale = true;
     private int modeLogged = -1;
+
+    /** The last surface query was refused (logged once per refusal). */
+    private boolean capsRefused;
 
     /** The window's size, asked once per frame (reused: no allocation per frame). */
     private final int[] sizeW = new int[1];
@@ -217,7 +221,9 @@ final class SteinVkSwapchain {
                 1,
                 1,
                 VK_IMAGE_LAYOUT_UNDEFINED,
-                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                // after the presentation engine: chained to the acquire wait (transfer stage)
+                VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
         int sw = screen.width();
         int sh = screen.height();
         try (MemoryStack stack = MemoryStack.stackPush()) {
@@ -272,11 +278,25 @@ final class SteinVkSwapchain {
      * window has no area (minimized): nothing to present until it comes back.
      */
     private boolean recreate() {
+        // minimized: no area to present to, so the surface is not even asked (the query each frame
+        // was most of the Vulkan frame's native time)
+        glfwGetFramebufferSize(window, sizeW, sizeH);
+        if (sizeW[0] <= 0 || sizeH[0] <= 0) {
+            return false;
+        }
         try (MemoryStack stack = MemoryStack.stackPush()) {
             VkSurfaceCapabilitiesKHR caps = VkSurfaceCapabilitiesKHR.calloc(stack);
-            SteinVkDevice.check(
-                    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device.physical(), surface, caps),
-                    "surface capabilities");
+            int r = vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device.physical(), surface, caps);
+            if (r != VK_SUCCESS) {
+                // a minimized window with the display off or the session locked: some drivers
+                // refuse to describe its surface. Nothing to present now; the next frame retries.
+                if (!capsRefused) {
+                    capsRefused = true;
+                    Log.warn("gfx", "vulkan: the window's surface is not available (" + r + ")");
+                }
+                return false;
+            }
+            capsRefused = false;
             int[] fw = new int[1];
             int[] fh = new int[1];
             glfwGetFramebufferSize(window, fw, fh);

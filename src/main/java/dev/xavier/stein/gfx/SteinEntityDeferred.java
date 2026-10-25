@@ -524,11 +524,12 @@ public final class SteinEntityDeferred {
             int[] verts,
             int[] ref,
             long iblob,
+            float[] data,
             double[] fix,
             long vblob,
             int dynCount) {
         return SteinDeferredRetained.emitRetainedBatch(
-                gs, n, dyn, verts, ref, iblob, fix, vblob, dynCount);
+                gs, n, dyn, verts, ref, iblob, data, fix, vblob, dynCount);
     }
 
     static void retainedLightmap() {

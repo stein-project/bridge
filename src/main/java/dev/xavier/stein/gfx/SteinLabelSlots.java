@@ -8,6 +8,10 @@
 
 package dev.xavier.stein.gfx;
 
+import net.minecraft.util.ChatComponentText;
+import net.minecraft.util.EnumChatFormatting;
+import net.minecraft.util.IChatComponent;
+
 /**
  * Per entity, the last text of its label and the assemblies of the passes: a table of slots (open
  * addressing by the entity's identity) that drops the entities that stopped appearing in the name
@@ -55,7 +59,16 @@ final class SteinLabelSlots {
         long stamp;
         final Text name = new Text();
         final Text score = new Text();
+
+        /** The last plain name text and formatting code, and the formatted name made of them. */
+        String nameRaw;
+
+        String nameCode;
+        String nameFormatted;
     }
+
+    private static final boolean NAME_CACHE = SteinGfxOptions.NAME_TEXT_CACHE;
+    private static final boolean NAME_CHECK = NAME_CACHE && SteinGfxOptions.NAME_TEXT_CHECK;
 
     private static Slot[] slots = new Slot[1024];
     private static int slotCount;
@@ -118,6 +131,52 @@ final class SteinLabelSlots {
         }
         slots = t;
         slotCount = n;
+    }
+
+    /** Whether {@code -Dsteinbridge.gfx.nameTextCheck=true} is on (for the report). */
+    static boolean checkingNames() {
+        return NAME_CHECK;
+    }
+
+    /**
+     * {@code component.getFormattedText()} for the entity's name, as the same String object as the
+     * last frame when the text did not change: then {@link #text} keeps the entry by identity,
+     * without comparing the characters, and nothing is allocated.
+     *
+     * <p>Only for a ChatComponentText (the exact class) without siblings — what the game's
+     * getDisplayName and a mod's plain text give. Its iterator yields only the component itself, so
+     * getFormattedText is exactly its style's formatting code, the text and the reset code; both
+     * are still asked of the component every frame and compared with the last ones, so any change
+     * (team prefix, a mod's new text, style) builds the String again. Anything else goes through
+     * getFormattedText as before.
+     */
+    static String formatted(Slot slot, Object component) {
+        IChatComponent c = (IChatComponent) component;
+        if (!NAME_CACHE || c.getClass() != ChatComponentText.class || !c.getSiblings().isEmpty()) {
+            return c.getFormattedText();
+        }
+        String code = c.getChatStyle().getFormattingCode();
+        String raw = c.getUnformattedTextForChat();
+        if (code == null || raw == null) {
+            return c.getFormattedText();
+        }
+        String s = slot.nameFormatted;
+        if (s == null
+                || !(raw == slot.nameRaw || raw.equals(slot.nameRaw))
+                || !(code == slot.nameCode || code.equals(slot.nameCode))) {
+            s = code + raw + EnumChatFormatting.RESET;
+            slot.nameRaw = raw;
+            slot.nameCode = code;
+            slot.nameFormatted = s;
+        }
+        if (NAME_CHECK) {
+            if (s.equals(c.getFormattedText())) {
+                SteinLabelStats.nameSame++;
+            } else {
+                SteinLabelStats.nameDifferent++;
+            }
+        }
+        return s;
     }
 
     /**

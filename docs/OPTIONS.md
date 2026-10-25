@@ -26,6 +26,7 @@ listed at the end.
 - `-Dsteinbridge.diag.background=true`: test bench only; the window appears minimized and without focus (default: off).
 - `-Dsteinbridge.gfx.glDebug=true`: asks GLFW for an OpenGL debug context (default: off).
 - `-Dsteinbridge.perf.timeSwap=true`: times the buffer swap and the event queue and prints the worst case and average per second (default: off).
+- `-Dsteinbridge.perf.frameStats=true`: every 5 seconds, prints the frame count, the average, p50 and p99 frame times and the 1% low (the average FPS of the slowest 1% of frames), plus the average of the frames that ran a game tick and of the others, and how many of the slowest frames had a tick, to compare the graphics APIs on the bench (default: off).
 
 ## DiagOptions
 
@@ -178,7 +179,7 @@ listed at the end.
 `dev.xavier.stein.gfx.SteinGfxOptions`
 
 - `-Dsteinbridge.gfx.passStateCheck=true` (diagnostics): on every tracked pass, the queries to the driver, compared with what was tracked at opening and with the game's state at closing; counts and prints the divergences.
-- `-Dsteinbridge.gfx.gpuPassTiming=true` (diagnostics): GPU time of each pass (OpenGL timestamps), read a few frames later and printed every 5 s.
+- `-Dsteinbridge.gfx.gpuPassTiming=true` (diagnostics): GPU time of each pass (OpenGL or Vulkan timestamps), read a few frames later and printed every 5 s.
 - `-Dsteinbridge.gfx.recordFrameCheck=true` (diagnostics): on one frame in 300, each command is described at recording and again at replay, compared one by one, and the resources it uses are checked in the driver at replay time (buffer, texture, sampler and framebuffer still exist).
 - `-Dsteinbridge.gfx.frameSubmitStats=true` (diagnostics): submissions to the driver per frame and the reason (and the caller) of each submission outside the end of the frame, every 5 s.
 - `-Dsteinbridge.gfx.passTiming=true`: (diagnostics) measures the CPU time to open and close each pass and prints it periodically (default: off).
@@ -193,6 +194,10 @@ listed at the end.
 - `-Dsteinbridge.gfx.gpuHeldItemCheck=...`: (diagnostics) compares the GPU held item with the game's (default: off).
 - `-Dsteinbridge.gfx.gpuLabel=...`: name labels on the GPU (default: on).
 - `-Dsteinbridge.gfx.gpuLabelCheck=...`: (diagnostics) compares the GPU name labels with the game's (default: off).
+- `-Dsteinbridge.gfx.nameTextCache=...`: the GPU label keeps each entity's formatted name while its plain text and formatting code stay the same (default: on).
+- `-Dsteinbridge.gfx.nameTextCheck=...`: (diagnostics) compares every kept formatted name with the game's getFormattedText (default: off).
+- `-Dsteinbridge.gfx.labelBackgroundCache=...`: the GPU label finds its resident background by size instead of hashing the quad every time (default: on).
+- `-Dsteinbridge.gfx.labelBackgroundCheck=...`: (diagnostics) compares every background found by size with the quad lookup (default: off).
 - `-Dsteinbridge.gfx.ownTextCache=...`: Stein's own text cache (default: on).
 - `-Dsteinbridge.gfx.particles=false`: the particles drawn call by call, as the game does: no fast particle path and no recorded particle pass (default: on).
 - `-Dsteinbridge.gfx.particleCheck=...`: (diagnostics) checks the fast particle path against the game's (default: off).
@@ -218,6 +223,7 @@ listed at the end.
 - `-Dsteinbridge.gfx.retainTilesCheck=...`: (diagnostics) checks the retained tiles against the game's renderer (default: off).
 - `-Dsteinbridge.gfx.retainTilesCheckEvery=...`: frames between retained tile checks (default 30).
 - `-Dsteinbridge.gfx.retainTilesStats=...`: (diagnostics) prints only the retained tile numbers (default: off).
+- `-Dsteinbridge.gfx.retainTilesReplayCheck=...`: (diagnostics) checks every re-emitted retained tile against the plain computation (corrected matrices and group lookups) and prints the mismatches (default: off).
 - `-Dsteinbridge.gfx.retainTilesPredict=false`: the retained tiles read the state for every block instead of predicting it between blocks of a sequence; only the exact value `false` turns the prediction off (default: on).
 
 ## SteinGlOptions
@@ -244,6 +250,7 @@ listed at the end.
 - `-Dsteinbridge.gfx.vkGameCopy=false` (diagnostics): the game's textures are not copied into the renderer's texture arrays; entities and the HUD draw with the game's texture itself (default: copied).
 - `-Dsteinbridge.gfx.vkDebugDrawsAtSec=N` (diagnostics): logs every draw of one frame, N seconds after startup — pass, pipeline state, textures and the start of the uniforms (default: off).
 - `-Dsteinbridge.gfx.vkSyncEachPass=true` (diagnostics): submits and waits for the GPU at the end of every pass, so nothing the CPU writes afterwards can reach a pass already recorded (default: off).
+- `-Dsteinbridge.gfx.vkPipelineStats=true` (diagnostics): every 5 s, how many draw pipelines were compiled on the render thread and how long they took (total and worst): the hitches a new pipeline costs in the middle of a frame (default: off).
 
 ## Removed options
 

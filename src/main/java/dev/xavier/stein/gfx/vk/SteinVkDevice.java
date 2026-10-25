@@ -185,6 +185,10 @@ public final class SteinVkDevice extends SteinDevice {
     final int depth24;
 
     final boolean multiDrawIndirect;
+
+    /** Timestamp queries can be reset from the CPU (Vulkan 1.2 hostQueryReset). */
+    final boolean hostQueryReset;
+
     final int maxDrawIndirectCount;
 
     /** How many bindings a push descriptor set accepts (above that the pipeline uses the pool). */
@@ -206,6 +210,12 @@ public final class SteinVkDevice extends SteinDevice {
     private final long pipelineCache;
     private final Path pipelineCacheFile;
     private SteinVkCommands openPass;
+
+    /** The pass with its render open, possibly already ended (see {@code SteinVkCommands#end}). */
+    private SteinVkCommands renderOwner;
+
+    private final SteinVkDynamic dynamic = new SteinVkDynamic();
+
     private boolean destroyed;
 
     private record Pending(long value, VkCommandBuffer cmd, Runnable action) {}
@@ -285,6 +295,7 @@ public final class SteinVkDevice extends SteinDevice {
                         "vulkan: no VK_EXT_depth_clip_control: the near half of OpenGL's"
                                 + " NDC depth (-1 to 1) is lost");
             }
+            hostQueryReset = v12Q.hostQueryReset();
             multiDrawIndirect = has.multiDrawIndirect();
             logicOp = has.logicOp();
             wideLines = has.wideLines();
@@ -304,6 +315,9 @@ public final class SteinVkDevice extends SteinDevice {
                             .sType$Default()
                             .timelineSemaphore(true)
                             .drawIndirectCount(v12Q.drawIndirectCount())
+                            // resetting timestamp queries from the CPU (gpuPassTiming): a reset
+                            // command is not allowed inside a render, and passes keep theirs open
+                            .hostQueryReset(v12Q.hostQueryReset())
                             .pNext(dynOn.address());
             VkPhysicalDeviceFeatures on =
                     VkPhysicalDeviceFeatures.calloc(stack)
@@ -503,6 +517,11 @@ public final class SteinVkDevice extends SteinDevice {
         return device;
     }
 
+    /** The graphics queue's family. */
+    int family() {
+        return family;
+    }
+
     VkPhysicalDevice physical() {
         return physical;
     }
@@ -589,6 +608,7 @@ public final class SteinVkDevice extends SteinDevice {
                             "command buffer");
                     c = new VkCommandBuffer(pp.get(0), device);
                 }
+                dynamic.forget(); // a begun command buffer holds no dynamic state yet
                 check(
                         vkBeginCommandBuffer(
                                 c,
@@ -611,7 +631,24 @@ public final class SteinVkDevice extends SteinDevice {
         if (openPass != null) {
             openPass.suspend();
         }
+        if (renderOwner != null) {
+            renderOwner.suspend(); // the render left open by the last pass
+        }
         return cmd();
+    }
+
+    /** The dynamic state the command buffer holds, for {@code c}. */
+    SteinVkDynamic dynamic(VkCommandBuffer c) {
+        return dynamic.of(c);
+    }
+
+    /** The pass whose render is open now (its target's images are attachments), or null. */
+    SteinVkCommands renderOwner() {
+        return renderOwner;
+    }
+
+    void renderOwnerIs(SteinVkCommands pass) {
+        renderOwner = pass;
     }
 
     /** The value that the submission being recorded will signal. */
@@ -637,6 +674,9 @@ public final class SteinVkDevice extends SteinDevice {
     long submit(long wait, int waitStage, long signal) {
         if (openPass != null) {
             openPass.suspendForSubmit();
+        }
+        if (renderOwner != null) {
+            renderOwner.suspendForSubmit();
         }
         VkCommandBuffer c = cmd();
         check(vkEndCommandBuffer(c), "end command buffer");
@@ -897,6 +937,7 @@ public final class SteinVkDevice extends SteinDevice {
         vkDeviceWaitIdle(device);
         destroyed = true;
         defaults.destroy();
+        SteinVkGpuTiming.destroy(this);
         completedCache = Long.MAX_VALUE;
         reclaim();
         while (!retired.isEmpty()) {

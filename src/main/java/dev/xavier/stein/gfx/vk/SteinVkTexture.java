@@ -195,8 +195,17 @@ final class SteinVkTexture extends SteinTexture {
         // only discards when the drawing view is the whole image: the other levels and layers
         // keep what they had
         if (discard && desc.mips == 1 && desc.layers == 1) {
+            // discarded, but the previous users of the image (in its tracked layout) finish first
             SteinVkBarriers.layout(
-                    c, image, aspect, 0, desc.mips, desc.layers, VK_IMAGE_LAYOUT_UNDEFINED, to);
+                    c,
+                    image,
+                    aspect,
+                    0,
+                    desc.mips,
+                    desc.layers,
+                    VK_IMAGE_LAYOUT_UNDEFINED,
+                    to,
+                    layout);
             layout = to;
         } else {
             toLayout(c, to);

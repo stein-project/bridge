@@ -121,6 +121,13 @@ final class SteinVkPipeline extends SteinPipeline {
     private boolean push;
 
     private final Map<SteinVkRenderTarget.Formats, Long> variants = new HashMap<>();
+
+    /**
+     * The last target's formats and the pipeline made for them: a draw usually repeats the last.
+     */
+    private SteinVkRenderTarget.Formats lastFormats;
+
+    private long lastHandle = VK_NULL_HANDLE;
     private long computePipeline = VK_NULL_HANDLE;
     private boolean valid;
     private boolean destroyed;
@@ -351,11 +358,15 @@ final class SteinVkPipeline extends SteinPipeline {
      * OpenGL).
      */
     long handle(SteinVkRenderTarget.Formats formats) {
+        if (formats == lastFormats && !destroyed) {
+            return lastHandle; // the same target as the last draw: no lookup
+        }
         if (!valid()) {
             return VK_NULL_HANDLE;
         }
         Long p = variants.get(formats);
         if (p == null) {
+            long t0 = SteinVkOptions.PIPELINE_STATS ? System.nanoTime() : 0L;
             try {
                 p = createGraphics(formats);
             } catch (RuntimeException e) {
@@ -367,9 +378,46 @@ final class SteinVkPipeline extends SteinPipeline {
                                 + e.getMessage());
                 p = VK_NULL_HANDLE;
             }
+            if (SteinVkOptions.PIPELINE_STATS) {
+                compiled(desc.name, System.nanoTime() - t0);
+            }
             variants.put(formats, p);
         }
+        lastFormats = formats;
+        lastHandle = p;
         return p;
+    }
+
+    // ---- compile statistics (vkPipelineStats) ----
+
+    private static int compiledCount;
+    private static long compiledNanos;
+    private static long compiledWorst;
+    private static String compiledWorstName = "";
+    private static long compiledReportAt = System.nanoTime();
+
+    private static void compiled(String name, long nanos) {
+        compiledCount++;
+        compiledNanos += nanos;
+        if (nanos > compiledWorst) {
+            compiledWorst = nanos;
+            compiledWorstName = name;
+        }
+        long now = System.nanoTime();
+        if (now - compiledReportAt >= 5_000_000_000L) {
+            Log.info(
+                    "gfx",
+                    String.format(
+                            "vulkan: %d pipelines compiled in 5 s, %.2f ms in all, worst %.2f ms (%s)",
+                            compiledCount,
+                            compiledNanos / 1e6,
+                            compiledWorst / 1e6,
+                            compiledWorstName));
+            compiledCount = 0;
+            compiledNanos = 0L;
+            compiledWorst = 0L;
+            compiledReportAt = now;
+        }
     }
 
     private long createGraphics(SteinVkRenderTarget.Formats formats) {

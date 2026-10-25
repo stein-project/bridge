@@ -54,4 +54,11 @@ public final class SteinVkOptions {
      * (default: off).
      */
     static final boolean SYNC_EACH_PASS = Opt.flag("steinbridge.gfx.vkSyncEachPass");
+
+    /**
+     * {@code -Dsteinbridge.gfx.vkPipelineStats=true} (diagnostics): every 5 s, how many draw
+     * pipelines were compiled on the render thread and how long they took (total and worst): the
+     * hitches a new pipeline costs in the middle of a frame (default: off).
+     */
+    static final boolean PIPELINE_STATS = Opt.flag("steinbridge.gfx.vkPipelineStats");
 }

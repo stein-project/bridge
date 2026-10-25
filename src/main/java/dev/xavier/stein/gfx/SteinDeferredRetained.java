@@ -104,14 +104,14 @@ final class SteinDeferredRetained {
 
     /**
      * Re-emits a retained block at once: the {@code n} instances (128 bytes each, consecutive in
-     * {@code iblob}, memory of our own) in a single ring reservation and a single copy; the dynamic
-     * vertices ({@code dynCount}, consecutive in {@code vblob}) likewise. {@code fix}: the camera's
-     * 3x4 correction (by rows, the current one over the one at recording time; null = the same
-     * camera, exact copy) rewrites the 3 matrix rows of each instance. {@code gs}: the groups (from
-     * {@link SteinEntityDeferred#groupFor}, still valid: {@link SteinEntityDeferred#groupEpoch});
-     * {@code dyn[i]} = 1 for a dynamic draw, whose {@code ref[i]} is the byte offset in {@code
-     * vblob}; model part: {@code ref[i]} is the display list. False = did not fit in a region (the
-     * caller records again).
+     * {@code iblob}, memory of our own, and the same floats in {@code data}) in a single ring
+     * reservation; the dynamic vertices ({@code dynCount}, consecutive in {@code vblob}) likewise.
+     * {@code fix}: the camera's 3x4 correction (by rows, the current one over the one at recording
+     * time; null = the same camera, exact copy) rewrites the 3 matrix rows of each instance. {@code
+     * gs}: the groups (from {@link SteinEntityDeferred#groupFor}, still valid: {@link
+     * SteinEntityDeferred#groupEpoch}); {@code dyn[i]} = 1 for a dynamic draw, whose {@code ref[i]}
+     * is the byte offset in {@code vblob}; model part: {@code ref[i]} is the display list. False =
+     * did not fit in a region (the caller records again).
      */
     static boolean emitRetainedBatch(
             Object[] gs,
@@ -120,6 +120,7 @@ final class SteinDeferredRetained {
             int[] verts,
             int[] ref,
             long iblob,
+            float[] data,
             double[] fix,
             long vblob,
             int dynCount) {
@@ -147,29 +148,10 @@ final class SteinDeferredRetained {
             break;
         }
         long p = instances.address(inst);
-        MemoryUtil.memCopy(iblob, p, ibytes);
-        if (fix != null) {
-            // row r of the new = sum_k fix[r][k] * row k of the recorded (+ fix[r][3] in the
-            // translation column)
-            for (int i = 0; i < n; i++) {
-                long src = iblob + (long) i * INSTANCE_BYTES;
-                long dst = p + (long) i * INSTANCE_BYTES;
-                for (int r = 0; r < 3; r++) {
-                    double c0 = fix[r * 4];
-                    double c1 = fix[r * 4 + 1];
-                    double c2 = fix[r * 4 + 2];
-                    for (int c = 0; c < 4; c++) {
-                        double v =
-                                c0 * MemoryUtil.memGetFloat(src + c * 4L)
-                                        + c1 * MemoryUtil.memGetFloat(src + 16 + c * 4L)
-                                        + c2 * MemoryUtil.memGetFloat(src + 32 + c * 4L);
-                        if (c == 3) {
-                            v += fix[r * 4 + 3];
-                        }
-                        MemoryUtil.memPutFloat(dst + (r * 4L + c) * 4L, (float) v);
-                    }
-                }
-            }
+        if (fix == null) {
+            MemoryUtil.memCopy(iblob, p, ibytes);
+        } else {
+            writeCorrected(p, iblob, data, n, fix);
         }
         int vfirst = 0;
         if (dynCount > 0) {
@@ -201,6 +183,49 @@ final class SteinDeferredRetained {
             command(g, verts[i], first, base + i);
         }
         return true;
+    }
+
+    /** The 3 corrected matrix rows of the instance being written. */
+    private static final float[] rows = new float[12];
+
+    /**
+     * Writes the {@code n} retained instances to the ring at {@code p} with their matrix rows taken
+     * to the current camera: row r of the new = sum_k fix[r][k] * row k of the recorded (+
+     * fix[r][3] in the translation column), in double; {@link SteinTileReplayCheck} repeats it.
+     *
+     * <p>Each ring byte is written once, in order: the ring is mapped memory meant for streaming
+     * writes, and copying the whole instance first and then rewriting its first 48 bytes stored
+     * them twice. The recorded rows are read from {@code data}, the heap copy that holds the same
+     * floats as {@code iblob} (both filled from it when recording), instead of reading native
+     * memory.
+     */
+    private static void writeCorrected(long p, long iblob, float[] data, int n, double[] fix) {
+        final int floats = INSTANCE_BYTES / 4;
+        float[] t = rows;
+        for (int i = 0; i < n; i++) {
+            int s = i * floats;
+            for (int r = 0; r < 3; r++) {
+                double c0 = fix[r * 4];
+                double c1 = fix[r * 4 + 1];
+                double c2 = fix[r * 4 + 2];
+                for (int c = 0; c < 4; c++) {
+                    double v = c0 * data[s + c] + c1 * data[s + 4 + c] + c2 * data[s + 8 + c];
+                    if (c == 3) {
+                        v += fix[r * 4 + 3];
+                    }
+                    t[r * 4 + c] = (float) v;
+                }
+            }
+            long src = iblob + (long) i * INSTANCE_BYTES;
+            long dst = p + (long) i * INSTANCE_BYTES;
+            for (int k = 0; k < 12; k++) {
+                MemoryUtil.memPutFloat(dst + k * 4L, t[k]);
+            }
+            MemoryUtil.memCopy(src + 48, dst + 48, INSTANCE_BYTES - 48);
+            if (SteinTileReplayCheck.ENABLED) {
+                SteinTileReplayCheck.instance(src, fix, t);
+            }
+        }
     }
 
     /**

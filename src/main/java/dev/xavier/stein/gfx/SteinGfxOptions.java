@@ -63,8 +63,8 @@ public final class SteinGfxOptions {
     public static final boolean BIND_CACHE = feature("bindCache", true);
 
     /**
-     * {@code -Dsteinbridge.gfx.gpuPassTiming=true} (diagnostics): GPU time of each pass (OpenGL
-     * timestamps), read a few frames later and printed every 5 s.
+     * {@code -Dsteinbridge.gfx.gpuPassTiming=true} (diagnostics): GPU time of each pass (OpenGL or
+     * Vulkan timestamps), read a few frames later and printed every 5 s.
      */
     public static final boolean GPU_PASS_TIMING = Opt.flag("steinbridge.gfx.gpuPassTiming");
 
@@ -162,6 +162,30 @@ public final class SteinGfxOptions {
      * the game's (default: off).
      */
     static final boolean GPU_LABEL_CHECK = Opt.flag("steinbridge.gfx.gpuLabelCheck");
+
+    /**
+     * {@code -Dsteinbridge.gfx.nameTextCache=...}: the GPU label keeps each entity's formatted name
+     * while its plain text and formatting code stay the same (default: on).
+     */
+    static final boolean NAME_TEXT_CACHE = feature("nameTextCache", true);
+
+    /**
+     * {@code -Dsteinbridge.gfx.nameTextCheck=...}: (diagnostics) compares every kept formatted name
+     * with the game's getFormattedText (default: off).
+     */
+    static final boolean NAME_TEXT_CHECK = Opt.flag("steinbridge.gfx.nameTextCheck");
+
+    /**
+     * {@code -Dsteinbridge.gfx.labelBackgroundCache=...}: the GPU label finds its resident
+     * background by size instead of hashing the quad every time (default: on).
+     */
+    static final boolean LABEL_BACKGROUND_CACHE = feature("labelBackgroundCache", true);
+
+    /**
+     * {@code -Dsteinbridge.gfx.labelBackgroundCheck=...}: (diagnostics) compares every background
+     * found by size with the quad lookup (default: off).
+     */
+    static final boolean LABEL_BACKGROUND_CHECK = Opt.flag("steinbridge.gfx.labelBackgroundCheck");
 
     /** {@code -Dsteinbridge.gfx.ownTextCache=...}: Stein's own text cache (default: on). */
     static final boolean OWN_TEXT_CACHE = feature("ownTextCache", true);
@@ -302,6 +326,14 @@ public final class SteinGfxOptions {
      * numbers (default: off).
      */
     static final boolean RETAIN_TILES_STATS = Opt.flag("steinbridge.gfx.retainTilesStats");
+
+    /**
+     * {@code -Dsteinbridge.gfx.retainTilesReplayCheck=...}: (diagnostics) checks every re-emitted
+     * retained tile against the plain computation (corrected matrices and group lookups) and prints
+     * the mismatches (default: off).
+     */
+    static final boolean RETAIN_TILES_REPLAY_CHECK =
+            Opt.flag("steinbridge.gfx.retainTilesReplayCheck");
 
     /**
      * {@code -Dsteinbridge.gfx.retainTilesPredict=false}: the retained tiles read the state for

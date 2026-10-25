@@ -6,7 +6,7 @@
  * Copyright (c) 2026 Breno Xavier
  */
 
-package dev.xavier.stein.gfx.gl;
+package dev.xavier.stein.gfx;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -15,15 +15,15 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * The bookkeeping that the GPU timers ({@link SteinGlGpuTiming}, {@link SteinGlOpTiming}) share: a
+ * The bookkeeping that the GPU timers (per pass on both backends, per command on OpenGL) share: a
  * ring of timestamp slots (label and frame of each), read frames later and never waited for, and
  * the totals per label. The query objects themselves stay with whoever owns the ring.
  *
  * <p>Pipeline: Stein GFX only.
  */
-final class SteinGlTimestampRing {
+public final class SteinTimestampRing {
 
-    final int slots;
+    public final int slots;
     private final int[] slotLabel;
     private final long[] slotFrame;
     private int head;
@@ -34,15 +34,15 @@ final class SteinGlTimestampRing {
     private long dropped;
 
     private final Map<String, Integer> ids = new HashMap<>();
-    final List<String> names = new ArrayList<>();
+    public final List<String> names = new ArrayList<>();
 
     /** Per label id: time summed, how many measurements, and (the pass timer) time spent before. */
-    long[] sum;
+    public long[] sum;
 
-    long[] hits;
-    long[] gap;
+    public long[] hits;
+    public long[] gap;
 
-    SteinGlTimestampRing(int slots, int initialLabels) {
+    public SteinTimestampRing(int slots, int initialLabels) {
         this.slots = slots;
         this.slotLabel = new int[slots];
         this.slotFrame = new long[slots];
@@ -52,7 +52,7 @@ final class SteinGlTimestampRing {
     }
 
     /** Takes the next slot in {@code frame}; -1 (and counts it) if the ring is full. */
-    int claim(long frame) {
+    public int claim(long frame) {
         if (count == slots) {
             dropped++;
             return -1;
@@ -64,16 +64,16 @@ final class SteinGlTimestampRing {
         return slot;
     }
 
-    void setLabel(int slot, int label) {
+    public void setLabel(int slot, int label) {
         slotLabel[slot] = label;
     }
 
-    int label(int slot) {
+    public int label(int slot) {
         return slotLabel[slot];
     }
 
     /** True while there are slots waiting to be read. */
-    boolean any() {
+    public boolean any() {
         return count > 0;
     }
 
@@ -81,7 +81,7 @@ final class SteinGlTimestampRing {
      * How many slots the oldest frame has, if it is older than {@code currentFrame} (otherwise 0:
      * the current one is still open).
      */
-    int oldestFrameSize(long currentFrame) {
+    public int oldestFrameSize(long currentFrame) {
         long f = slotFrame[tail];
         if (f >= currentFrame) {
             return 0;
@@ -94,24 +94,24 @@ final class SteinGlTimestampRing {
     }
 
     /** The slot at position {@code i} of the oldest frame. */
-    int slotAt(int i) {
+    public int slotAt(int i) {
         return (tail + i) % slots;
     }
 
     /** The oldest frame was read: its {@code n} slots go back to the ring. */
-    void release(int n) {
+    public void release(int n) {
         tail = (tail + n) % slots;
         count -= n;
     }
 
-    long takeDropped() {
+    public long takeDropped() {
         long d = dropped;
         dropped = 0;
         return d;
     }
 
     /** The id of the label, created on the first use (the totals arrays grow with it). */
-    int id(String label) {
+    public int id(String label) {
         Integer i = ids.get(label);
         if (i != null) {
             return i;

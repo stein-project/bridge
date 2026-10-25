@@ -93,7 +93,9 @@ import java.util.Map;
  * passes (default 30) the blocks that would be retained also run the game's renderer; what is
  * generated is compared with what is retained (instances, groups, vertices, exit state) and the
  * divergences are counted and printed with {@code [gfx]}. The drawing in that frame is the game's.
- * {@code -Dsteinbridge.gfx.retainTilesStats=true}: only the numbers.
+ * {@code -Dsteinbridge.gfx.retainTilesStats=true}: only the numbers. {@code
+ * -Dsteinbridge.gfx.retainTilesReplayCheck=true}: every re-emission is also computed the plain way
+ * ({@link SteinTileReplayCheck}).
  *
  * <p>Pipeline: Stein GFX only.
  */
@@ -289,6 +291,9 @@ public final class SteinTileRetain {
             sweep(entries.size() > MAX_ENTRIES ? Long.MAX_VALUE : pass - MAX_IDLE);
         }
         stats();
+        if (SteinTileReplayCheck.ENABLED) {
+            SteinTileReplayCheck.report();
+        }
     }
 
     /** Releases the entries that have not shown up since before pass {@code before}. */
@@ -618,7 +623,7 @@ public final class SteinTileRetain {
             e.groupsEpoch = epoch;
         }
         if (!SteinEntityDeferred.emitRetainedBatch(
-                e.groups, e.n, e.type, e.verts, e.ref, e.iblob, fix, e.vblob, e.dynVerts)) {
+                e.groups, e.n, e.type, e.verts, e.ref, e.iblob, e.data, fix, e.vblob, e.dynVerts)) {
             // Bigger than a ring region (does not happen with these blocks): records through the
             // game.
             return false;

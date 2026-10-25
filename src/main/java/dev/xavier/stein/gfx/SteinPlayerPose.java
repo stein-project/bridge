@@ -19,6 +19,7 @@ import static dev.xavier.stein.gfx.SteinPlayerPoseModels.*;
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.bridge.engine.ArmorGlint;
 import dev.xavier.stein.bridge.engine.GLMatrix;
+import dev.xavier.stein.bridge.engine.Mat4;
 
 import net.minecraft.client.entity.AbstractClientPlayer;
 import net.minecraft.client.model.ModelPlayer;
@@ -145,6 +146,37 @@ public final class SteinPlayerPose {
     static final float GLINT_SCALE = 0.33333334F;
 
     static final float GLINT_BRIGHTNESS = 0.76F;
+
+    /**
+     * The part of the armor glint's texture matrix that does not depend on time, per pass:
+     * identity, scale 1/3, rotation of 30 - 60 * pass degrees about Z. Computed once with the same
+     * Mat4 operations, so copying it gives the same floats as redoing them for every player.
+     */
+    private static final float[] GLINT_BASE = glintBase();
+
+    private static float[] glintBase() {
+        float[] base = new float[32];
+        float[] t = new float[16];
+        for (int i = 0; i < 2; i++) {
+            Mat4.identity(t);
+            Mat4.scale(t, GLINT_SCALE, GLINT_SCALE, GLINT_SCALE);
+            Mat4.rotate(t, 30.0F - (float) i * 60.0F, 0.0F, 0.0F, 1.0F);
+            System.arraycopy(t, 0, base, i * 16, 16);
+        }
+        return base;
+    }
+
+    /**
+     * The armor glint's texture matrix of pass {@code pass} at {@code time} (ticks), as
+     * ArmorGlint's renderGlint builds it: {@link #GLINT_BASE}, then the translation over time.
+     */
+    static void glintMatrix(float[] t, int pass, float time) {
+        System.arraycopy(GLINT_BASE, pass * 16, t, 0, 16);
+        Mat4.translate(t, 0.0F, time * (0.001F + (float) pass * 0.003F) * 20.0F, 0.0F);
+        if (CHECK) {
+            SteinPlayerPoseStateCheck.glint(t, pass, time);
+        }
+    }
 
     static {
         // The lookups of the game's members (see the class): at the same point as ever.
@@ -406,7 +438,11 @@ public final class SteinPlayerPose {
                     continue;
                 }
                 LayerRenderer layer = (LayerRenderer) list.get(i);
-                boolean bright = renderer.setBrightness(player, pt, layer.shouldCombineTextures());
+                // through SteinGameState, as the patched renderLayers: the deferred parts read the
+                // damage red from there (deadmau5's ears combine it)
+                boolean bright =
+                        SteinGameState.setBrightness(
+                                renderer, player, pt, layer.shouldCombineTextures());
                 boolean record = i == 1 && held == H_RECORD;
                 try {
                     if (record) {
@@ -432,7 +468,7 @@ public final class SteinPlayerPose {
                     ArmorGlint.flushDeferred();
                 } finally {
                     if (bright) {
-                        renderer.unsetBrightness(); // otherwise the damage red stays on
+                        SteinGameState.unsetBrightness(renderer); // otherwise the red stays on
                     }
                 }
             }
