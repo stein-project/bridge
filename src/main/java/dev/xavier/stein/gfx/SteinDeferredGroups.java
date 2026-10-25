@@ -197,8 +197,23 @@ final class SteinDeferredGroups {
      * to store.
      */
     static Object groupFor(long key) {
+        // The direct cache only ever holds groups taken from the map under their own key and is
+        // emptied together with it (dropIdleGroups), so a hit is exactly the map's answer, without
+        // boxing a Long: retained tiles look their groups up again after every drop.
+        int slot = groupSlot(key);
+        Group c = groupCache[slot];
+        if (c != null && c.key == key) {
+            if (SteinTileReplayCheck.ENABLED) {
+                SteinTileReplayCheck.group(c == groups.get(key));
+            }
+            return c;
+        }
         Group g = groups.get(key);
-        return g != null ? g : createGroup(key);
+        if (g == null) {
+            g = createGroup(key);
+        }
+        groupCache[slot] = g;
+        return g;
     }
 
     /**

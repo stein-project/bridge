@@ -328,6 +328,14 @@ public final class SteinGfxOptions {
     static final boolean RETAIN_TILES_STATS = Opt.flag("steinbridge.gfx.retainTilesStats");
 
     /**
+     * {@code -Dsteinbridge.gfx.retainTilesReplayCheck=...}: (diagnostics) checks every re-emitted
+     * retained tile against the plain computation (corrected matrices and group lookups) and prints
+     * the mismatches (default: off).
+     */
+    static final boolean RETAIN_TILES_REPLAY_CHECK =
+            Opt.flag("steinbridge.gfx.retainTilesReplayCheck");
+
+    /**
      * {@code -Dsteinbridge.gfx.retainTilesPredict=false}: the retained tiles read the state for
      * every block instead of predicting it between blocks of a sequence; only the exact value
      * {@code false} turns the prediction off (default: on).

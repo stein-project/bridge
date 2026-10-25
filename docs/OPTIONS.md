@@ -223,6 +223,7 @@ listed at the end.
 - `-Dsteinbridge.gfx.retainTilesCheck=...`: (diagnostics) checks the retained tiles against the game's renderer (default: off).
 - `-Dsteinbridge.gfx.retainTilesCheckEvery=...`: frames between retained tile checks (default 30).
 - `-Dsteinbridge.gfx.retainTilesStats=...`: (diagnostics) prints only the retained tile numbers (default: off).
+- `-Dsteinbridge.gfx.retainTilesReplayCheck=...`: (diagnostics) checks every re-emitted retained tile against the plain computation (corrected matrices and group lookups) and prints the mismatches (default: off).
 - `-Dsteinbridge.gfx.retainTilesPredict=false`: the retained tiles read the state for every block instead of predicting it between blocks of a sequence; only the exact value `false` turns the prediction off (default: on).
 
 ## SteinGlOptions
