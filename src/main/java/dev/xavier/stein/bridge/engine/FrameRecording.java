@@ -10,8 +10,8 @@ package dev.xavier.stein.bridge.engine;
 
 /**
  * The frames as flight recorder events ({@link FrameEvent}), apart from {@link FrameTime}: a Java
- * without the jdk.jfr module (the Stein Client's before 0.1.39) cannot load a class that names an Event,
- * there. This one is only touched when the module is present ({@link #PRESENT}).
+ * without the jdk.jfr module (the runtime installers before the benchmark's shipped none) cannot
+ * load a class that names an Event. This one is only touched when the module is present.
  *
  * <p>Pipeline: both.
  */
