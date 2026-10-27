@@ -32,6 +32,9 @@ import java.util.Set;
  * check, which picks a random player from the list — it now picks among the representatives, which
  * does not change the outcome of any check.
  *
+ * <p>On the integrated server the set then leaves out the chunks {@link LazyChunks} has not loaded
+ * yet: the game's updateBlocks would load (and generate) each one on the spot.
+ *
  * <p>The patcher redirects the call in World.updateBlocks to here. {@code
  * -Dsteinbridge.opt.vanillaActiveChunks=true} turns it off, for A/B. {@code
  * -Dsteinbridge.opt.checkActiveChunks=true} runs both paths every tick and compares the sets, to
@@ -47,9 +50,15 @@ public final class ActiveChunks {
 
     private ActiveChunks() {}
 
-    @SuppressWarnings("unchecked")
     public static void setActivePlayerChunksAndCheckLight(Object worldObj) {
         World world = (World) worldObj;
+        build(world);
+        // integrated server: chunks still waiting for the spread loading are not ticked yet
+        LazyChunks.trimActive(world);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void build(World world) {
         List<Object> players = (List<Object>) (List<?>) world.playerEntities;
         if (VANILLA || players.size() < 2) {
             world.setActivePlayerChunksAndCheckLight();

@@ -82,6 +82,11 @@ listed at the end.
 - `-Dsteinbridge.diag.debugOff=true`: keeps the F3 screen closed during benchmark runs (default: off).
 - `-Dsteinbridge.diag.gearAtSec=N`: dresses the player in test gear N seconds after startup (default: off).
 - `-Dsteinbridge.diag.gearProtection=N`: Protection enchantment level on the test gear (default 4).
+- `-Dsteinbridge.diag.gearArmor=material`: material of the test armor (diamond, iron, gold, chainmail, leather; default diamond).
+- `-Dsteinbridge.diag.gearItems=item,item...`: items put in the hotbar from the second slot, then in the inventory (default: none).
+- `-Dsteinbridge.diag.packAtSec=S:name`: at second S, switches to the resource pack folder or zip `name` (empty: none) and reloads the resources, as the pack screen does (default: off).
+- `-Dsteinbridge.diag.singleplayerMode=N`: game type of a world the singleplayer scene creates (0 survival, 1 creative; default 0).
+- `-Dsteinbridge.diag.creativeTabs=S:tab|...`: at second S, the open creative inventory switches to that tab index (8 combat, 11 the player's inventory; default: none).
 - `-Dsteinbridge.diag.reloadChunksEverySec=N`: reloads the terrain every N seconds (default: off).
 - `-Dsteinbridge.diag.graphicsAtSec=S:1,S:0...`: switches Fancy (1) or Fast (0) graphics at second S (default: none).
 - `-Dsteinbridge.diag.citAtSec=N`: runs the custom-item-textures scene N seconds after startup (default: off).
@@ -162,6 +167,12 @@ listed at the end.
 - `-Dsteinbridge.opt.vanillaParticleRemoval=true`: removes particles with the game's removeAll (default: Stein's).
 - `-Dsteinbridge.opt.vanillaClientSettings=true`: writes options like the game does, with no deferral (default: deferred).
 - `-Dsteinbridge.opt.noServerWatch=true`: turns the singleplayer server watch off (default: on).
+- `-Dsteinbridge.opt.vanillaSearchRate=true`: the chunk visibility search runs whenever the game asks, every frame while chunks wait to be built (default: the previous list is kept when the camera did not move and no chunk finished; see `ChunkSearch`).
+- `-Dsteinbridge.opt.vanillaRebuildNear=true`: setupTerrain's rebuildNear loop walks the whole visible list on every frame (default: only the chunks waiting; see `RebuildNear`).
+- `-Dsteinbridge.opt.checkRebuildNear=true`: also walks the whole list on every frame and compares (default: off).
+- `-Dsteinbridge.opt.vanillaChunkLoading=true`: the integrated server loads and generates every chunk of the view distance in the tick that asks for it, as the game does (default: spread over the ticks, nearest first; see `LazyChunks`).
+- `-Dsteinbridge.opt.vanillaPendingTicks=true`: saving a chunk walks every scheduled block update of the world, as the game does (default: one index per save; see `PendingTicks`).
+- `-Dsteinbridge.opt.checkPendingTicks=true`: answers every chunk of a save both ways and compares the lists (default: off).
 - `-Dsteinbridge.opt.noWatchdog=true`: turns the freeze watchdog off (default: on).
 - `-Dsteinbridge.watchdog.silenceSec=N`: seconds of silence before the watchdog reports a freeze (default: 20).
 - `-Dsteinbridge.watchdog.tickSec=N`: seconds between the watchdog's checks (default: 10).

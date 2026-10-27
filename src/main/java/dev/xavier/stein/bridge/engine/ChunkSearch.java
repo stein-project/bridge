@@ -12,11 +12,9 @@ import dev.xavier.stein.bridge.core.Log;
 
 import net.minecraft.client.renderer.RenderGlobal;
 import net.minecraft.client.renderer.ViewFrustum;
-import net.minecraft.client.renderer.chunk.CompiledChunk;
 import net.minecraft.client.renderer.chunk.RenderChunk;
 import net.minecraft.client.renderer.culling.ICamera;
 import net.minecraft.entity.Entity;
-import net.minecraft.util.BlockPos;
 import net.minecraft.util.EnumFacing;
 
 import java.util.ArrayList;
@@ -46,6 +44,10 @@ final class ChunkSearch {
     private static double bfsPt;
     private static int bfsFrame;
     private static List<Object> checkStart;
+    private static List<?> previous;
+
+    /** setupTerrain calls: one per rendered frame (the layer copy's rebuilds, ChunkInfoFilter). */
+    static int frames;
 
     private static Object[] qInfo = new Object[0];
     private static RenderChunk[] qChunk = new RenderChunk[0];
@@ -60,6 +62,11 @@ final class ChunkSearch {
     private static long bfsInconclusive;
 
     private ChunkSearch() {}
+
+    /** The RenderGlobal whose setupTerrain is running, or null outside it. */
+    static RenderGlobal currentRg() {
+        return bfsRg;
+    }
 
     /**
      * setupTerrain call in renderWorldPass: stores the arguments for the search and calls the
@@ -84,6 +91,12 @@ final class ChunkSearch {
         bfsCamera = camera;
         bfsPt = partialTicks;
         bfsFrame = frame;
+        frames++;
+        // the list of the last search: the game replaces it before its loop (SearchRate)
+        previous = rg.renderInfos;
+        if (!armed || CHECK_BFS) {
+            SearchRate.forget();
+        }
         try {
             rg.setupTerrain(entity, partialTicks, camera, frame, spectator);
         } finally {
@@ -92,6 +105,7 @@ final class ChunkSearch {
             bfsRg = null;
             bfsEntity = null;
             bfsCamera = null;
+            previous = null;
         }
     }
 
@@ -99,7 +113,7 @@ final class ChunkSearch {
      * The queue.isEmpty() of the search loop: on the first turn, the whole search; the queue comes
      * back empty.
      */
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     static boolean bfsLoop(Object queue) {
         Queue<Object> q = (Queue<Object>) queue;
         if (!armed) {
@@ -112,8 +126,8 @@ final class ChunkSearch {
             return empty;
         }
         armed = false;
-        ChunkWatch.searches++;
         if (CHECK_BFS) {
+            ChunkWatch.searches++;
             // The game does the search; at the end it is redone here and the two lists are
             // compared.
             checkStart = new ArrayList<>(q);
@@ -122,7 +136,18 @@ final class ChunkSearch {
         }
         List<Object> start = new ArrayList<>(q);
         q.clear();
-        bfs(start, (List<Object>) (List<?>) bfsRg.renderInfos, bfsFrame);
+        if (SearchRate.keep(bfsRg, bfsEntity, start, previous)) {
+            bfsRg.renderInfos = (List) previous;
+            return true;
+        }
+        ChunkWatch.searches++;
+        SearchRate.searched(bfsRg, bfsEntity, start, ChunkGraph.compiledVersion);
+        List<Object> out = (List<Object>) (List<?>) bfsRg.renderInfos;
+        if (out instanceof ArrayList<Object> list && previous != null) {
+            // the game's new list grew one copy at a time: 2.2 GB in 50 s at distance 32
+            list.ensureCapacity(previous.size() + previous.size() / 8 + 16);
+        }
+        bfs(start, out, bfsFrame);
         return true;
     }
 
@@ -133,7 +158,7 @@ final class ChunkSearch {
         }
         RenderGlobal rg = bfsRg;
         Entity e = bfsEntity;
-        ICamera camera = bfsCamera;
+        FrustumBox.begin(bfsCamera);
         double partialTicks = bfsPt;
         // The BlockPos of the player's chunk, as setupTerrain computes it (interpolated position).
         double lx = e.lastTickPosX;
@@ -177,11 +202,11 @@ final class ChunkSearch {
             qChunk[head] = null;
             head++;
             out.add(info);
-            BlockPos p = rc.position;
-            int rx = p.x;
-            int ry = p.y;
-            int rz = p.z;
-            CompiledChunk compiled = null;
+            ChunkCorner.sync(rc);
+            int rx = ChunkCorner.x(rc);
+            int ry = ChunkCorner.y(rc);
+            int rz = ChunkCorner.z(rc);
+            long visibility = -1L; // ChunkVisibility bits, read on first use
             for (int f = 0; f < 6; f++) {
                 // getRenderChunkOffset: the neighbouring position, the distance and height tests
                 // and the ViewFrustum's circular index.
@@ -211,18 +236,14 @@ final class ChunkSearch {
                     continue;
                 }
                 if (many && facing >= 0) {
-                    if (compiled == null) {
-                        compiled = rc.getCompiledChunk();
+                    if (visibility == -1L) {
+                        visibility = ChunkVisibility.of(rc);
                     }
-                    if (!compiled.isVisible(
-                            ChunkGraph.facings[ChunkGraph.opposite[facing]],
-                            ChunkGraph.facings[f])) {
+                    if (!ChunkVisibility.visible(visibility, ChunkGraph.opposite[facing], f)) {
                         continue;
                     }
                 }
-                if (n == null
-                        || !n.setFrameIndex(frame)
-                        || !camera.isBoundingBoxInFrustum(n.boundingBox)) {
+                if (n == null || !n.setFrameIndex(frame) || !FrustumBox.inside(n)) {
                     continue;
                 }
                 Object ni = ChunkGraph.RC_INFO.get(n);
