@@ -245,6 +245,8 @@ listed at the end.
 `dev.xavier.stein.gfx.vk.SteinVkOptions`
 
 - `-Dsteinbridge.gfx.vkValidation=true`: turns on the Vulkan SDK validation layers (default: off).
+- `-Dsteinbridge.gfx.vkNoDepthClipControl=true`: acts as if the device had no VK_EXT_depth_clip_control, as older drivers: the game goes to OpenGL (default: off; to test that path).
+- `-Dsteinbridge.gfx.vkAllowOldDriver=true`: runs Vulkan on a device without VK_EXT_depth_clip_control anyway, with the shaders' depth remap (default: off).
 - `-Dsteinbridge.gfx.vkNoPush=true`: does not use push descriptors (default: off).
 - `-Dsteinbridge.gfx.vkDevice=N`: chooses the physical device by driver order (default: -1, automatic).
 - `-Dsteinbridge.gfx.vkGameCopy=false` (diagnostics): the game's textures are not copied into the renderer's texture arrays; entities and the HUD draw with the game's texture itself (default: copied).

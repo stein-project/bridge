@@ -62,6 +62,13 @@ public enum SteinBackend {
      */
     private static final String CRASHED = "vulkanCrashed";
 
+    /**
+     * Written when Vulkan, asked for, cannot run on this machine (the {@link Fallback}'s name),
+     * with OpenGL saved as the choice: the Stein Client reads it, switches to OpenGL and tells the
+     * player, and the next starts do not try Vulkan again.
+     */
+    private static final String UNSUPPORTED = "vulkanUnsupported";
+
     /** A Vulkan start counts as good after this many frames over {@link #HEALTHY_NANOS}. */
     private static final int HEALTHY_FRAMES = 60;
 
@@ -77,7 +84,9 @@ public enum SteinBackend {
         /** The window system refused a window without OpenGL. */
         NO_WINDOW,
         /** No GPU with what Stein needs (Vulkan 1.2, dynamic rendering) that presents to it. */
-        NO_DEVICE
+        NO_DEVICE,
+        /** A GPU whose driver is too old for Stein's Vulkan (no VK_EXT_depth_clip_control). */
+        OLD_DRIVER
     }
 
     private static SteinBackend running = OPENGL;
@@ -197,6 +206,12 @@ public enum SteinBackend {
     public static void fellBack(Fallback why, String detail) {
         fallback = why;
         Log.warn("gfx", "Vulkan was requested, running OpenGL: " + detail);
+        if (FORCED == null) {
+            Properties p = load();
+            p.setProperty(KEY, OPENGL.key);
+            p.setProperty(UNSUPPORTED, why.name().toLowerCase(Locale.ROOT));
+            store(p);
+        }
     }
 
     /** Set by Display once the window exists. */

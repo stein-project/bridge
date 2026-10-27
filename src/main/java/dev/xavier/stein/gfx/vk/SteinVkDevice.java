@@ -169,6 +169,13 @@ public final class SteinVkDevice extends SteinDevice {
     /** Device memory, shared in blocks by the small resources. */
     private final SteinVkMemory heap;
 
+    /** A driver too old for Stein's Vulkan: the game runs OpenGL instead (SteinVkWindow). */
+    public static final class OldDriver extends IllegalStateException {
+        OldDriver(String message) {
+            super(message);
+        }
+    }
+
     /** The device is 1.3 (core dynamic rendering) or 1.2 with VK_KHR_dynamic_rendering. */
     final boolean core13;
 
@@ -267,7 +274,8 @@ public final class SteinVkDevice extends SteinDevice {
                     devExt.contains(KHRPushDescriptor.VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME)
                             && !SteinVkOptions.NO_PUSH;
             boolean clipExt =
-                    devExt.contains(EXTDepthClipControl.VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME);
+                    devExt.contains(EXTDepthClipControl.VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME)
+                            && !SteinVkOptions.NO_DEPTH_CLIP_CONTROL;
 
             // ---- resources the GPU has ----
             VkPhysicalDeviceDepthClipControlFeaturesEXT clipQ =
@@ -289,11 +297,17 @@ public final class SteinVkDevice extends SteinDevice {
                         "GPU without timeline semaphores or dynamic rendering");
             }
             depthClipControl = clipExt && clipQ.depthClipControl();
+            if (!depthClipControl && !SteinVkOptions.ALLOW_OLD_DRIVER) {
+                // every current driver has it; one without is old (Intel's before 2022 among them),
+                // and those also showed blank frames: OpenGL there (the shaders' depth remap below
+                // stays for vkAllowOldDriver)
+                throw new OldDriver("GPU driver without VK_EXT_depth_clip_control");
+            }
             if (!depthClipControl) {
                 Log.info(
                         "gfx",
-                        "vulkan: no VK_EXT_depth_clip_control: the near half of OpenGL's"
-                                + " NDC depth (-1 to 1) is lost");
+                        "vulkan: no VK_EXT_depth_clip_control: the vertex shaders move"
+                                + " OpenGL's depth (-1 to 1) into Vulkan's (0 to 1)");
             }
             hostQueryReset = v12Q.hostQueryReset();
             multiDrawIndirect = has.multiDrawIndirect();

@@ -69,6 +69,8 @@ import org.lwjgl.vulkan.VkPipelineVertexInputStateCreateInfo;
 import org.lwjgl.vulkan.VkPipelineViewportDepthClipControlCreateInfoEXT;
 import org.lwjgl.vulkan.VkPipelineViewportStateCreateInfo;
 import org.lwjgl.vulkan.VkShaderModuleCreateInfo;
+import org.lwjgl.vulkan.VkSpecializationInfo;
+import org.lwjgl.vulkan.VkSpecializationMapEntry;
 import org.lwjgl.vulkan.VkVertexInputAttributeDescription;
 import org.lwjgl.vulkan.VkVertexInputBindingDescription;
 
@@ -430,6 +432,16 @@ final class SteinVkPipeline extends SteinPipeline {
                     .stage(VK_SHADER_STAGE_VERTEX_BIT)
                     .module(vertexModule)
                     .pName(stack.UTF8(ENTRY_POINT));
+            if (!device.depthClipControl) {
+                // OpenGL's clip depth moved into Vulkan's in the vertex shader (clip_depth.glsl)
+                ByteBuffer on = stack.calloc(4);
+                on.putInt(0, 1);
+                VkSpecializationMapEntry.Buffer entry =
+                        VkSpecializationMapEntry.calloc(1, stack).constantID(0).offset(0).size(4);
+                stages.get(0)
+                        .pSpecializationInfo(
+                                VkSpecializationInfo.calloc(stack).pMapEntries(entry).pData(on));
+            }
             if (stageCount == 2) {
                 stages.get(1)
                         .sType$Default()
