@@ -37,6 +37,7 @@ import static org.lwjgl.vulkan.VK10.vkCmdSetScissor;
 import static org.lwjgl.vulkan.VK10.vkCmdSetViewport;
 import static org.lwjgl.vulkan.VK10.vkUpdateDescriptorSets;
 
+import dev.xavier.stein.bridge.bench.BenchCounters;
 import dev.xavier.stein.gfx.SteinBuffer;
 import dev.xavier.stein.gfx.SteinCommands;
 import dev.xavier.stein.gfx.SteinGlTrack;
@@ -144,6 +145,7 @@ final class SteinVkCommands extends SteinCommands {
     private int gpuSlot = -1;
 
     SteinVkCommands(SteinVkDevice device, SteinRenderPass pass) {
+        BenchCounters.pass();
         this.device = device;
         this.pass = pass;
         if (!(pass.target instanceof SteinVkRenderTarget t)) {
@@ -683,6 +685,7 @@ final class SteinVkCommands extends SteinCommands {
         }
         VkCommandBuffer c = prepareDraw();
         if (c != null) {
+            BenchCounters.draw();
             vkCmdDraw(c, vertexCount, instanceCount, firstVertex, firstInstance);
         }
     }
@@ -699,6 +702,7 @@ final class SteinVkCommands extends SteinCommands {
         }
         VkCommandBuffer c = prepareDraw();
         if (c != null) {
+            BenchCounters.draw();
             vkCmdDrawIndexed(c, indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
         }
     }
@@ -710,6 +714,7 @@ final class SteinVkCommands extends SteinCommands {
         }
         VkCommandBuffer c = prepareDraw();
         if (c != null) {
+            BenchCounters.draw();
             indirect(c, buffer.handle(), offset, count, 16, false);
         }
     }
@@ -725,6 +730,7 @@ final class SteinVkCommands extends SteinCommands {
         }
         VkCommandBuffer c = prepareDraw();
         if (c != null) {
+            BenchCounters.draw();
             indirect(c, buffer.handle(), offset, count, 20, true);
         }
     }

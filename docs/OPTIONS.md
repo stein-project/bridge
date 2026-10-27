@@ -15,6 +15,23 @@ listed at the end.
 - `-Dsteinlens.connectedTextures=true|false`: overrides the file's connected textures setting without saving (default: unset, the file decides).
 - `-Dsteinlens.debug=true`: zoom state (every 2 s and on every change) and custom items lookups, recomputed choices and enchantment version steps (every 2 s) in the log (default: off).
 
+## BenchOptions
+
+`dev.xavier.stein.bridge.bench.BenchOptions`
+
+- `-Dsteinbridge.bench=true`: runs the benchmark — opens a fresh world with a fixed seed, plays a fixed route on its own with the player's input locked, and writes `stein-bench/<date>.zip` in the game folder (default: off). It also turns on the GPU time per pass.
+- `-Dsteinbridge.bench.settings=standard|player`: `standard` plays with the same video settings on every machine (render distance 12, Fancy, smooth lighting, all particles, fancy clouds, no frame limit, no VSync), so two machines compare; `player` keeps the player's own (default: standard). Either way the player's settings come back at the end and options.txt is never written.
+- `-Dsteinbridge.bench.scale=X`: multiplies how long each part of the route is measured (default 1.0, about four minutes in all; 0.25 for a quick check).
+- `-Dsteinbridge.bench.repeat=N`: plays the whole route N times (default 1).
+- `-Dsteinbridge.bench.only=a,b`: plays only these parts of the route, by name (default: all; the names are in the report and in docs/BENCHMARK.md).
+- `-Dsteinbridge.bench.maxBiomes=N`: visits at most N biomes in the biome tour, the nearest first (default 0: every biome the seed has within 2000 blocks of the spawn).
+- `-Dsteinbridge.bench.size=WxH`: sets the window to this size for the run, for two machines to measure the same pixels (default: unset, the window as it is).
+- `-Dsteinbridge.bench.quit=true`: closes the game when the report is written (default: off, the game stays open and says where the file is).
+- `-Dsteinbridge.bench.startAtSec=N`: seconds after startup before the benchmark opens its world (default 5).
+- `-Dsteinbridge.bench.external=false`: no external tools (nvidia-smi and typeperf for the GPU and processor clocks, reg and powercfg for the machine description; all read-only) (default: they run, the clocks at one sample per second).
+- `-Dsteinbridge.bench.gpu=false`: no GPU time per pass during the run, to measure what the timestamps themselves cost (default: on; set in `core.Opt` before Stein GFX reads it).
+- `-Dsteinbridge.bench.dir=path`: where the report goes (default: `stein-bench` in the game folder).
+
 ## CoreOptions
 
 `dev.xavier.stein.bridge.core.CoreOptions`

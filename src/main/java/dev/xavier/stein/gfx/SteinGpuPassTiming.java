@@ -8,6 +8,7 @@
 
 package dev.xavier.stein.gfx;
 
+import dev.xavier.stein.bridge.bench.Bench;
 import dev.xavier.stein.bridge.core.Log;
 
 import java.util.ArrayList;
@@ -140,6 +141,7 @@ public final class SteinGpuPassTiming {
             long first = 0;
             long prevEnd = 0;
             long gaps = 0;
+            long busy = 0;
             boolean whole = true;
             for (int i = 0; i < n; i++) {
                 int s = r.slotAt(i);
@@ -153,6 +155,10 @@ public final class SteinGpuPassTiming {
                 }
                 r.sum[id] += t1 - t0;
                 r.hits[id]++;
+                busy += t1 - t0;
+                if (Bench.ON) {
+                    Bench.gpuPass(r.names.get(id), t1 - t0);
+                }
                 // the frame's span on the GPU (from the start of the first pass to the end of the
                 // last) and the gaps between passes: GPU idle waiting for commands, or work outside
                 // the passes (target switch, submission)
@@ -168,6 +174,9 @@ public final class SteinGpuPassTiming {
                 spanSum += prevEnd - first;
                 gapSum += gaps;
                 spanFrames++;
+                if (Bench.ON) {
+                    Bench.gpuFrame(prevEnd - first, busy, gaps);
+                }
             }
             r.release(n);
         }

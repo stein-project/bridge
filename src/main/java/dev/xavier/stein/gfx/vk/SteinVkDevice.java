@@ -48,6 +48,7 @@ import static org.lwjgl.vulkan.VK12.VK_SEMAPHORE_TYPE_TIMELINE;
 import static org.lwjgl.vulkan.VK12.vkGetSemaphoreCounterValue;
 import static org.lwjgl.vulkan.VK12.vkWaitSemaphores;
 
+import dev.xavier.stein.bridge.bench.BenchCounters;
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.gfx.SteinBuffer;
 import dev.xavier.stein.gfx.SteinCaps;
@@ -642,6 +643,9 @@ public final class SteinVkDevice extends SteinDevice {
      * the next draw).
      */
     VkCommandBuffer outside() {
+        if (openPass != null || renderOwner != null) {
+            BenchCounters.renderBreak();
+        }
         if (openPass != null) {
             openPass.suspend();
         }
