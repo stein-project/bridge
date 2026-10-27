@@ -30,6 +30,10 @@ listed at the end.
 - `-Dsteinbridge.bench.startAtSec=N`: seconds after startup before the benchmark opens its world (default 5).
 - `-Dsteinbridge.bench.external=false`: no external tools (nvidia-smi and typeperf for the GPU and processor clocks, reg and powercfg for the machine description; all read-only) (default: they run, the clocks at one sample per second).
 - `-Dsteinbridge.bench.gpu=false`: no GPU time per pass during the run, to measure what the timestamps themselves cost (default: on; set in `core.Opt` before Stein GFX reads it).
+- `-Dsteinbridge.bench.modes=auto|current|vulkan,opengl,fixed`: the graphics modes to run, one run each, the game reopening itself between them and joining the reports at the end: `auto`, every mode this machine has (Stein GFX on Vulkan and on OpenGL, the fixed-function pipeline); `current`, only the mode the game started in; or a list (default: auto).
+- `-Dsteinbridge.bench.jfr=false`: no flight recording in the report (default: on, when the running Java has the jdk.jfr module).
+- `-Dsteinbridge.bench.session=name`: set by the benchmark when it reopens the game, so the runs of every mode go into one report (default: unset, a new session).
+- `-Dsteinbridge.bench.modesLeft=a,b`: set by the benchmark when it reopens the game: the modes still to run after this one (default: unset).
 - `-Dsteinbridge.bench.dir=path`: where the report goes (default: `stein-bench` in the game folder).
 
 ## CoreOptions

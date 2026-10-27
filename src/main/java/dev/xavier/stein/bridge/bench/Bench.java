@@ -12,7 +12,6 @@ import com.sun.management.GarbageCollectionNotificationInfo;
 
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.bridge.core.Win;
-import dev.xavier.stein.gfx.SteinGfxOptions;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiMainMenu;
@@ -193,10 +192,23 @@ public final class Bench {
     private static void begin(Minecraft mc, long now) {
         BenchConsole.install();
         route = new ArrayList<>(BenchScene.route());
-        File dir = new File(mc.mcDataDir, BenchOptions.DIR);
-        String api = Win.vulkan ? "vulkan" : SteinGfxOptions.ENABLED ? "opengl" : "fixed";
+        String mode = BenchModes.current();
         stamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss"));
-        out = new File(dir, "stein-bench-" + stamp + "-" + api + ".zip");
+        session = BenchOptions.SESSION != null ? BenchOptions.SESSION : stamp;
+        modes = BenchModes.detect();
+        plan = BenchModes.plan(modes);
+        String asked = askedMode();
+        if (asked != null && !asked.equals(mode)) {
+            // reopened for a mode that did not come up (Vulkan fell back to OpenGL, for one):
+            // note it and go on to the next mode without measuring this one twice
+            BenchSessions.note(
+                    mc.mcDataDir, session, asked, "the game came up in " + mode + " instead");
+            phase = Phase.DONE;
+            nextMode(mc);
+            return;
+        }
+        out = BenchSessions.modeZip(mc.mcDataDir, session, mode);
+        File dir = out.getParentFile();
         try {
             Files.createDirectories(dir.toPath());
             zip = new ZipOutputStream(Files.newOutputStream(out.toPath()));
@@ -207,6 +219,16 @@ public final class Bench {
             return;
         }
         environment = BenchSystem.snapshot(mc);
+        environment.put("mode", mode);
+        environment.put("modes_on_this_machine", modes);
+        environment.put("modes_still_to_run", plan);
+        environment.put("session", session);
+        if (BenchOptions.JFR && ModuleLayer.boot().findModule("jdk.jfr").isPresent()) {
+            BenchJfr.start();
+            jfr = true;
+        } else {
+            event("flight recording: " + (BenchOptions.JFR ? "this Java has no jdk.jfr" : "off"));
+        }
         frames = new BenchFrames(zip, SEGMENTS);
         external = new BenchExternal();
         external.start();
@@ -646,6 +668,13 @@ public final class Bench {
             }
         }
         event(stopped ? "stopped" : "finished");
+        File recording = null;
+        if (jfr) {
+            recording = new File(out.getParentFile(), "recording.jfr");
+            if (!BenchJfr.stop(recording)) {
+                recording = null;
+            }
+        }
         String error =
                 BenchReport.write(
                         zip,
@@ -658,22 +687,82 @@ public final class Bench {
                         SEGMENTS,
                         start,
                         stopped,
+                        recording,
                         mc);
+        if (recording != null) {
+            recording.delete();
+        }
         if (shuttingDown) {
             return;
         }
         if (error != null) {
             message("steinbridge.bench.failed", error);
-        } else {
-            message("steinbridge.bench.done", out.getAbsolutePath());
-            for (BenchStats s : RESULTS) {
-                if (!s.clean()) {
-                    message("steinbridge.bench.invalid");
-                    break;
-                }
+        }
+        for (BenchStats s : RESULTS) {
+            if (!s.clean()) {
+                message("steinbridge.bench.invalid");
+                break;
             }
         }
         Log.info("bench", "report: " + out.getAbsolutePath());
+        if (!stopped) {
+            nextMode(mc);
+        }
+    }
+
+    /** The session's name: its runs' reports go into one folder, joined at the end. */
+    private static String session;
+
+    private static java.util.Map<String, String> modes;
+    private static List<String> plan = List.of();
+    private static boolean jfr;
+
+    /** The mode a reopened game was asked for (null at the first run). */
+    private static String askedMode() {
+        if (BenchOptions.SESSION == null) {
+            return null;
+        }
+        if ("false".equals(System.getProperty("steinbridge.gfx"))) {
+            return BenchModes.FIXED;
+        }
+        String api = System.getProperty("steinbridge.gfx.api");
+        return api == null ? null : api.toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * After a run: the game reopens in the next mode of the plan, or, with none left, the session
+     * is joined into the zip to send and the game says where it is.
+     */
+    private static void nextMode(Minecraft mc) {
+        if (!plan.isEmpty()) {
+            String next = plan.get(0);
+            List<String> after = plan.subList(1, plan.size());
+            if (mc.theWorld != null) {
+                mc.theWorld.sendQuittingDisconnectingPacket();
+                mc.loadWorld((net.minecraft.client.multiplayer.WorldClient) null);
+            }
+            if (BenchModes.relaunch(next, session, after)) {
+                event("reopening the game in " + next + (after.isEmpty() ? "" : ", then " + after));
+                mc.shutdown();
+                return;
+            }
+            for (String m : plan) {
+                BenchSessions.note(
+                        mc.mcDataDir,
+                        session,
+                        m,
+                        "the game could not be reopened by itself: run it again with this mode");
+            }
+        }
+        try {
+            File done = BenchSessions.combine(mc.mcDataDir, session);
+            if (done != null) {
+                message("steinbridge.bench.done", done.getAbsolutePath());
+                Log.info("bench", "session report: " + done.getAbsolutePath());
+            }
+        } catch (IOException e) {
+            message("steinbridge.bench.failed", e.toString());
+        }
         if (BenchOptions.QUIT) {
             mc.shutdown();
         }

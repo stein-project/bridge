@@ -27,8 +27,22 @@ mods) and the window cannot be resized. Minimizing it or switching to another wi
 prevented: those frames are flagged and the part they fall in is marked in the report, so keep the game
 in front. Closing the window stops the run and still writes the report, marked as stopped.
 
-To compare the graphics APIs, run once per API: `-Dsteinbridge.gfx.api=opengl`,
-`-Dsteinbridge.gfx.api=vulkan`, and `-Dsteinbridge.gfx=false` for the fixed-function pipeline.
+### Every graphics mode the machine has
+
+At the start the benchmark finds out what the machine can run: the fixed-function pipeline always;
+Stein GFX on OpenGL when the driver gives a 4.1 core context (asked with a hidden window, closed at
+once); Stein GFX on Vulkan when there is a Vulkan 1.2 device with dynamic rendering (asked of a
+Vulkan instance made only for that). The window is created for one API, so each mode is a run of its
+own: when a run ends, the game reopens itself with the same Java, arguments and folder in the next
+mode, and the last run joins everything into one zip, `stein-bench-<session>.zip`, with each mode's
+report in its own folder and `compare.txt`/`compare.json` side by side (average fps, 1% low, p99 and
+GPU time per part and mode). A mode that does not come up (Vulkan falling back to OpenGL, for one) is
+noted instead of measured twice. `-Dsteinbridge.bench.modes=current` runs only the mode the game
+started in; `-Dsteinbridge.bench.modes=vulkan,opengl` picks them. Running every mode takes three times
+as long; `bench.scale` and `bench.only` shorten each run.
+
+The game reopens itself only when it was started through the Bridge's launch class (the installer's
+profile and the Stein Client do this); otherwise the report says which modes are left to run by hand.
 
 ## The route
 
@@ -93,6 +107,7 @@ trustworthy) or FAIL (something did not work), with the reason.
 | `gpu.csv` | each part's GPU time per pass |
 | `shots/` | each part's picture, taken right after it was measured |
 | `console.log` | everything the game printed during the run (the Bridge's log, the mods', every stack trace) |
+| `recording.jfr` | Java's flight recording of the whole run with the "profile" settings: method samples, allocation samples, collections, compilations, locks, I/O, threads, and Stein's frame events (open it in JDK Mission Control; `-Dsteinbridge.bench.jfr=false` leaves it out) |
 | `events.log` | what the benchmark did, and when |
 | `game/` | `options.txt`, the graphics choice and the game log |
 

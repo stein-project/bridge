@@ -89,6 +89,33 @@ public final class BenchOptions {
     public static final boolean GPU = Opt.flag("steinbridge.bench.gpu", true);
 
     /**
+     * {@code -Dsteinbridge.bench.modes=auto|current|vulkan,opengl,fixed}: the graphics modes to
+     * run, one run each, the game reopening itself between them and joining the reports at the end:
+     * {@code auto}, every mode this machine has (Stein GFX on Vulkan and on OpenGL, the
+     * fixed-function pipeline); {@code current}, only the mode the game started in; or a list
+     * (default: auto).
+     */
+    public static final String MODES = Opt.text("steinbridge.bench.modes", "auto");
+
+    /**
+     * {@code -Dsteinbridge.bench.jfr=false}: no flight recording in the report (default: on, when
+     * the running Java has the jdk.jfr module).
+     */
+    public static final boolean JFR = Opt.flag("steinbridge.bench.jfr", true);
+
+    /**
+     * {@code -Dsteinbridge.bench.session=name}: set by the benchmark when it reopens the game, so
+     * the runs of every mode go into one report (default: unset, a new session).
+     */
+    public static final String SESSION = Opt.text("steinbridge.bench.session", null);
+
+    /**
+     * {@code -Dsteinbridge.bench.modesLeft=a,b}: set by the benchmark when it reopens the game: the
+     * modes still to run after this one (default: unset).
+     */
+    public static final String MODES_LEFT = Opt.text("steinbridge.bench.modesLeft", null);
+
+    /**
      * {@code -Dsteinbridge.bench.dir=path}: where the report goes (default: {@code stein-bench} in
      * the game folder).
      */
