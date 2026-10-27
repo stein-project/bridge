@@ -10,9 +10,13 @@ package dev.xavier.stein.bridge.diag;
 
 import dev.xavier.stein.bridge.core.Log;
 
+import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayerMP;
+import net.minecraft.init.Blocks;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.util.BlockPos;
+import net.minecraft.world.WorldServer;
 import net.minecraft.world.WorldSettings;
 import net.minecraft.world.WorldType;
 
@@ -72,6 +76,9 @@ final class DiagSingleplayerScene {
         }
         long now = System.nanoTime();
         stallServer(server, elapsed);
+        dayTime(server);
+        cave(server, elapsed);
+        overlook(server, elapsed);
         probeQueues(server, mc, now);
         if (now < spNextReport) {
             return;
@@ -84,7 +91,7 @@ final class DiagSingleplayerScene {
         WorldSettings settings =
                 new WorldSettings(
                         20260913L,
-                        WorldSettings.GameType.getByID(0),
+                        WorldSettings.GameType.getByID(DiagOptions.SP_MODE),
                         true,
                         false,
                         WorldType.DEFAULT);
@@ -101,6 +108,124 @@ final class DiagSingleplayerScene {
                             }
                         });
         Log.info("diag", "singleplayer: opening the world " + DiagOptions.SP_WORLD);
+    }
+
+    private static boolean caveBuilt;
+
+    /** {@code caveAtSec}: a closed room in the air with an opening in its roof (server side). */
+    private static void cave(MinecraftServer server, long elapsed) {
+        if (caveBuilt
+                || DiagOptions.SP_CAVE_AT < 0
+                || elapsed < DiagOptions.SP_CAVE_AT * 1_000_000_000L) {
+            return;
+        }
+        caveBuilt = true;
+        server.addScheduledTask(
+                (Runnable)
+                        () -> {
+                            List<EntityPlayerMP> players =
+                                    server.getConfigurationManager().playerEntityList;
+                            if (players.isEmpty()) {
+                                return;
+                            }
+                            EntityPlayerMP p = players.get(0);
+                            WorldServer w = server.worldServerForDimension(0);
+                            int x0 = (int) Math.floor(p.posX);
+                            int z0 = (int) Math.floor(p.posZ);
+                            int y0 = 150;
+                            IBlockState stone = Blocks.stone.getDefaultState();
+                            IBlockState air = Blocks.air.getDefaultState();
+                            for (int dx = -7; dx <= 7; dx++) {
+                                for (int dz = -7; dz <= 7; dz++) {
+                                    for (int dy = -1; dy <= 7; dy++) {
+                                        boolean shell =
+                                                Math.abs(dx) == 7
+                                                        || Math.abs(dz) == 7
+                                                        || dy == -1
+                                                        || dy == 7;
+                                        boolean hole =
+                                                dy == 7 && dx >= 1 && dx <= 3 && dz >= -1
+                                                        && dz <= 1;
+                                        w.setBlockState(
+                                                new BlockPos(x0 + dx, y0 + dy, z0 + dz),
+                                                shell && !hole ? stone : air);
+                                    }
+                                }
+                            }
+                            // a pool of lava in the floor, across from the opening (the glow's
+                            // test)
+                            for (int dx = -5; dx <= -3; dx++) {
+                                w.setBlockState(
+                                        new BlockPos(x0 + dx, y0 - 1, z0 - 5),
+                                        Blocks.lava.getDefaultState());
+                            }
+                            w.setWorldTime(DiagOptions.SP_CAVE_TIME);
+                            // the corner across from the opening, facing it and the floor below
+                            p.playerNetServerHandler.setPlayerLocation(
+                                    x0 - 5.5, y0, z0 + 5.5, 225f, DiagOptions.SP_CAVE_PITCH);
+                            Log.info(
+                                    "diag",
+                                    "cave: room at "
+                                            + x0
+                                            + " "
+                                            + y0
+                                            + " "
+                                            + z0
+                                            + ", opening above");
+                        });
+    }
+
+    private static boolean dayTimeSet;
+
+    /** {@code dayTime}: the world's time fixed, the day's cycle stopped (server side). */
+    private static void dayTime(MinecraftServer server) {
+        if (dayTimeSet || DiagOptions.SP_DAY_TIME < 0) {
+            return;
+        }
+        dayTimeSet = true;
+        server.addScheduledTask(
+                (Runnable)
+                        () -> {
+                            WorldServer w = server.worldServerForDimension(0);
+                            w.getGameRules().setOrCreateGameRule("doDaylightCycle", "false");
+                            w.setWorldTime(DiagOptions.SP_DAY_TIME);
+                            // and clear weather for as long as a run lasts
+                            w.getWorldInfo().setRaining(false);
+                            w.getWorldInfo().setRainTime(1_000_000);
+                            w.getWorldInfo().setThundering(false);
+                            w.getWorldInfo().setThunderTime(1_000_000);
+                            Log.info("diag", "day time: " + DiagOptions.SP_DAY_TIME);
+                        });
+    }
+
+    private static boolean overlooked;
+
+    /** {@code overlookAtSec}: the player flying high over the land, looking down (server side). */
+    private static void overlook(MinecraftServer server, long elapsed) {
+        if (overlooked
+                || DiagOptions.SP_OVERLOOK_AT < 0
+                || elapsed < DiagOptions.SP_OVERLOOK_AT * 1_000_000_000L) {
+            return;
+        }
+        overlooked = true;
+        server.addScheduledTask(
+                (Runnable)
+                        () -> {
+                            List<EntityPlayerMP> players =
+                                    server.getConfigurationManager().playerEntityList;
+                            if (players.isEmpty()) {
+                                return;
+                            }
+                            EntityPlayerMP p = players.get(0);
+                            p.capabilities.allowFlying = true;
+                            p.capabilities.isFlying = true;
+                            p.sendPlayerAbilities();
+                            server.worldServerForDimension(0)
+                                    .setWorldTime(DiagOptions.SP_CAVE_TIME);
+                            p.playerNetServerHandler.setPlayerLocation(
+                                    p.posX, p.posY + 40, p.posZ, 200f, 35f);
+                            Log.info("diag", "overlook: 40 blocks up");
+                        });
     }
 
     /** Stops the server thread once, at {@code stallServerAtSec}. */

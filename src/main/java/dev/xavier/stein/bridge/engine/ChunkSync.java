@@ -110,6 +110,9 @@ public final class ChunkSync {
             }
         }
         ((RenderChunk) chunk).setNeedsUpdate(flag);
+        if (flag) {
+            RebuildNear.marked(chunk);
+        }
     }
 
     /** In place of renderDispatcher.updateChunkNow(chunk) for the chunks adjacent to the player. */

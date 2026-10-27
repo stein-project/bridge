@@ -21,10 +21,12 @@ import net.minecraft.client.gui.GuiOptions;
 import net.minecraft.client.gui.GuiScreen;
 import net.minecraft.client.gui.GuiScreenOptionsSounds;
 import net.minecraft.client.gui.GuiVideoSettings;
+import net.minecraft.client.gui.inventory.GuiContainerCreative;
 import net.minecraft.client.gui.inventory.GuiInventory;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.multiplayer.ServerList;
 import net.minecraft.client.settings.GameSettings;
+import net.minecraft.creativetab.CreativeTabs;
 import net.minecraft.entity.boss.BossStatus;
 
 import org.lwjgl.glfw.GLFW;
@@ -523,5 +525,26 @@ final class DiagScreenScenes {
         }
         DiagGame.open(new GuiInventory(player));
         Log.info("diag", "inventory opened");
+    }
+
+    private static int creativeTabIndex;
+
+    /** {@code creativeTabs}: switches the open creative inventory's tab at the given seconds. */
+    static void creativeTabsFrame() {
+        String[] tabs = DiagOptions.CREATIVE_TABS;
+        if (creativeTabIndex >= tabs.length) {
+            return;
+        }
+        String[] t = tabs[creativeTabIndex].split(":");
+        if (Scenes.elapsed() < Long.parseLong(t[0]) * 1_000_000_000L) {
+            return;
+        }
+        creativeTabIndex++;
+        if (DiagGame.mc().currentScreen instanceof GuiContainerCreative gui) {
+            gui.setCurrentCreativeTab(CreativeTabs.creativeTabArray[Integer.parseInt(t[1])]);
+            Log.info("diag", "creative tab " + t[1]);
+        } else {
+            Log.info("diag", "creative tab: no creative inventory open");
+        }
     }
 }

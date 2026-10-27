@@ -136,6 +136,8 @@ final class SteinTerrainPipelines {
                         .texture("shadowMap", 2)
                         .texture("casterMap", 3)
                         .texture("glowMask", 4)
+                        .texture("shadowPrevMap", 5)
+                        .texture("cloudMap", 6)
                         .uniforms("Frame", 0);
         if ((key & BLEND_BIT) != 0) {
             SteinPipeline.Factor[] f = SteinPipeline.Factor.values();

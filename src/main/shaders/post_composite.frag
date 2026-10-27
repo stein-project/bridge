@@ -46,6 +46,42 @@ layout(location = 0) out vec4 color;
 layout(location = 1) out vec4 lights;
 #endif
 
+// The light in the air (half the size) brought to the pixel: the 3x3 of its texels around it, each counted by its
+// distance (the half-size pass keeps, in the alpha, the depth it walked to) against this pixel's, so the light keeps
+// the edges of what stands in front at the full size (from inside a cave the opening's rim stepped), and by its
+// nearness, which also smooths the steps' grain.
+float viewDistance(float d) {
+    return d >= 0.99999 ? 1e4 : abs(params7.w / (d * 2.0 - 1.0 + params7.z));
+}
+
+vec3 softRays(vec2 uv, ivec2 p, ivec2 last) {
+    float zc = viewDistance(texelFetch(depth, p, 0).r);
+    ivec2 size = textureSize(rays, 0);
+    vec2 h = gl_FragCoord.xy * 0.5 - 0.5;   // this pixel in the half-size texels
+    ivec2 base = ivec2(floor(h + 0.5));
+    vec3 sum = vec3(0.0);
+    float weights = 0.0;
+    vec3 nearest = vec3(0.0);
+    float best = 1e9;
+    for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
+            ivec2 t = clamp(base + ivec2(x, y), ivec2(0, 1), size - 1);   // (the first row's first texel is the sun)
+            vec4 r = texelFetch(rays, t, 0);
+            vec2 off = vec2(t) - h;
+            float dz = abs(r.a - zc);
+            float w = exp(-dot(off, off) * 0.6) * exp(-dz / (0.03 * zc + 0.12));
+            sum += w * finite(r.rgb);
+            weights += w;
+            if (dz < best) {
+                best = dz;
+                nearest = finite(r.rgb);
+            }
+        }
+    }
+    // no texel at this depth around (a thin edge): the closest in depth
+    return weights > 1e-4 ? sum / weights : nearest;
+}
+
 // The hand where it was drawn, the world elsewhere (the hand's depth is from its own projection: always a step).
 float depthAt(ivec2 p, ivec2 last) {
     ivec2 q = clamp(p, ivec2(0), last);
@@ -133,32 +169,55 @@ float mist(vec2 uv, float d) {
 // The glare of the sun (or moon) in the eyes: a round glow around it on the screen — a wide soft one and a tight hot
 // one — as much as the sky around it is open (the depth at a few points around the sun; a tree in front hides it),
 // in the haze's colour (params10: golden low, white-gold high, cold for the moon).
-vec3 glare(vec2 uv) {
+// Where the sun (or moon) is on the screen, and how much of its disc is seen: the depth at the centre (counted twice)
+// and at eight points on the disc's rim. A gap of sky a little beside a sun behind a wall used to count, and the
+// glare and the haze's glow showed over the rock.
+vec2 sunOnScreen() {
+    vec3 s = params9.xyz;
+    return vec2(s.x * params7.x, s.y * params7.y) / -s.z * 0.5 + 0.5;
+}
+
+float sunOpen() {
+    if (params6.w > 0.0) {
+        return texelFetch(rays, ivec2(0), 0).a;   // the rays' pass measured it (in its first texel)
+    }
+    vec3 s = params9.xyz;
+    if (s.z > -0.05) {
+        return 0.0;
+    }
+    vec2 at = sunOnScreen();
+    float open = 0.0;
+    for (int i = 0; i < 10; i++) {
+        float a = 0.785398 * float(i);
+        vec2 q = at + (i < 8 ? vec2(cos(a), sin(a)) * vec2(texel.x / texel.y, 1.0) * 0.0045 : vec2(0.0));
+        bool inside = q.x >= 0.0 && q.y >= 0.0 && q.x <= 1.0 && q.y <= 1.0;
+        open += inside ? step(0.99999, texelFetch(depth, ivec2(q / texel.xy), 0).r) : 0.5;
+    }
+    open /= 10.0;
+    return open * open;   // a sun half behind a hill: a quarter of the glare, not half
+}
+
+vec3 glare(vec2 uv, float open) {
     vec3 s = params9.xyz;
     if (s.z > -0.05 || dot(params10.rgb, vec3(1.0)) <= 0.0) {
         return vec3(0.0);   // behind the camera, or no haze light now
     }
-    vec2 at = vec2(s.x * params7.x, s.y * params7.y) / -s.z * 0.5 + 0.5;
-    ivec2 last = textureSize(depth, 0) - 1;
-    float open = 0.0;
-    for (int i = 0; i < 9; i++) {
-        vec2 o = vec2(float(i % 3) - 1.0, float(i / 3) - 1.0) * 0.012;
-        vec2 q = at + o;
-        bool inside = q.x >= 0.0 && q.y >= 0.0 && q.x <= 1.0 && q.y <= 1.0;
-        open += inside ? step(0.99999, texelFetch(depth, ivec2(q / texel.xy), 0).r) : 0.5;
-    }
-    open /= 9.0;
-    open *= open;   // a sun half behind a hill: a quarter of the glare, not half
+    vec2 at = sunOnScreen();
     vec2 d = (uv - at) * vec2(texel.y / texel.x, 1.0);
     float r = length(d);
     float g = 0.35 * exp(-r * 5.0) + 1.6 * exp(-r * 28.0) + 4.0 * exp(-r * 90.0);
     return params10.rgb * g * open;
 }
 
-vec3 exposed(vec3 c, vec3 glow, vec2 uv) {
-    vec3 l = srgbToLinear(c) + srgbToLinear(min(glow, vec3(64.0))) * params.x * 0.6 + glare(uv);
-    float mean = textureLod(average, vec2(0.5), params3.w).r;
-    float e = clamp(pow(0.45 / max(mean, 0.02), 0.6), 0.5, 1.2);
+// The world's mean luma (sRGB-coded, log mean) that is shown as drawn; brighter darkens, darker opens.
+const float EXPOSURE_KEY = 0.36;
+
+vec3 exposed(vec3 c, vec3 glow, vec2 uv, float open) {
+    vec3 l = srgbToLinear(c) + srgbToLinear(min(glow, vec3(64.0))) * params.x * 0.6 + glare(uv, open);
+    // the world's mean (the log mean, without the sky): the same land as bright whatever share of sky is in view
+    float mean = exp(textureLod(average, vec2(0.5), params3.w).g);
+    // gentle: a view of bright sky and one of dark ground differed by more than twice
+    float e = clamp(pow(EXPOSURE_KEY / max(mean, 0.02), 0.35), 0.72, 1.12);
     l *= e;
     float white = 1.0 + params2.w;
     float m = max(l.r, max(l.g, l.b));
@@ -206,19 +265,23 @@ void main() {
                 vec3 ray = normalize(vec3(ndc.x / params7.x, ndc.y / params7.y, -1.0));
                 float toward = max(dot(ray, params9.xyz), 0.0);
                 float phase = pow(toward, 5.0) * 0.6 + pow(toward, 40.0) * 1.6;
+                if (d < 0.99999) {
+                    phase *= sunOpen();   // the glow on the land only when the sun is not behind it
+                }
                 float m = min(mist(uv, d) * (1.0 + params9.w * phase), 0.92);
                 c = mix(c, params6.rgb + params10.rgb * phase, m);
             }
         }
     }
     if (params6.w > 0.0) {
-        // the shafts are light in the air: nothing on what is near, growing with the distance
-        vec3 shafts = finite(texture(rays, uv).rgb) * smoothstep(8.0, 64.0, air);
+        // the shafts are light in the air (post_rays leaves the near pixels out of the screen's rays itself, and
+        // the light in the air is only where the air is)
+        vec3 shafts = air > 0.0 ? softRays(uv, p, last) : vec3(0.0);   // none on the hand
         c = params4.w > 0.0 ? c + shafts : 1.0 - (1.0 - min(c, vec3(1.0))) * (1.0 - min(shafts, vec3(1.0)));
     }
     vec3 glow = finite(texture(bloom, uv).rgb);
     if (params4.w > 0.0) {
-        color = vec4(exposed(c, glow, uv), base.a);
+        color = vec4(exposed(c, glow, uv, sunOpen()), base.a);
 #ifdef HDR_LAYER
         lights = vec4(color.rgb, 1.0);
         color.rgb = min(color.rgb, vec3(1.0));

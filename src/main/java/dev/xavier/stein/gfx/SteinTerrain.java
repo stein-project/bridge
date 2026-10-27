@@ -587,6 +587,9 @@ public final class SteinTerrain {
         cmd.bindTexture(2, SteinShadows.texture(), SteinShadows.sampler());
         cmd.bindTexture(3, SteinEntityShadows.texture(), SteinShadows.sampler());
         cmd.bindTexture(4, SteinGlow.mask(SteinDevice.get()), SteinGlow.sampler());
+        cmd.bindTexture(5, SteinShadows.previous(), SteinShadows.sampler());
+        SteinClouds.ensure(SteinDevice.get());
+        cmd.bindTexture(6, SteinClouds.texture(), SteinClouds.sampler());
         SteinBuffer bound = null;
         int start = 0;
         for (int r = 0; r < d.runs && start < count; r++) {

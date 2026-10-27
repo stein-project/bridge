@@ -474,6 +474,46 @@ public final class EngineOptions {
      */
     static final boolean NO_SERVER_WATCH = Opt.flag("steinbridge.opt.noServerWatch");
 
+    /**
+     * {@code -Dsteinbridge.opt.vanillaSearchRate=true}: the chunk visibility search runs whenever
+     * the game asks, every frame while chunks wait to be built (default: the previous list is kept
+     * when the camera did not move and no chunk finished; see {@link ChunkSearch}).
+     */
+    static final boolean VANILLA_SEARCH_RATE = Opt.flag("steinbridge.opt.vanillaSearchRate");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaRebuildNear=true}: setupTerrain's rebuildNear loop walks the
+     * whole visible list on every frame (default: only the chunks waiting; see {@link
+     * RebuildNear}).
+     */
+    static final boolean VANILLA_REBUILD_NEAR = Opt.flag("steinbridge.opt.vanillaRebuildNear");
+
+    /**
+     * {@code -Dsteinbridge.opt.checkRebuildNear=true}: also walks the whole list on every frame and
+     * compares (default: off).
+     */
+    static final boolean CHECK_REBUILD_NEAR = Opt.flag("steinbridge.opt.checkRebuildNear");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaChunkLoading=true}: the integrated server loads and generates
+     * every chunk of the view distance in the tick that asks for it, as the game does (default:
+     * spread over the ticks, nearest first; see {@link LazyChunks}).
+     */
+    static final boolean VANILLA_CHUNK_LOADING = Opt.flag("steinbridge.opt.vanillaChunkLoading");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaPendingTicks=true}: saving a chunk walks every scheduled
+     * block update of the world, as the game does (default: one index per save; see {@link
+     * PendingTicks}).
+     */
+    static final boolean VANILLA_PENDING_TICKS = Opt.flag("steinbridge.opt.vanillaPendingTicks");
+
+    /**
+     * {@code -Dsteinbridge.opt.checkPendingTicks=true}: answers every chunk of a save both ways and
+     * compares the lists (default: off).
+     */
+    static final boolean CHECK_PENDING_TICKS = Opt.flag("steinbridge.opt.checkPendingTicks");
+
     /** {@code -Dsteinbridge.opt.noWatchdog=true}: turns the freeze watchdog off (default: on). */
     static final boolean NO_WATCHDOG = Opt.flag("steinbridge.opt.noWatchdog");
 

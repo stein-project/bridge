@@ -63,7 +63,7 @@ public final class SteinPostFx {
      * How fast the mean luma follows the scene, in seconds (the time to go about two thirds of the
      * way): slow enough that turning the camera does not make a bright surface pulse.
      */
-    private static final double ADAPT_SECONDS = 0.6;
+    private static final double ADAPT_SECONDS = 1.6;
 
     /** A pause longer than this (a screen in front, a loading) starts the mean over at once. */
     private static final long ADAPT_RESET_NANOS = 1_000_000_000L;
@@ -82,8 +82,8 @@ public final class SteinPostFx {
     /** The edge smoothing fades out between half of this and this, in blocks. */
     private static final float EDGE_DISTANCE = 32f;
 
-    /** Bytes of one pass's Post block (nine vec4). */
-    private static final int BLOCK_BYTES = 176;
+    /** Bytes of one pass's Post block (nineteen vec4: the texel and params to params18). */
+    private static final int BLOCK_BYTES = 304;
 
     /** One block being written (reused: no allocation per frame). */
     private static final float[] B = new float[BLOCK_BYTES / 4];
@@ -121,6 +121,10 @@ public final class SteinPostFx {
     private static SteinTexture layeredGame;
     private static SteinTexture layeredLights;
     private static SteinPipeline luma;
+
+    /** The hand was drawn on its own depth this frame (the scene's depth is the hand's alone). */
+    private static boolean handApart;
+
     private static SteinRenderTarget lumaTarget;
     private static SteinPipeline adapt;
 
@@ -269,6 +273,7 @@ public final class SteinPostFx {
                     "post-processing: the game's depth cannot be copied, no edge smoothing nor"
                             + " atmosphere");
         }
+        handApart = worldCopied;
         if (depth && !worldCopied) {
             // no hand this frame (no clear before it): the depth now is the world's
             dev.copyTarget(game, world, true);
@@ -283,7 +288,17 @@ public final class SteinPostFx {
         writeBlocks(dev, w, h, levels, level, smooth, hdr, atmosphere, shafts, wide);
         SteinTexture mean = sceneColor;
         if (levels > 0 || hdr || wide) {
-            draw(dev, "post luma", lumaTarget, luma, AT[0], sceneColor, null, null, null);
+            // the depths tell the sky and the hand apart (when copied)
+            draw(
+                    dev,
+                    "post luma",
+                    lumaTarget,
+                    luma,
+                    AT[0],
+                    sceneColor,
+                    depth ? worldDepth : sceneColor,
+                    depth ? sceneDepth : sceneColor,
+                    null);
             lumaTarget.color(0).generateMips();
             // the first time the other target was never drawn: the luma image stands in (its value
             // is not used, the first adaptation takes the mean whole)
@@ -392,12 +407,19 @@ public final class SteinPostFx {
 
     /**
      * The rays' pass: its target at a quarter of the size and its block (written apart from the
-     * others, before them); false when there are no rays to draw.
+     * others, before them): the screen's rays towards the sun when it is on the screen, the light
+     * in the air ({@link SteinVolume}) when there is a shadow map; false when neither draws.
      */
     private static boolean raysBlock(SteinDevice dev, int w, int h) {
         int rw = Math.max(1, w / 2);
         int rh = Math.max(1, h / 2);
-        if (!SteinAtmosphere.rays(B, w, h)) {
+        java.util.Arrays.fill(B, 0f);
+        boolean screen = SteinAtmosphere.rays(B, w, h);
+        if (!screen) {
+            java.util.Arrays.fill(B, 4, 12, 0f);
+        }
+        boolean volume = SteinAtmosphere.volume(B);
+        if (!screen && !volume) {
             java.util.Arrays.fill(B, 0f);
             return false;
         }
@@ -447,10 +469,17 @@ public final class SteinPostFx {
             // the adaptation reads the luma image's last mipmap; the rays, the world's depth
             cmd.bindTexture(
                     0, a, pipeline == adapt ? mipmapped : pipeline == rays ? nearest : linear);
-            if (b != null) {
-                cmd.bindTexture(1, b, pipeline == bloomFirst ? mipmapped : linear);
+            if (pipeline == rays) {
+                // the sun's shadow maps of the world just drawn, compared (SteinVolume)
+                cmd.bindTexture(1, SteinShadows.drawnMap(), SteinShadows.sampler());
+                cmd.bindTexture(2, SteinShadows.drawnPrevMap(), SteinShadows.sampler());
+            } else if (b != null) {
+                cmd.bindTexture(
+                        1,
+                        b,
+                        pipeline == bloomFirst ? mipmapped : pipeline == luma ? nearest : linear);
             }
-            if (c != null) {
+            if (c != null && pipeline != rays) {
                 cmd.bindTexture(2, c, nearest);
             }
             if (d != null) {
@@ -486,6 +515,11 @@ public final class SteinPostFx {
             boolean wide) {
         int align = dev.caps().uniformAlignment;
         texel(w, h, LUMA_SIZE, LUMA_SIZE);
+        B[4] = smooth || atmosphere ? 1f : 0f; // the world's depth was copied: the sky is left out
+        B[7] = handApart ? 1f : 0f; // and the hand
+        if (atmosphere) {
+            SteinAtmosphere.meterTerms(B); // and the clouds
+        }
         AT[0] = block(align);
         // the adaptation: the share of the way to the mean now, from the time since the last frame
         long now = System.nanoTime();
@@ -659,8 +693,26 @@ public final class SteinPostFx {
                         "handDepth",
                         "average",
                         "rays");
-        luma = pipeline(dev, "post luma", vertex, "post_luma.frag", false, "src");
-        rays = pipeline(dev, "post rays", vertex, "post_rays.frag", false, "depth");
+        luma =
+                pipeline(
+                        dev,
+                        "post luma",
+                        vertex,
+                        "post_luma.frag",
+                        false,
+                        "src",
+                        "depth",
+                        "handDepth");
+        rays =
+                pipeline(
+                        dev,
+                        "post rays",
+                        vertex,
+                        "post_rays.frag",
+                        false,
+                        "depth",
+                        "shadowMap",
+                        "shadowPrevMap");
         adapt = pipeline(dev, "post adapt", vertex, "post_adapt.frag", false, "src", "previous");
         for (int i = 0; i < ADAPTED.length; i++) {
             SteinTexture t =

@@ -82,9 +82,11 @@ public final class Scenes {
         DiagScreenScenes.videoFrame();
         DiagWorldScenes.reloadChunksFrame();
         DiagWorldScenes.gearFrame();
+        DiagWorldScenes.packFrame();
         DiagScreenScenes.controlsFrame();
         DiagWorldScenes.nbtFrame();
         DiagScreenScenes.pauseFrame();
         DiagScreenScenes.inventoryFrame();
+        DiagScreenScenes.creativeTabsFrame();
     }
 }

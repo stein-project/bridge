@@ -52,20 +52,45 @@ public final class SteinShadows {
     /** How far the map reaches towards and away from the sun, in blocks. */
     private static final float DEPTH = 256f;
 
+    /** The finest texel's share of the plain one, at the map's centre (shadow_distort.glsl). */
+    private static final double SHADOW_NEAR = 0.15;
+
     /** The anchor moves in steps of this many blocks (a new map at each step). */
     private static final int ANCHOR_STEP = 4;
 
     /** Casters at most in one map (a chunk layer each). */
     private static final int MAX_CASTERS = 16384;
 
-    /** Bytes of the receivers' block: the shadow matrix, the sun in eye space, the settings. */
-    public static final int BYTES = 64 + 16 + 16 + SteinEntityShadows.BYTES + SteinWorldLight.BYTES;
+    /**
+     * Bytes of the receivers' block: the shadow matrix, the sun in eye space, the settings, the
+     * entities' and the world light's parts, and the previous map's matrix and fade.
+     */
+    public static final int BYTES =
+            64
+                    + 16
+                    + 16
+                    + SteinEntityShadows.BYTES
+                    + SteinWorldLight.BYTES
+                    + 64
+                    + 16
+                    + SteinClouds.BYTES;
 
-    /** The sun leans this far to the south: a shadow is never straight down, even at noon. */
-    private static final double TILT = Math.toRadians(25.0);
+    /**
+     * The light leans this far to the south of the sun drawn in the sky: just enough that it is
+     * never exactly straight down (the map's orientation needs a horizontal axis). It was 25
+     * degrees, and the shadows and the light in the air came from somewhere else than the sun.
+     */
+    private static final double TILT = Math.toRadians(3.0);
 
-    /** The sun moves in steps of 1/SUN_STEPS of the day (five ticks): a new map at each step. */
-    private static final int SUN_STEPS = 4800;
+    /**
+     * The sun moves in steps of 1/SUN_STEPS of the day (twenty ticks, a second): a new map at each
+     * step, faded in over {@link #FADE_NS} from the one before. Redrawn in place at every step, the
+     * leaves' and the grass's shadows trembled (a texel's worth at each redraw).
+     */
+    private static final int SUN_STEPS = 1200;
+
+    /** A new sun step's map takes over from the previous one in this long. */
+    private static final long FADE_NS = 1_000_000_000L;
 
     /** The moon's shadows, a little weaker than the sun's. */
     private static final float MOON = 0.7f;
@@ -92,12 +117,47 @@ public final class SteinShadows {
 
     private static SteinTexture map;
     private static SteinRenderTarget target;
+
+    /** The two maps: the one drawn last ({@link #map}) and the one before, fading out. */
+    private static final SteinTexture[] MAPS = new SteinTexture[2];
+
+    private static final SteinRenderTarget[] TARGETS = new SteinRenderTarget[2];
+    private static int current;
+
+    /** What the previous map was drawn with: the light's view, its anchor and its snap. */
+    private static final float[] PREV_VIEW = new float[9];
+
+    private static final float[] DRAWN_VIEW = new float[9];
+    private static int prevAnchorX;
+    private static int prevAnchorY;
+    private static int prevAnchorZ;
+    private static double prevSnapX;
+    private static double prevSnapY;
+    private static double drawnSnapX;
+    private static double drawnSnapY;
+
+    /** When the last sun step's map was drawn (the fade's start), or MIN_VALUE: no fade. */
+    private static long fadeStart = Long.MIN_VALUE;
+
+    /** The previous map's share this frame (1 just after a step, 0 once faded). */
+    private static float fade;
+
+    private static final float[] PREV = new float[16];
     private static SteinTexture dummy;
     private static SteinSampler compare;
     private static SteinPipeline pipeline;
     private static SteinBuffer origins;
     private static SteinBuffer commands;
     private static SteinBuffer frame;
+
+    /**
+     * The map's centre moved off the anchor, in the light's plane (blocks), so that it falls on a
+     * whole number of the finest texels: when the anchor steps, the texels near the camera land on
+     * the same places and the shadows there stay still instead of sliding.
+     */
+    private static double snapX;
+
+    private static double snapY;
 
     /** What the map was drawn for. */
     private static int mapAnchorX = Integer.MIN_VALUE;
@@ -227,8 +287,10 @@ public final class SteinShadows {
         }
         SteinWorldLight.frame(world, strength, k < 1f, (float) ly, rain);
         if (strength == 0f) {
+            SteinClouds.frame(dev, null, m, cx, cy, cz, lx, ly, lz);
             return;
         }
+        SteinClouds.frame(dev, world, m, cx, cy, cz, lx, ly, lz);
         // the view: back = the light; right = up x back (never zero: the light leans south); up
         double rx = lz;
         double rz = -lx;
@@ -255,14 +317,41 @@ public final class SteinShadows {
                 resize(dev, SIZES[lv]);
             }
             radius = RADII[lv];
-            if (!mapValid
-                    || mapRadius != radius
-                    || ax != mapAnchorX
-                    || ay != mapAnchorY
-                    || az != mapAnchorZ
-                    || step != mapStep
-                    || slicesVersion != mapVersion) {
+            // the anchor in the light's plane, on the grid of the finest texel (near the centre)
+            double texel = SHADOW_NEAR * 2.0 * radius / size;
+            double lxA = VIEW[0] * (double) ax + VIEW[1] * (double) ay + VIEW[2] * (double) az;
+            double lyA = VIEW[3] * (double) ax + VIEW[4] * (double) ay + VIEW[5] * (double) az;
+            snapX = lxA - Math.floor(lxA / texel) * texel;
+            snapY = lyA - Math.floor(lyA / texel) * texel;
+            boolean same =
+                    mapValid
+                            && mapRadius == radius
+                            && ax == mapAnchorX
+                            && ay == mapAnchorY
+                            && az == mapAnchorZ
+                            && slicesVersion == mapVersion;
+            if (!same || step != mapStep) {
+                if (same) {
+                    // only the sun moved: the drawn map stays as the previous one and the new one
+                    // goes into the other, taking over in FADE_NS
+                    System.arraycopy(DRAWN_VIEW, 0, PREV_VIEW, 0, 9);
+                    prevAnchorX = mapAnchorX;
+                    prevAnchorY = mapAnchorY;
+                    prevAnchorZ = mapAnchorZ;
+                    prevSnapX = drawnSnapX;
+                    prevSnapY = drawnSnapY;
+                    current ^= 1;
+                    map = MAPS[current];
+                    target = TARGETS[current];
+                    fadeStart = System.nanoTime();
+                } else {
+                    // the anchor or the blocks changed: drawn again in place, no fade
+                    fadeStart = Long.MIN_VALUE;
+                }
                 draw(dev, ax, ay, az, atlas);
+                System.arraycopy(VIEW, 0, DRAWN_VIEW, 0, 9);
+                drawnSnapX = snapX;
+                drawnSnapY = snapY;
                 mapAnchorX = ax;
                 mapAnchorY = ay;
                 mapAnchorZ = az;
@@ -277,14 +366,23 @@ public final class SteinShadows {
             Log.warn("gfx", "shadows turned off for this session: " + e);
             return;
         }
-        receivers(m, cx - ax, cy - ay, cz - az);
+        long sinceStep = System.nanoTime() - fadeStart;
+        fade = fadeStart == Long.MIN_VALUE ? 0f : Math.max(0f, 1f - sinceStep / (float) FADE_NS);
+        receivers(m, cx, cy, cz, ax, ay, az);
         if (lv >= 2) {
             SteinEntityShadows.frame(m, cx, cy, cz);
         }
     }
 
+    /** The strength the world was drawn with, kept for the post-processing (SteinVolume). */
+    private static float drawnStrength;
+
+    private static float drawnFade;
+
     /** After the world's drawing: the HUD and the screens get no shadows. */
     public static void worldEnd() {
+        drawnStrength = active && map != null && mapValid ? strength : 0f;
+        drawnFade = fade;
         active = false;
         strength = 0f;
         hand = false;
@@ -308,9 +406,61 @@ public final class SteinShadows {
         MemoryUtil.memPutFloat(p + 80, k);
         MemoryUtil.memPutFloat(p + 84, 1f / size);
         MemoryUtil.memPutFloat(p + 88, 2f * radius / size); // a texel, in blocks
-        MemoryUtil.memPutFloat(p + 92, 0f);
+        // the edges open with the distance to the caster where the camera is enclosed (SteinVolume)
+        MemoryUtil.memPutFloat(p + 92, SteinVolume.enclosed() > 0.35f ? 1f : 0f);
         SteinEntityShadows.write(p + 96, k > 0f);
         SteinWorldLight.write(p + 96 + SteinEntityShadows.BYTES, active);
+        // the previous map's matrix and its share (0: no fade, the shaders skip it)
+        long q = p + 96 + SteinEntityShadows.BYTES + SteinWorldLight.BYTES;
+        float f = k > 0f ? fade : 0f;
+        float[] prev = f > 0f ? PREV : SHADOW;
+        for (int i = 0; i < 16; i++) {
+            MemoryUtil.memPutFloat(q + i * 4L, prev[i]);
+        }
+        MemoryUtil.memPutFloat(q + 64, f);
+        MemoryUtil.memPutFloat(q + 68, 0f);
+        MemoryUtil.memPutFloat(q + 72, 0f);
+        MemoryUtil.memPutFloat(q + 76, 0f);
+        SteinClouds.write(q + 80, k > 0f);
+    }
+
+    /**
+     * For the post-processing, after the world: the strength the world was drawn with (0: no map to
+     * read), its eye -> map matrix ({@link #drawnMatrix}) and the map ({@link #drawnMap}).
+     */
+    static float drawnStrength() {
+        return drawnStrength;
+    }
+
+    /** The receivers' matrix of the world just drawn (eye space -> the map's clip space). */
+    static float[] drawnMatrix() {
+        return SHADOW;
+    }
+
+    /** The previous map's share in the world just drawn (0: none) and its matrix. */
+    static float drawnFade() {
+        return drawnStrength > 0f ? drawnFade : 0f;
+    }
+
+    static float[] drawnPrevMatrix() {
+        return PREV;
+    }
+
+    /** The previous map of the world just drawn (the current one when there is no fade). */
+    static SteinTexture drawnPrevMap() {
+        return drawnFade() > 0f ? MAPS[current ^ 1] : drawnMap();
+    }
+
+    /** The map of the world just drawn, or the stand-in when there is none. */
+    static SteinTexture drawnMap() {
+        return drawnStrength > 0f ? map : dummy;
+    }
+
+    /** The previous map to sample now (while it fades), else the same as {@link #texture}. */
+    static SteinTexture previous() {
+        return active && strength > 0f && fade > 0f && MAPS[current ^ 1] != null
+                ? MAPS[current ^ 1]
+                : texture();
     }
 
     /** The map to sample now: the shadow map, or a depth texture standing in. */
@@ -358,10 +508,7 @@ public final class SteinShadows {
 
     private static void create(SteinDevice dev) {
         ensure(dev);
-        map =
-                dev.createTexture(
-                        SteinTexture.Desc.target("shadow map", SteinFormat.DEPTH32F, size, size));
-        target = dev.createTarget(new SteinTexture[0], map);
+        maps(dev);
         pipeline =
                 dev.createPipeline(
                         SteinPipeline.builder("shadow map")
@@ -396,17 +543,31 @@ public final class SteinShadows {
         Log.info("gfx", "shadows: " + size + "x" + size + " map");
     }
 
-    /** A new level with another map size: the map made again. */
+    /** A new level with another map size: the maps made again. */
     private static void resize(SteinDevice dev, int newSize) {
-        target.destroy();
-        map.destroy();
+        for (int i = 0; i < 2; i++) {
+            TARGETS[i].destroy();
+            MAPS[i].destroy();
+        }
         size = newSize;
-        map =
-                dev.createTexture(
-                        SteinTexture.Desc.target("shadow map", SteinFormat.DEPTH32F, size, size));
-        target = dev.createTarget(new SteinTexture[0], map);
+        maps(dev);
         mapValid = false;
+        fadeStart = Long.MIN_VALUE;
         Log.info("gfx", "shadows: " + size + "x" + size + " map");
+    }
+
+    /** The two maps at this session's size; the first is the current one. */
+    private static void maps(SteinDevice dev) {
+        for (int i = 0; i < 2; i++) {
+            MAPS[i] =
+                    dev.createTexture(
+                            SteinTexture.Desc.target(
+                                    "shadow map " + i, SteinFormat.DEPTH32F, size, size));
+            TARGETS[i] = dev.createTarget(new SteinTexture[0], MAPS[i]);
+        }
+        current = 0;
+        map = MAPS[0];
+        target = TARGETS[0];
     }
 
     private static SteinBuffer upload(
@@ -481,6 +642,8 @@ public final class SteinShadows {
         float[] proj = PROJ;
         proj[0] = 1f / radius;
         proj[5] = 1f / radius;
+        proj[12] = (float) (snapX / radius);
+        proj[13] = (float) (snapY / radius);
         proj[10] = -1f / DEPTH;
         proj[15] = 1f;
         for (int i = 0; i < 16; i++) {
@@ -498,9 +661,25 @@ public final class SteinShadows {
         MemoryUtil.memPutFloat(p + 172, 1f); // textured
     }
 
-    /** The receivers' shadow matrix and the sun in eye space. */
-    private static void receivers(float[] m, double dx, double dy, double dz) {
-        lightMatrix(SHADOW, m, dx, dy, dz, radius, DEPTH);
+    /** The receivers' matrices (the map's and, while it fades, the previous one's), the sun. */
+    private static void receivers(
+            float[] m, double cx, double cy, double cz, int ax, int ay, int az) {
+        if (fade > 0f) {
+            lightMatrix(
+                    PREV,
+                    m,
+                    cx - prevAnchorX,
+                    cy - prevAnchorY,
+                    cz - prevAnchorZ,
+                    radius,
+                    DEPTH,
+                    PREV_VIEW);
+            PREV[12] += (float) (prevSnapX / radius);
+            PREV[13] += (float) (prevSnapY / radius);
+        }
+        lightMatrix(SHADOW, m, cx - ax, cy - ay, cz - az, radius, DEPTH);
+        SHADOW[12] += (float) (snapX / radius);
+        SHADOW[13] += (float) (snapY / radius);
         // the sun (back) in eye space: R * back
         float bx = VIEW[6];
         float by = VIEW[7];
@@ -517,6 +696,19 @@ public final class SteinShadows {
      */
     static void lightMatrix(
             float[] out, float[] m, double dx, double dy, double dz, float radius, float depth) {
+        lightMatrix(out, m, dx, dy, dz, radius, depth, VIEW);
+    }
+
+    /** {@link #lightMatrix} with the light's view {@code view} (rows right, up, back). */
+    private static void lightMatrix(
+            float[] out,
+            float[] m,
+            double dx,
+            double dy,
+            double dz,
+            float radius,
+            float depth,
+            float[] view) {
         // m^-1 for a rigid matrix: R^T and -R^T t
         float[] inv = INV;
         for (int r = 0; r < 3; r++) {
@@ -535,9 +727,9 @@ public final class SteinShadows {
         for (int c = 0; c < 4; c++) {
             for (int r = 0; r < 3; r++) {
                 float v =
-                        VIEW[r * 3] * inv[c * 4]
-                                + VIEW[r * 3 + 1] * inv[c * 4 + 1]
-                                + VIEW[r * 3 + 2] * inv[c * 4 + 2];
+                        view[r * 3] * inv[c * 4]
+                                + view[r * 3 + 1] * inv[c * 4 + 1]
+                                + view[r * 3 + 2] * inv[c * 4 + 2];
                 out[c * 4 + r] = v * (r == 2 ? -1f / depth : 1f / radius);
             }
             out[c * 4 + 3] = c == 3 ? 1f : 0f;

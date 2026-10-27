@@ -123,6 +123,9 @@ final class SteinDeferredFrame {
         SteinShadows.ensure(SteinDevice.get());
         c.bindTexture(2, SteinShadows.texture(), SteinShadows.sampler());
         c.bindTexture(3, SteinEntityShadows.texture(), SteinShadows.sampler());
+        c.bindTexture(5, SteinShadows.previous(), SteinShadows.sampler());
+        SteinClouds.ensure(SteinDevice.get());
+        c.bindTexture(6, SteinClouds.texture(), SteinClouds.sampler());
         if (strictOrder) {
             // Strict order in segments: in the order they were opened, each with its pipeline and
             // its texture.

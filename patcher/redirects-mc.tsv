@@ -15,3 +15,8 @@ java/net/URL	openConnection	(Ljava/net/Proxy;)Ljava/net/URLConnection;	open	dev/
 # Item edges (engine/ItemEdges): ItemModelGenerator.isTransparent also takes nearly transparent pixels (alpha up to 16) as
 # empty, as the clients resource packs are made on do; otherwise an item painted on an alpha-1 background comes out flat.
 bgp	a	([IIIII)Z	empty	dev/xavier/stein/bridge/engine/ItemEdges	body
+# ClassInheritanceMultiMap (engine/ClassMapGuard): its class list is one static HashSet that the client thread walks
+# (a new chunk) while the integrated server adds to it; the walk threw ConcurrentModificationException and the chunk
+# packet was lost (a hole in the world). The additions take the set's lock and the walk goes over a copy.
+java/util/Set	add	(Ljava/lang/Object;)Z	add	dev/xavier/stein/bridge/engine/ClassMapGuard	static	ne.a(Ljava/lang/Class;)V
+java/util/Set	iterator	()Ljava/util/Iterator;	iterator	dev/xavier/stein/bridge/engine/ClassMapGuard	static	ne.<init>

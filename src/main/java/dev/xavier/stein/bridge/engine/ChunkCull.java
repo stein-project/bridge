@@ -13,7 +13,11 @@ import net.minecraft.client.renderer.ViewFrustum;
 import net.minecraft.client.renderer.chunk.RenderChunk;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.EnumFacing;
+import net.minecraft.world.chunk.Chunk;
+import net.minecraft.world.chunk.EmptyChunk;
+import net.minecraft.world.chunk.storage.ExtendedBlockStorage;
 
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.Set;
@@ -21,14 +25,22 @@ import java.util.Set;
 /**
  * The cheaper part of the chunk visibility search: each chunk's neighbour (RenderGlobal.
  * getRenderChunkOffset) in plain arithmetic, and the visible faces of the camera's section
- * (getVisibleFacings) kept while the camera stays in the same block and no block changes. See
- * {@link ChunkGraph} for the game names and the {@code vanillaCull} / {@code checkCull} switches.
+ * (getVisibleFacings) kept while the camera stays in the same block and the section's blocks are
+ * the same: the faces depend only on which blocks of that section are opaque. They used to be
+ * dropped on any block change or chunk arriving anywhere, which at distance 32 meant a flood fill
+ * of 4,096 blocks (and 1.3 GB of allocations in 50 s) on every search; comparing the section's 8 KB
+ * with a copy is a fraction of that. See {@link ChunkGraph} for the game names and the {@code
+ * vanillaCull} / {@code checkCull} switches.
  */
 final class ChunkCull {
     private static Object cachedRg;
     private static long cachedPos;
-    private static int cachedEpoch;
     private static Set<?> cachedFacings;
+
+    /** A copy of the camera section's blocks the cached faces were computed from (null: air). */
+    private static char[] cachedBlocks;
+
+    private static boolean cachedAir;
 
     private ChunkCull() {}
 
@@ -95,8 +107,13 @@ final class ChunkCull {
             return rg.getVisibleFacings(pos);
         }
         long key = pack(pos);
-        int epoch = ChunkGraph.blockEpoch;
-        if (cachedFacings != null && rg == cachedRg && key == cachedPos && epoch == cachedEpoch) {
+        char[] blocks = sectionBlocks(rg, pos);
+        boolean air = blocks == null;
+        if (cachedFacings != null
+                && rg == cachedRg
+                && key == cachedPos
+                && air == cachedAir
+                && (air || Arrays.equals(blocks, cachedBlocks))) {
             Set<?> r = copy(cachedFacings);
             if (ChunkGraph.CHECK) {
                 ChunkGraph.check(r.equals(rg.getVisibleFacings(pos)), "faces");
@@ -108,8 +125,31 @@ final class ChunkCull {
         cachedFacings = copy(fresh);
         cachedRg = rg;
         cachedPos = key;
-        cachedEpoch = epoch;
+        cachedAir = air;
+        if (!air) {
+            if (cachedBlocks == null || cachedBlocks.length != blocks.length) {
+                cachedBlocks = new char[blocks.length];
+            }
+            System.arraycopy(blocks, 0, cachedBlocks, 0, blocks.length);
+        }
         return fresh;
+    }
+
+    /**
+     * The blocks of the section getVisibleFacings reads (Chunk.getBlock: the section's storage, air
+     * when there is none or the chunk is not loaded), or null for all air.
+     */
+    private static char[] sectionBlocks(RenderGlobal rg, BlockPos pos) {
+        int y = pos.y >> 4;
+        if (y < 0 || y >= 16) {
+            return null;
+        }
+        Chunk chunk = rg.theWorld.getChunkFromChunkCoords(pos.x >> 4, pos.z >> 4);
+        if (chunk instanceof EmptyChunk) {
+            return null;
+        }
+        ExtendedBlockStorage storage = chunk.getBlockStorageArray()[y];
+        return storage == null ? null : storage.getData();
     }
 
     private static long pack(BlockPos pos) {

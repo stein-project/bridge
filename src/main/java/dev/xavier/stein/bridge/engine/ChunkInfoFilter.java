@@ -18,6 +18,7 @@ import net.minecraft.world.World;
 import net.minecraft.world.chunk.Chunk;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -37,10 +38,14 @@ final class ChunkInfoFilter {
     //    tile entity.
     // Each loop body keeps testing what it tested: only the iterations that did nothing are gone.
     // The copy is rebuilt when the list changes (setupTerrain creates another on every search), the
-    // size, the compilations version, the chunk map, the world or — for entities — the entities
-    // version, which goes up before every Chunk.addEntity/removeEntity/removeEntityAtIndex. The
-    // reordering of the translucent layer (iterator in renderBlockLayer) keeps using the whole
-    // list.
+    // size, the compilations version, the world or — for entities, instead of the compilations
+    // version — which chunks have tile entities ({@link TileChunks}) and the set of sections
+    // holding
+    // an entity ({@link EntitySections}, read from the client's entities on every use: the entities
+    // version went up on every move of the integrated server's entities too, and the chunk map
+    // version on every chunk arriving, so the copy was rebuilt on almost every frame at distance
+    // 32). The reordering of the translucent layer (iterator in renderBlockLayer) keeps using the
+    // whole list.
     // -Dsteinbridge.opt.vanillaInfoFilter=true: the loops over the whole list.
     // -Dsteinbridge.opt.checkInfoFilter=true: rebuilds the copy on every use and compares it with
     // the stored one.
@@ -59,13 +64,13 @@ final class ChunkInfoFilter {
     private static Object layerSrc;
     private static int layerSize = -1;
     private static int layerCompiled;
+    private static int layerFrame;
 
     private static ArrayList<Object> entityInfos = new ArrayList<>();
     private static Object entitySrc;
     private static int entitySize = -1;
-    private static int entityCompiled;
-    private static int entityChunks;
-    private static int entityEntities;
+    private static int entityTiles;
+    private static long[] entitySections = new long[0];
     private static Object entityWorld;
 
     private static final CheckReport REPORT = new CheckReport(5_000_000_000L);
@@ -96,12 +101,19 @@ final class ChunkInfoFilter {
     private static List<Object> layers(Object list) {
         List<?> src = (List<?>) list;
         int compiled = ChunkGraph.compiledVersion;
-        if (list != layerSrc || src.size() != layerSize || compiled != layerCompiled) {
+        int frame = ChunkSearch.frames;
+        // a chunk compiled after the frame's first layer joins on the next frame: each layer asked
+        // again, with chunks finishing on the build threads all the time, and the copy was rebuilt
+        // up to 4 times a frame at distance 32
+        if (list != layerSrc
+                || src.size() != layerSize
+                || (compiled != layerCompiled && frame != layerFrame)) {
             layerInfos = fillLayers(src);
             layerSrc = list;
             layerSize = src.size();
             layerCompiled = compiled;
-        } else if (CHECK_FILTER) {
+            layerFrame = frame;
+        } else if (CHECK_FILTER && compiled == layerCompiled) {
             ArrayList<Object> fresh = fillLayers(src);
             checkFilter(fresh.equals(layerInfos), ChunkGraph.compiledVersion != compiled, "layers");
         }
@@ -110,7 +122,7 @@ final class ChunkInfoFilter {
 
     /** The chunks with some layer used, in list order, in a new list. */
     private static ArrayList<Object> fillLayers(List<?> src) {
-        ArrayList<Object> out = new ArrayList<>();
+        ArrayList<Object> out = new ArrayList<>(sizeLike(layerInfos));
         for (int i = 0, n = src.size(); i < n; i++) {
             Object info = src.get(i);
             if (!((RenderChunk) ChunkGraph.INFO_CHUNK.get(info)).getCompiledChunk().isEmpty()) {
@@ -133,34 +145,64 @@ final class ChunkInfoFilter {
         List<?> src = (List<?>) list;
         World world = ((RenderGlobal) rg).theWorld;
         int compiled = ChunkGraph.compiledVersion;
-        int chunks = ChunkGraph.chunkEpoch;
-        int ents = ChunkGraph.entityVersion;
+        TileChunks.update();
+        int tiles = TileChunks.version;
+        EntitySections.collect(world);
+        long[] sections = EntitySections.keys();
+        int n = EntitySections.count();
         if (list != entitySrc
                 || src.size() != entitySize
-                || compiled != entityCompiled
-                || chunks != entityChunks
-                || ents != entityEntities
-                || world != entityWorld) {
-            entityInfos = fillEntities(world, src);
+                || tiles != entityTiles
+                || world != entityWorld
+                || !Arrays.equals(sections, 0, n, entitySections, 0, entitySections.length)) {
+            entityInfos = fillEntities(src, sections, n);
             entitySrc = list;
             entitySize = src.size();
-            entityCompiled = compiled;
-            entityChunks = chunks;
-            entityEntities = ents;
+            entityTiles = tiles;
+            entitySections = Arrays.copyOf(sections, n);
             entityWorld = world;
         } else if (CHECK_FILTER) {
-            ArrayList<Object> fresh = fillEntities(world, src);
+            ArrayList<Object> fresh = fillEntities(src, sections, n);
             checkFilter(
                     fresh.equals(entityInfos), ChunkGraph.compiledVersion != compiled, "entities");
+        }
+        if (CHECK_FILTER) {
+            // the sections from the entities against each chunk's own lists (the game's loop)
+            checkFilter(
+                    entityInfos.equals(fillEntitiesByChunk(world, src)),
+                    ChunkGraph.compiledVersion != compiled,
+                    "entities by chunk");
         }
         return entityInfos;
     }
 
     /**
-     * The chunks with an entity in the section (chunk.getEntityLists()[y / 16], like the game's
-     * loop) or with a tile entity in the compilation, in list order.
+     * The chunks with an entity in the section (from {@link EntitySections}) or with a tile entity
+     * in the compilation (from {@link TileChunks}), in list order.
      */
-    private static ArrayList<Object> fillEntities(World world, List<?> src) {
+    private static ArrayList<Object> fillEntities(List<?> src, long[] sections, int n) {
+        EntitySections.index(sections, n);
+        ArrayList<Object> out = new ArrayList<>(sizeLike(entityInfos));
+        for (int i = 0, size = src.size(); i < size; i++) {
+            Object info = src.get(i);
+            RenderChunk rc = (RenderChunk) ChunkGraph.INFO_CHUNK.get(info);
+            BlockPos p = rc.position;
+            boolean has = EntitySections.has(p.x >> 4, p.y / 16, p.z >> 4);
+            if (!has) {
+                has = TileChunks.has(rc);
+            }
+            if (has) {
+                out.add(info);
+            }
+        }
+        return out;
+    }
+
+    /**
+     * The check's reference: the section's own list (chunk.getEntityLists()[y / 16], like the
+     * game's loop) or a tile entity in the compilation, in list order.
+     */
+    private static ArrayList<Object> fillEntitiesByChunk(World world, List<?> src) {
         ArrayList<Object> out = new ArrayList<>();
         for (int i = 0, n = src.size(); i < n; i++) {
             Object info = src.get(i);
@@ -177,6 +219,14 @@ final class ChunkInfoFilter {
             }
         }
         return out;
+    }
+
+    /**
+     * A new copy starts with room for the previous one and a margin: it is rebuilt after every
+     * search, and growing one copy at a time allocated almost 1 GB in 50 s at distance 32.
+     */
+    private static int sizeLike(List<?> previous) {
+        return previous.size() + previous.size() / 8 + 16;
     }
 
     private static void checkFilter(boolean same, boolean compiledChanged, String what) {

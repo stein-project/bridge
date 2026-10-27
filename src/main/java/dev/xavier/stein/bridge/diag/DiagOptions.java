@@ -326,6 +326,70 @@ final class DiagOptions {
     static final int GEAR_PROTECTION = Opt.integer("steinbridge.diag.gearProtection", 4);
 
     /**
+     * {@code -Dsteinbridge.diag.gearArmor=material}: material of the test armor (diamond, iron,
+     * gold, chainmail, leather; default diamond).
+     */
+    static final String GEAR_ARMOR = Opt.text("steinbridge.diag.gearArmor", "diamond");
+
+    /**
+     * {@code -Dsteinbridge.diag.gearItems=item,item...}: items put in the hotbar from the second
+     * slot, then in the inventory (default: none).
+     */
+    static final String[] GEAR_ITEMS = list("steinbridge.diag.gearItems", ",", 0);
+
+    /**
+     * {@code -Dsteinbridge.diag.packAtSec=S:name}: at second S, switches to the resource pack
+     * folder or zip {@code name} (empty: none) and reloads the resources, as the pack screen does
+     * (default: off).
+     */
+    static final String PACK_AT = Opt.text("steinbridge.diag.packAtSec", "");
+
+    /**
+     * {@code -Dsteinbridge.diag.singleplayerMode=N}: game type of a world the singleplayer scene
+     * creates (0 survival, 1 creative; default 0).
+     */
+    static final int SP_MODE = Opt.integer("steinbridge.diag.singleplayerMode", 0);
+
+    /**
+     * {@code -Dsteinbridge.diag.caveAtSec=S}: at second S, the integrated server builds a closed
+     * stone room high above the player, with a 3x3 opening in its roof, sets the morning and puts
+     * the player in a corner facing where the sun comes in (the light in the air's scene; default:
+     * off).
+     */
+    static final long SP_CAVE_AT = Opt.number("steinbridge.diag.caveAtSec", -1L);
+
+    /**
+     * {@code -Dsteinbridge.diag.caveTime=T}: the world's time for the cave scene (default 2500).
+     */
+    static final long SP_CAVE_TIME = Opt.number("steinbridge.diag.caveTime", 2500L);
+
+    /**
+     * {@code -Dsteinbridge.diag.cavePitch=P}: the player's pitch in the cave scene (degrees, down
+     * positive; default 8: the floor; about -50 looks at the opening).
+     */
+    static final int SP_CAVE_PITCH = Opt.integer("steinbridge.diag.cavePitch", 8);
+
+    /**
+     * {@code -Dsteinbridge.diag.dayTime=T}: once the world is open, sets its time to T and stops
+     * the day's cycle, with clear weather — runs that reuse a world see the same sun (default:
+     * off).
+     */
+    static final long SP_DAY_TIME = Opt.number("steinbridge.diag.dayTime", -1L);
+
+    /**
+     * {@code -Dsteinbridge.diag.overlookAtSec=S}: at second S, the player flies 40 blocks above
+     * where it is, looking down over the land (the clouds' shadows; the world's time is caveTime;
+     * default: off).
+     */
+    static final long SP_OVERLOOK_AT = Opt.number("steinbridge.diag.overlookAtSec", -1L);
+
+    /**
+     * {@code -Dsteinbridge.diag.creativeTabs=S:tab|...}: at second S, the open creative inventory
+     * switches to that tab index (8 combat, 11 the player's inventory; default: none).
+     */
+    static final String[] CREATIVE_TABS = list("steinbridge.diag.creativeTabs", "\\|", 0);
+
+    /**
      * {@code -Dsteinbridge.diag.reloadChunksEverySec=N}: reloads the terrain every N seconds
      * (default: off).
      */
@@ -357,6 +421,13 @@ final class DiagOptions {
 
     /** {@code -Dsteinbridge.diag.yaw=N}: with {@link #PITCH}, keeps the player facing N degrees. */
     static final int YAW = Opt.integer("steinbridge.diag.yaw", -1000);
+
+    /**
+     * {@code -Dsteinbridge.diag.yawStep=S:D[:P]}: with {@link #YAW}, turns the player D more
+     * degrees (and P more down) from second S on — the same place seen a little to the side or up,
+     * for the exposure (default: off).
+     */
+    static final String YAW_STEP = Opt.text("steinbridge.diag.yawStep", "");
 
     /**
      * {@code -Dsteinbridge.diag.showcaseAtSec=N}: opens the video settings' showcase (the landscape

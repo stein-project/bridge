@@ -9,6 +9,8 @@
 package dev.xavier.stein.bridge.engine;
 
 import dev.xavier.stein.bridge.core.Log;
+import dev.xavier.stein.bridge.core.SteinLog;
+import dev.xavier.stein.bridge.core.SteinLog.Topic;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.integrated.IntegratedServer;
@@ -31,7 +33,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * above 250 ms or a wait above 500 ms in either queue, with the second's garbage collection and the
  * memory in use; at most one line per second. The first 15 s of the world are left out (joining
  * always has one long tick, as in the game). Without an integrated server (multiplayer), one field
- * read per frame. {@code -Dsteinbridge.opt.noServerWatch=true} turns it off.
+ * read per frame. With the Stein performance log on, every second also gets a line with the
+ * server's ticks, their mean and longest time and the chunks waiting for {@link LazyChunks}. {@code
+ * -Dsteinbridge.opt.noServerWatch=true} turns it off.
  */
 public final class ServerWatch {
 
@@ -94,16 +98,23 @@ public final class ServerWatch {
         long gc = gcMillis();
         long serverWait = SERVER_MAX.getAndSet(0);
         long clientWait = CLIENT_MAX.getAndSet(0);
-        if (lastTicks >= 0 && now >= watchFrom) {
+        if (lastTicks >= 0) {
             long[] times = server.tickTimeArray;
             int n = Math.min(times.length, Math.max(0, ticks - lastTicks));
             long longest = 0;
+            long sum = 0;
             for (int i = 1; i <= n; i++) {
-                longest = Math.max(longest, times[Math.floorMod(ticks - i, times.length)]);
+                long t = times[Math.floorMod(ticks - i, times.length)];
+                longest = Math.max(longest, t);
+                sum += t;
             }
-            if (longest > TICK_LIMIT_NS
-                    || serverWait > QUEUE_LIMIT_NS
-                    || clientWait > QUEUE_LIMIT_NS) {
+            if (SteinLog.on(Topic.PERF)) {
+                perfLine(ticks - lastTicks, n == 0 ? 0 : sum / n, longest);
+            }
+            if (now >= watchFrom
+                    && (longest > TICK_LIMIT_NS
+                            || serverWait > QUEUE_LIMIT_NS
+                            || clientWait > QUEUE_LIMIT_NS)) {
                 Runtime rt = Runtime.getRuntime();
                 Log.info(
                         "server",
@@ -122,6 +133,27 @@ public final class ServerWatch {
         }
         lastTicks = ticks;
         lastGc = gc;
+    }
+
+    /**
+     * The integrated server's second in the Stein performance log, next to the client's (Watchdog):
+     * the frame rate can stay high while the server is stopped, and the player sees mobs, damage
+     * and terrain frozen.
+     */
+    private static void perfLine(int ticks, long meanNs, long longestNs) {
+        SteinLog.debug(
+                Topic.PERF,
+                "server",
+                ticks
+                        + " ticks, mean "
+                        + meanNs / NANOS_PER_MILLI
+                        + " ms, longest "
+                        + longestNs / NANOS_PER_MILLI
+                        + " ms, chunks waiting "
+                        + LazyChunks.pending()
+                        + " (spread loading has loaded "
+                        + LazyChunks.loaded()
+                        + ")");
     }
 
     /**

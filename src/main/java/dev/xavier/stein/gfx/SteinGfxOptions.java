@@ -56,6 +56,18 @@ public final class SteinGfxOptions {
     public static final boolean PASS_STATE_CHECK = Opt.flag("steinbridge.gfx.passStateCheck");
 
     /**
+     * {@code -Dsteinbridge.gfx.noVolume=true}: no light in the air ({@link SteinVolume}), for A/B
+     * (default: with the atmosphere and the shadows).
+     */
+    public static final boolean NO_VOLUME = Opt.flag("steinbridge.gfx.noVolume");
+
+    /**
+     * {@code -Dsteinbridge.gfx.noCloudShadows=true}: the clouds cast no shadows and do not dim the
+     * sun ({@link SteinClouds}), for A/B (default: with the clouds and the shadows).
+     */
+    public static final boolean NO_CLOUD_SHADOWS = Opt.flag("steinbridge.gfx.noCloudShadows");
+
+    /**
      * Repeated bindings kept away from the driver: pipelines with the same layout share the VAO,
      * and vertex, index, uniform and storage buffers already bound at the same point are not bound
      * again. {@code -Dsteinbridge.gfx.bindCache=false} turns it off.

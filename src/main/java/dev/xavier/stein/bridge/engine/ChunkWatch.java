@@ -86,11 +86,14 @@ final class ChunkWatch {
                                 + empty
                                 + ", searches "
                                 + searches
+                                + ", kept "
+                                + SearchRate.kept
                                 + " (from arrival "
                                 + ChunkSync.extraSearches
                                 + ")";
                 ChunkSync.extraSearches = 0;
                 searches = 0;
+                SearchRate.kept = 0;
             }
             if (world != null) {
                 int cx = (int) Math.floor(x) >> 4;

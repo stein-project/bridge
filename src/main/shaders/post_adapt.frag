@@ -14,10 +14,18 @@ layout(set = 0, binding = 1) uniform sampler2D src;       // the luma image, wit
 layout(set = 0, binding = 2) uniform sampler2D previous;  // the adapted mean of the last frame (1x1)
 layout(location = 0) out vec4 color;
 
+// The world's mean log luma (g, the exposure's) moves the same way, in the log: as fast towards brighter as towards
+// darker — and only as much as there is world in view to measure: a view of sky with a few treetops in a corner keeps
+// about the last value (a handful of pixels made the whole image's exposure).
 void main() {
-    float now = textureLod(src, vec2(0.5), params.y).r;
-    float before = texelFetch(previous, ivec2(0), 0).r;
+    vec3 now = textureLod(src, vec2(0.5), params.y).rgb;
+    vec2 before = texelFetch(previous, ivec2(0), 0).rg;
+    float trust = smoothstep(0.002, 0.08, now.b);
+    float lg = now.b > 0.002 ? now.g / now.b : before.g;
     // all the way (the first frame, after a pause): the last value is not read at all
-    float mean = params.x >= 0.999 ? now : mix(before, now, params.x);
-    color = vec4(mean, 0.0, 0.0, 1.0);
+    if (params.x >= 0.999) {
+        color = vec4(now.r, trust > 0.0 ? lg : -1.0, 0.0, 1.0);   // nothing but sky at first: about the land by day
+        return;
+    }
+    color = vec4(mix(before.r, now.r, params.x), mix(before.g, lg, params.x * trust), 0.0, 1.0);
 }

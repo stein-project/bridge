@@ -49,6 +49,7 @@ public final class SteinWorldLight {
     private static final float[] AMBIENT = {1f, 1f, 1f};
     private static float moonGlow;
     private static float night;
+    private static boolean moonDirect;
 
     private SteinWorldLight() {}
 
@@ -71,7 +72,18 @@ public final class SteinWorldLight {
      * moon's, its height over the horizon (0..1), and the world for the hour, the rain and the
      * moon's phase.
      */
+    /** The direct light's colour of this frame (the sun's or the moon's), for SteinVolume. */
+    static float[] direct() {
+        return DIRECT;
+    }
+
+    /** The direct light of this frame is the moon's. */
+    static boolean moonDirect() {
+        return moonDirect;
+    }
+
     static void frame(WorldClient world, float strength, boolean moon, float height, float rain) {
+        moonDirect = moon;
         float k = strength;
         float[] c = moon ? MOON : null;
         for (int i = 0; i < 3; i++) {

@@ -222,6 +222,8 @@ final class SteinDeferredResources {
                         .texture("lightmap", 1)
                         .texture("shadowMap", 2)
                         .texture("casterMap", 3)
+                        .texture("shadowPrevMap", 5)
+                        .texture("cloudMap", 6)
                         .uniforms("Frame", 0);
         if ((full & KEY_NOALPHA) != 0) {
             b.alphaWrite(false);

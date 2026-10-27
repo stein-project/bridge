@@ -8,6 +8,8 @@
 
 package dev.xavier.stein.gfx;
 
+import dev.xavier.stein.bridge.engine.Visuals;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.entity.Entity;
@@ -86,6 +88,26 @@ public final class SteinAtmosphere {
     }
 
     /**
+     * What the exposure's meter needs to place a pixel in the world (post_luma's block): the
+     * projection's terms (params.yz, params2.xy), the world's up in eye space (params3.xyz) and the
+     * clouds' layer above the camera (params3.w); left at zero when not captured this frame.
+     */
+    static void meterTerms(float[] b) {
+        if (!captured) {
+            return;
+        }
+        b[5] = PROJ[2];
+        b[6] = PROJ[3];
+        b[8] = PROJ[0];
+        b[9] = PROJ[1];
+        b[12] = VIEW[3];
+        b[13] = VIEW[4];
+        b[14] = VIEW[5];
+        WorldClient world = Minecraft.getMinecraft().theWorld;
+        b[15] = world == null ? 1e4f : Visuals.cloudHeight(world.provider) - cameraY;
+    }
+
+    /**
      * At each terrain layer's Frame block: the first time in a world drawing, keeps the projection
      * ({@code proj}, column major), the camera's matrix {@code m} and the fog's colour.
      */
@@ -121,6 +143,38 @@ public final class SteinAtmosphere {
         WorldClient world = mc.theWorld;
         celestial = world == null ? 0f : world.getCelestialAngle(pt);
         rain = world == null ? 0f : world.getRainStrength(pt);
+        SteinVolume.capture(
+                world,
+                view.lastTickPosX + (view.posX - view.lastTickPosX) * pt,
+                cameraY,
+                view.lastTickPosZ + (view.posZ - view.lastTickPosZ) * pt);
+    }
+
+    /**
+     * The light in the air's part of the rays' block (SteinVolume), at this world's camera; the
+     * projection's terms (params8) always, the screen's shafts use them too.
+     */
+    static boolean volume(float[] b) {
+        b[32] = PROJ[0];
+        b[33] = PROJ[1];
+        b[34] = PROJ[2];
+        b[35] = PROJ[3];
+        // params9.xyz: the sun (or the moon) in eye space, as the sky draws it (the glare's
+        // measure)
+        float angle = celestial * (float) (Math.PI * 2);
+        float sx = (float) -Math.sin(angle);
+        float sy = (float) Math.cos(angle);
+        if (sy < -0.05f) {
+            sx = -sx;
+            sy = -sy;
+        }
+        b[36] = VIEW[0] * sx + VIEW[3] * sy;
+        b[37] = VIEW[1] * sx + VIEW[4] * sy;
+        b[38] = VIEW[2] * sx + VIEW[5] * sy;
+        b[73] =
+                SteinClouds
+                        .sunVisible(); // params18.y: the sun past the clouds (the glare's measure)
+        return SteinVolume.write(b, level, PROJ, VIEW, far);
     }
 
     /** After the world's drawing and its post-processing: the next drawing captures again. */
@@ -216,7 +270,12 @@ public final class SteinAtmosphere {
         float onScreen = clamp01((0.9f - edge) / 0.4f);
         // strongest low over the horizon
         float low = (float) Math.exp(-(sy * sy) / 0.12f);
-        float strength = RAYS[level] * onScreen * (1f - rain) * (moon ? 0.3f : 0.5f + 0.8f * low);
+        float strength =
+                RAYS[level]
+                        * onScreen
+                        * (1f - rain)
+                        * (moon ? 0.3f : 0.5f + 0.8f * low)
+                        * SteinClouds.sunVisible();
         if (strength <= 0.01f) {
             return false;
         }

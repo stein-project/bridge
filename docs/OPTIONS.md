@@ -86,12 +86,23 @@ listed at the end.
 - `-Dsteinbridge.diag.debugOff=true`: keeps the F3 screen closed during benchmark runs (default: off).
 - `-Dsteinbridge.diag.gearAtSec=N`: dresses the player in test gear N seconds after startup (default: off).
 - `-Dsteinbridge.diag.gearProtection=N`: Protection enchantment level on the test gear (default 4).
+- `-Dsteinbridge.diag.gearArmor=material`: material of the test armor (diamond, iron, gold, chainmail, leather; default diamond).
+- `-Dsteinbridge.diag.gearItems=item,item...`: items put in the hotbar from the second slot, then in the inventory (default: none).
+- `-Dsteinbridge.diag.packAtSec=S:name`: at second S, switches to the resource pack folder or zip `name` (empty: none) and reloads the resources, as the pack screen does (default: off).
+- `-Dsteinbridge.diag.singleplayerMode=N`: game type of a world the singleplayer scene creates (0 survival, 1 creative; default 0).
+- `-Dsteinbridge.diag.caveAtSec=S`: at second S, the integrated server builds a closed stone room high above the player, with a 3x3 opening in its roof, sets the morning and puts the player in a corner facing where the sun comes in (the light in the air's scene; default: off).
+- `-Dsteinbridge.diag.caveTime=T`: the world's time for the cave scene (default 2500).
+- `-Dsteinbridge.diag.cavePitch=P`: the player's pitch in the cave scene (degrees, down positive; default 8: the floor; about -50 looks at the opening).
+- `-Dsteinbridge.diag.dayTime=T`: once the world is open, sets its time to T and stops the day's cycle, with clear weather — runs that reuse a world see the same sun (default: off).
+- `-Dsteinbridge.diag.overlookAtSec=S`: at second S, the player flies 40 blocks above where it is, looking down over the land (the clouds' shadows; the world's time is caveTime; default: off).
+- `-Dsteinbridge.diag.creativeTabs=S:tab|...`: at second S, the open creative inventory switches to that tab index (8 combat, 11 the player's inventory; default: none).
 - `-Dsteinbridge.diag.reloadChunksEverySec=N`: reloads the terrain every N seconds (default: off).
 - `-Dsteinbridge.diag.graphicsAtSec=S:1,S:0...`: switches Fancy (1) or Fast (0) graphics at second S (default: none).
 - `-Dsteinbridge.diag.citAtSec=N`: runs the custom-item-textures scene N seconds after startup (default: off).
 - `-Dsteinbridge.diag.thirdPerson=N`: keeps the third-person view, 1 from behind or 2 from the front (default 0: off).
 - `-Dsteinbridge.diag.pitch=N`: keeps the player looking N degrees down (negative: up), every frame — the player's own shadow in first person (default: off).
 - `-Dsteinbridge.diag.yaw=N`: with `#PITCH`, keeps the player facing N degrees.
+- `-Dsteinbridge.diag.yawStep=S:D[:P]`: with `#YAW`, turns the player D more degrees (and P more down) from second S on — the same place seen a little to the side or up, for the exposure (default: off).
 - `-Dsteinbridge.diag.showcaseAtSec=N`: opens the video settings' showcase (the landscape drawn instead of the world) N seconds after startup, with a world loaded (default: off).
 - `-Dsteinbridge.diag.showcaseNightAtSec=N`: turns the showcase to night N seconds after startup, and back to day N seconds after that, alternating (default: off).
 
@@ -171,6 +182,12 @@ listed at the end.
 - `-Dsteinbridge.opt.vanillaParticleRemoval=true`: removes particles with the game's removeAll (default: Stein's).
 - `-Dsteinbridge.opt.vanillaClientSettings=true`: writes options like the game does, with no deferral (default: deferred).
 - `-Dsteinbridge.opt.noServerWatch=true`: turns the singleplayer server watch off (default: on).
+- `-Dsteinbridge.opt.vanillaSearchRate=true`: the chunk visibility search runs whenever the game asks, every frame while chunks wait to be built (default: the previous list is kept when the camera did not move and no chunk finished; see `ChunkSearch`).
+- `-Dsteinbridge.opt.vanillaRebuildNear=true`: setupTerrain's rebuildNear loop walks the whole visible list on every frame (default: only the chunks waiting; see `RebuildNear`).
+- `-Dsteinbridge.opt.checkRebuildNear=true`: also walks the whole list on every frame and compares (default: off).
+- `-Dsteinbridge.opt.vanillaChunkLoading=true`: the integrated server loads and generates every chunk of the view distance in the tick that asks for it, as the game does (default: spread over the ticks, nearest first; see `LazyChunks`).
+- `-Dsteinbridge.opt.vanillaPendingTicks=true`: saving a chunk walks every scheduled block update of the world, as the game does (default: one index per save; see `PendingTicks`).
+- `-Dsteinbridge.opt.checkPendingTicks=true`: answers every chunk of a save both ways and compares the lists (default: off).
 - `-Dsteinbridge.opt.noWatchdog=true`: turns the freeze watchdog off (default: on).
 - `-Dsteinbridge.watchdog.silenceSec=N`: seconds of silence before the watchdog reports a freeze (default: 20).
 - `-Dsteinbridge.watchdog.tickSec=N`: seconds between the watchdog's checks (default: 10).
@@ -188,6 +205,8 @@ listed at the end.
 `dev.xavier.stein.gfx.SteinGfxOptions`
 
 - `-Dsteinbridge.gfx.passStateCheck=true` (diagnostics): on every tracked pass, the queries to the driver, compared with what was tracked at opening and with the game's state at closing; counts and prints the divergences.
+- `-Dsteinbridge.gfx.noVolume=true`: no light in the air (`SteinVolume`), for A/B (default: with the atmosphere and the shadows).
+- `-Dsteinbridge.gfx.noCloudShadows=true`: the clouds cast no shadows and do not dim the sun (`SteinClouds`), for A/B (default: with the clouds and the shadows).
 - `-Dsteinbridge.gfx.gpuPassTiming=true` (diagnostics): GPU time of each pass (OpenGL or Vulkan timestamps), read a few frames later and printed every 5 s.
 - `-Dsteinbridge.diag.hdrLayerView=true` (diagnostics): with HDR's quick quality, the encode paints green where it took the light from the lights layer (default: off).
 - `-Dsteinbridge.diag.hdrShotAtSec=N` (diagnostics): N seconds after startup, saves the HDR encode's output (clipped to 8 bits) to screenshots/hdr-encode.png (default: off).

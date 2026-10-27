@@ -11,7 +11,9 @@ package dev.xavier.stein.bridge.diag;
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.bridge.showcase.Showcase;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.entity.EntityPlayerSP;
+import net.minecraft.client.resources.ResourcePackRepository;
 import net.minecraft.client.settings.GameSettings;
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.entity.Entity;
@@ -23,6 +25,8 @@ import net.minecraft.nbt.NBTBase;
 import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.potion.PotionEffect;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -128,9 +132,8 @@ final class DiagWorldScenes {
             ItemStack[] main = inv.mainInventory;
             ItemStack[] armor = inv.armorInventory;
             int current = inv.currentItem;
-            String[] pieces = {
-                "diamond_boots", "diamond_leggings", "diamond_chestplate", "diamond_helmet"
-            };
+            String m = DiagOptions.GEAR_ARMOR;
+            String[] pieces = {m + "_boots", m + "_leggings", m + "_chestplate", m + "_helmet"};
             int[] damage = {420, 470, 60, 330}; // maximums 429, 495, 528, 363
             // Protection at the level of -Dsteinbridge.diag.gearProtection (default 4): resource
             // packs choose the armor texture by enchantment and by worn durability, and without
@@ -139,7 +142,9 @@ final class DiagWorldScenes {
             int protectionLevel = DiagOptions.GEAR_PROTECTION;
             for (int i = 0; i < 4; i++) {
                 ItemStack s = new ItemStack(Item.getByNameOrId(pieces[i]), 1);
-                s.setItemDamage(damage[i]);
+                if ("diamond".equals(m)) {
+                    s.setItemDamage(damage[i]); // the worn bands of the bench's diamond packs
+                }
                 if (protectionLevel > 0) {
                     s.addEnchantment(Enchantment.protection, protectionLevel);
                 }
@@ -148,6 +153,13 @@ final class DiagWorldScenes {
             main[current] = new ItemStack(Item.getByNameOrId("bow"), 1);
             main[9] = new ItemStack(Item.getByNameOrId("arrow"), 64);
             main[10] = new ItemStack(Item.getByNameOrId("arrow"), 23);
+            String[] extra = DiagOptions.GEAR_ITEMS;
+            for (int i = 0; i < extra.length; i++) {
+                int slot = i < 8 ? (current + 1 + i) % 9 : 10 + i;
+                if (slot < main.length && Item.getByNameOrId(extra[i].trim()) != null) {
+                    main[slot] = new ItemStack(Item.getByNameOrId(extra[i].trim()), 1);
+                }
+            }
             player.addPotionEffect(new PotionEffect(1, 90 * 20, 1)); // Speed II, 1:30
             // Strength, 0:15 (blinks in the last 10 s)
             player.addPotionEffect(new PotionEffect(5, 15 * 20, 0));
@@ -292,14 +304,28 @@ final class DiagWorldScenes {
         if (DiagOptions.PITCH > -1000) {
             EntityPlayerSP p = net.minecraft.client.Minecraft.getMinecraft().thePlayer;
             if (p != null) {
-                p.rotationPitch = DiagOptions.PITCH;
-                p.prevRotationPitch = DiagOptions.PITCH;
+                float pitch = DiagOptions.PITCH + turn(2);
+                p.rotationPitch = pitch;
+                p.prevRotationPitch = pitch;
                 if (DiagOptions.YAW > -1000) {
-                    p.rotationYaw = DiagOptions.YAW;
-                    p.prevRotationYaw = DiagOptions.YAW;
+                    float yaw = DiagOptions.YAW + turn(1);
+                    p.rotationYaw = yaw;
+                    p.prevRotationYaw = yaw;
                 }
             }
         }
+    }
+
+    /**
+     * The degrees {@link DiagOptions#YAW_STEP} adds now to the yaw (part 1) or the pitch (part 2; 0
+     * before its second or when not given).
+     */
+    private static float turn(int part) {
+        String[] spec = DiagOptions.YAW_STEP.split(":");
+        if (spec.length <= part || Scenes.elapsed() < Long.parseLong(spec[0]) * 1_000_000_000L) {
+            return 0f;
+        }
+        return Float.parseFloat(spec[part]);
     }
 
     private static boolean showcaseOpened;
@@ -355,6 +381,42 @@ final class DiagWorldScenes {
         if (now >= nextReload) {
             nextReload = now + DiagOptions.RELOAD_EVERY * 1_000_000_000L;
             reloadChunks();
+        }
+    }
+
+    private static boolean packDone;
+
+    /** {@code packAtSec}: the resource pack switched in game, then the resources reloaded. */
+    static void packFrame() {
+        String spec = DiagOptions.PACK_AT;
+        int colon = spec.indexOf(':');
+        if (packDone || colon < 0) {
+            return;
+        }
+        if (Scenes.elapsed() < Long.parseLong(spec.substring(0, colon)) * 1_000_000_000L) {
+            return;
+        }
+        packDone = true;
+        String name = spec.substring(colon + 1);
+        try {
+            Minecraft mc = Minecraft.getMinecraft();
+            ResourcePackRepository repo = mc.getResourcePackRepository();
+            repo.updateRepositoryEntriesAll();
+            List<ResourcePackRepository.Entry> chosen = new ArrayList<>();
+            for (ResourcePackRepository.Entry e : repo.getRepositoryEntriesAll()) {
+                if (e.getResourcePackName().equals(name)) {
+                    chosen.add(e);
+                }
+            }
+            repo.setRepositories(chosen);
+            mc.gameSettings.resourcePacks.clear();
+            if (!chosen.isEmpty()) {
+                mc.gameSettings.resourcePacks.add(name);
+            }
+            mc.refreshResources();
+            Log.info("diag", "pack switched to '" + name + "' (" + chosen.size() + " found)");
+        } catch (RuntimeException e) {
+            Log.info("diag", "pack switch failed: " + e);
         }
     }
 
