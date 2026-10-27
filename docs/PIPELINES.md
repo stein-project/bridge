@@ -140,7 +140,8 @@ search (`Chunk*` except `ChunkArena`), network and threads (`Net`, `NetAddress`,
 (`ActiveChunks`, `BiomeLock`, `BlockMath`, `DataWatchers`, `EnchCache`, `EntityFlags`, `FontIndex`,
 `NameCache`, `SignText`, `ArmorTextures`, `CraftingInit`, `AngleTable`, `Particles`, `Rain`), state and
 option plumbing (`EngineOptions`, `CheckReport`, `FrameTime`, `KeyBindings`, `Mat4`, `Obf`, `Sprint`,
-`TextHook`, `Visuals`, `OldAnimations`). `HudBatch` and `ArmorGlint` batch the game's own calls
+`TextHook`, `Visuals`, `OldAnimations`). The built-in benchmark (`bridge/bench`, [BENCHMARK.md](BENCHMARK.md)) only
+measures: its counters sit in both backends and the fixed pipeline, and do nothing without `-Dsteinbridge.bench`. `HudBatch` and `ArmorGlint` batch the game's own calls
 through the GlStateManager and the Tessellator, which both pipelines handle; `./gradlew verify` (in the Loader) only
 runs the `HudBatch` check in the fixed run.
 

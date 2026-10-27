@@ -9,6 +9,7 @@
 package dev.xavier.stein.bridge.hooks;
 
 import dev.xavier.stein.bridge.SteinBridge;
+import dev.xavier.stein.bridge.bench.BenchZones;
 import dev.xavier.stein.bridge.engine.FrameTime;
 import dev.xavier.stein.gfx.SteinDevice;
 import dev.xavier.stein.gfx.SteinGfxOptions;
@@ -78,11 +79,13 @@ final class GameHooksHud {
             return;
         }
         if (GameHooks.SINK != null) {
+            BenchZones.begin(BenchZones.MODS_HUD);
             try {
                 GameHooks.SINK.overlay(GameHooksRender.partialTicks());
             } catch (Throwable e) {
                 GameHooks.fail("overlay", e);
             }
+            BenchZones.end(BenchZones.MODS_HUD);
         }
         VanillaHud.endFrame(); // the side scoreboard's objective belongs to this frame only
     }
@@ -90,19 +93,24 @@ final class GameHooksHud {
     /** In place of currentScreen.drawScreen(x, y, pt) in updateCameraAndRender. */
     static void drawScreen(Object screen, int mouseX, int mouseY, float partialTicks) {
         if (GameHooks.SINK != null) {
+            BenchZones.begin(BenchZones.MODS_SCREEN);
             try {
                 GameHooks.SINK.beforeDrawScreen(screen, mouseX, mouseY, partialTicks);
             } catch (Throwable e) {
                 GameHooks.fail("beforeDrawScreen", e);
             }
+            BenchZones.end(BenchZones.MODS_SCREEN);
         }
         ((GuiScreen) screen).drawScreen(mouseX, mouseY, partialTicks);
         if (GameHooks.SINK != null) {
+            // the zone sums both halves of the frame's screen events
+            BenchZones.begin(BenchZones.MODS_SCREEN);
             try {
                 GameHooks.SINK.afterDrawScreen(screen, mouseX, mouseY, partialTicks);
             } catch (Throwable e) {
                 GameHooks.fail("afterDrawScreen", e);
             }
+            BenchZones.end(BenchZones.MODS_SCREEN);
         }
     }
 

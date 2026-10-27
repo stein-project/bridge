@@ -8,6 +8,8 @@
 
 package dev.xavier.stein.bridge.hooks;
 
+import dev.xavier.stein.bridge.bench.Bench;
+import dev.xavier.stein.bridge.bench.BenchZones;
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.bridge.engine.FrameTime;
 import dev.xavier.stein.gfx.SteinGfxSelfTest;
@@ -117,12 +119,16 @@ public final class GameHooks {
     public static void tickEnd() {
         FrameTime.ticked();
         if (SINK != null) {
+            BenchZones.begin(BenchZones.MODS_TICK);
             try {
                 SINK.tickEnd();
             } catch (Throwable e) {
                 fail("tickEnd", e);
             }
+            BenchZones.end(BenchZones.MODS_TICK);
         }
+        // the benchmark's camera and route, after the mods (only with -Dsteinbridge.bench)
+        Bench.tick();
     }
 
     /**

@@ -19,6 +19,7 @@ import static dev.xavier.stein.gfx.gl.SteinGlOpList.op;
 import static dev.xavier.stein.gfx.gl.SteinGlOpList.opN;
 import static dev.xavier.stein.gfx.gl.SteinGlOps.*;
 
+import dev.xavier.stein.bridge.bench.BenchCounters;
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.gfx.SteinGfxOptions;
 import dev.xavier.stein.gfx.SteinPipeline;
@@ -543,6 +544,7 @@ public final class SteinGlFrame {
         if (STATS) {
             SteinGlFrameStats.noteSync(reason);
         }
+        BenchCounters.sync();
         SteinGlReplay.run();
         splitOpenPass();
         SteinGlFenceBatch.flush();

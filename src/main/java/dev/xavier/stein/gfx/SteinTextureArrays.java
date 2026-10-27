@@ -8,6 +8,7 @@
 
 package dev.xavier.stein.gfx;
 
+import dev.xavier.stein.bridge.bench.BenchCounters;
 import dev.xavier.stein.gfx.game.SteinGameTexture;
 import dev.xavier.stein.gfx.game.SteinGameTextures;
 
@@ -280,6 +281,7 @@ public final class SteinTextureArrays {
      * texture changes.
      */
     public static void touchBound() {
+        BenchCounters.textureUpload();
         int tex = SteinGameState.textureName(SteinGameState.activeUnit());
         forget(tex);
     }

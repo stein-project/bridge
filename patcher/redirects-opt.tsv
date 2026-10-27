@@ -1,6 +1,42 @@
 # Client optimizations applied by patching. They go only into the
 # SteinBridge variants; the vanilla variant remains the baseline.
 # class	name2	descriptor	name3	newOwner
+# The benchmark's CPU zones (dev.xavier.stein.bridge.bench.BenchZones, only with -Dsteinbridge.bench): the begin of
+# each zone. The hooks run in the order of the rules, so the begins are here, before every other rule of the same call,
+# and the ends at the bottom of redirects-mods.tsv, after every other: each zone covers the game's call AND the Stein
+# hooks around it (the recording sessions and their flushes, the mods' events).
+# Minecraft.runTick in runGameLoop.
+ave	s	()V	tickBegin	dev/xavier/stein/bridge/bench/BenchZones	before	ave.av
+# EntityRenderer.updateCameraAndRender in runGameLoop.
+bfk	a	(FJ)V	renderBegin	dev/xavier/stein/bridge/bench/BenchZones	before	ave.av
+# renderWorld in updateCameraAndRender.
+bfk	b	(FJ)V	worldBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(FJ)V
+# updateLightmap in renderWorld.
+bfk	g	(F)V	lightmapBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.b(FJ)V
+# RenderGlobal.setupTerrain in renderWorldPass.
+bfr	a	(Lpk;DLbia;IZ)V	terrainSetupBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(IFJ)V
+# RenderGlobal.updateChunks in renderWorldPass.
+bfr	a	(J)V	chunkUploadBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(IFJ)V
+# RenderGlobal.renderBlockLayer (each layer) in renderWorldPass.
+bfr	a	(Ladf;DILpk;)I	terrainBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(IFJ)V
+# RenderGlobal.renderSky in renderWorldPass.
+bfr	a	(FI)V	skyBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(IFJ)V
+# renderCloudsCheck in renderWorldPass.
+bfk	a	(Lbfr;FI)V	cloudsBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(IFJ)V
+# RenderGlobal.renderEntities in renderWorldPass.
+bfr	a	(Lpk;Lbia;F)V	entitiesBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(IFJ)V
+# EffectRenderer.renderParticles in renderWorldPass.
+bec	a	(Lpk;F)V	particlesBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(IFJ)V
+# EffectRenderer.renderLitParticles in renderWorldPass.
+bec	b	(Lpk;F)V	particlesBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(IFJ)V
+# renderRainSnow in renderWorldPass.
+bfk	c	(F)V	weatherBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(IFJ)V
+# renderHand in renderWorldPass.
+bfk	b	(FI)V	handBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(IFJ)V
+# GuiIngame.renderGameOverlay in updateCameraAndRender.
+avo	a	(F)V	hudBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(FJ)V
+# GuiScreen.drawScreen in updateCameraAndRender.
+axu	a	(IIF)V	screenBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(FJ)V
 # LongHashMap.getHashedKey: the x^z hash collides massively on the chunks around the player.
 nq	g	(J)I	hashedKey	dev/xavier/stein/bridge/engine/ChunkHash
 # World.setActivePlayerChunksAndCheckLight: O(players x radius^2) per tick; runs with one representative per chunk.

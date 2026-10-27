@@ -8,6 +8,7 @@
 
 package dev.xavier.stein.gfx.gl;
 
+import dev.xavier.stein.bridge.bench.BenchCounters;
 import dev.xavier.stein.gfx.SteinBuffer;
 import dev.xavier.stein.gfx.SteinCaps;
 import dev.xavier.stein.gfx.SteinCommands;
@@ -210,6 +211,7 @@ public final class SteinGlCommands extends SteinCommands {
         if (!replay) {
             SteinGlGame.flushEngine();
         }
+        BenchCounters.pass();
         this.caps = device.caps();
         this.name = pass.name;
         if (GPU_TIMING) {
@@ -644,6 +646,7 @@ public final class SteinGlCommands extends SteinCommands {
         if (p == null || vertexCount <= 0 || instanceCount <= 0) {
             return;
         }
+        BenchCounters.draw();
         if (firstInstance == 0) {
             GL31.glDrawArraysInstanced(p.mode, firstVertex, vertexCount, instanceCount);
         } else if (caps.baseInstance) {
@@ -663,6 +666,7 @@ public final class SteinGlCommands extends SteinCommands {
         if (p == null || indexCount <= 0 || instanceCount <= 0) {
             return;
         }
+        BenchCounters.draw();
         SteinGlPassRules.indexRequired("drawIndexed", indexHandle, p);
         long at = (long) firstIndex * indexSize;
         if (firstInstance == 0) {
@@ -716,6 +720,7 @@ public final class SteinGlCommands extends SteinCommands {
         if (p == null || count <= 0) {
             return;
         }
+        BenchCounters.draw();
         GL43.glMultiDrawArraysIndirect(p.mode, offset, count, DRAW_ARRAYS_INDIRECT_STRIDE);
     }
 
@@ -731,6 +736,7 @@ public final class SteinGlCommands extends SteinCommands {
             return;
         }
         SteinGlPassRules.indexRequired("drawIndexedIndirect", indexHandle, p);
+        BenchCounters.draw();
         GL43.glMultiDrawElementsIndirect(
                 p.mode, indexType, offset, count, DRAW_ELEMENTS_INDIRECT_STRIDE);
     }

@@ -8,6 +8,7 @@
 
 package dev.xavier.stein.bridge.engine;
 
+import dev.xavier.stein.bridge.bench.Bench;
 import dev.xavier.stein.bridge.core.CoreOptions;
 import dev.xavier.stein.bridge.core.Win;
 
@@ -79,7 +80,9 @@ public final class IdleLimit {
 
     /** This frame's limit, or 0 for none. */
     private static int fps() {
-        if (Win.handle == 0L) {
+        if (Win.handle == 0L || Bench.running()) {
+            // the benchmark measures at full speed even when the player switches windows (the
+            // frames are flagged instead)
             return 0;
         }
         // GLFW's own focus: it also covers a window that never got focus (opened behind another).

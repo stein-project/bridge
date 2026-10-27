@@ -8,6 +8,7 @@
 
 package dev.xavier.stein.bridge.hooks;
 
+import dev.xavier.stein.bridge.bench.BenchZones;
 import dev.xavier.stein.bridge.engine.ArmorTextures;
 import dev.xavier.stein.bridge.engine.RenderCheck;
 
@@ -159,11 +160,13 @@ final class GameHooksRender {
      */
     static void renderWorld() {
         if (GameHooks.SINK != null) {
+            BenchZones.begin(BenchZones.MODS_WORLD);
             try {
                 GameHooks.SINK.renderWorld(partialTicks());
             } catch (Throwable e) {
                 GameHooks.fail("renderWorld", e);
             }
+            BenchZones.end(BenchZones.MODS_WORLD);
         }
     }
 

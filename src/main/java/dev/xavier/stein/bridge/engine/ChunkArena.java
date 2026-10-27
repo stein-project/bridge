@@ -8,6 +8,7 @@
 
 package dev.xavier.stein.bridge.engine;
 
+import dev.xavier.stein.bridge.bench.BenchCounters;
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.gfx.SteinGfxOptions;
 import dev.xavier.stein.gfx.SteinTerrain;
@@ -434,6 +435,7 @@ public final class ChunkArena {
      * to the chunk's region, relative to its origin.
      */
     public static void upload(Object uploaderObj, Object rendererObj) {
+        BenchCounters.chunkUpload();
         VertexBufferUploader uploader = (VertexBufferUploader) uploaderObj;
         WorldRenderer renderer = (WorldRenderer) rendererObj;
         if (!active()) {

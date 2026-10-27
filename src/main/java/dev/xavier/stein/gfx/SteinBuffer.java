@@ -8,6 +8,7 @@
 
 package dev.xavier.stein.gfx;
 
+import dev.xavier.stein.bridge.bench.BenchCounters;
 import dev.xavier.stein.bridge.core.Log;
 
 import java.nio.ByteBuffer;
@@ -271,6 +272,7 @@ public abstract class SteinBuffer {
                 long t0 = System.nanoTime();
                 f.waitFor(FENCE_WAIT_NANOS);
                 waited(name, System.nanoTime() - t0);
+                BenchCounters.ringWait(System.nanoTime() - t0);
             }
             f.destroy();
             fences[first] = null;

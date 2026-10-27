@@ -29,6 +29,7 @@ import static org.lwjgl.glfw.GLFW.glfwSetMouseButtonCallback;
 import static org.lwjgl.glfw.GLFW.glfwSetScrollCallback;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowFocusCallback;
 
+import dev.xavier.stein.bridge.bench.Bench;
 import dev.xavier.stein.bridge.engine.KeyBindings;
 
 import org.lwjgl.glfw.GLFWCharCallback;
@@ -199,6 +200,9 @@ public final class Input {
     }
 
     private static void onKey(long w, int k, int scancode, int action, int mods) {
+        if (Bench.inputLocked()) {
+            return; // the benchmark is playing: nothing the player presses reaches the game
+        }
         if (action == GLFW_REPEAT && !Win.repeatEvents) {
             // The repeat is dropped, and so is its character (in LWJGL 2 it
             // came in the same event). Without this, the character of each
@@ -224,6 +228,9 @@ public final class Input {
     }
 
     private static void onChar(long w, int codepoint) {
+        if (Bench.inputLocked()) {
+            return;
+        }
         char c = codepoint < Character.MAX_VALUE ? (char) codepoint : ' ';
         if (pendingChar == SWALLOW) { // character of a discarded repeat
             pendingChar = null;
@@ -247,6 +254,9 @@ public final class Input {
     }
 
     private static void onCursorPos(long w, double xpos, double ypos) {
+        if (Bench.inputLocked()) {
+            return;
+        }
         int x = (int) (xpos * scaleX());
         int y = flipY((int) (ypos * scaleY()));
         Win.mouseDX += x - Win.mouseX;
@@ -257,6 +267,9 @@ public final class Input {
     }
 
     private static void onMouseButton(long w, int button, int action, int mods) {
+        if (Bench.inputLocked()) {
+            return;
+        }
         boolean down = action == GLFW_PRESS;
         if (button >= 0 && button < Win.mouseButtons.length) {
             Win.mouseButtons[button] = down;
@@ -265,6 +278,9 @@ public final class Input {
     }
 
     private static void onScroll(long w, double xoff, double yoff) {
+        if (Bench.inputLocked()) {
+            return;
+        }
         int d = (int) (yoff * WHEEL_DELTA);
         if (d == 0) {
             return;
