@@ -84,7 +84,7 @@ final class DiagSingleplayerScene {
         WorldSettings settings =
                 new WorldSettings(
                         20260913L,
-                        WorldSettings.GameType.getByID(0),
+                        WorldSettings.GameType.getByID(DiagOptions.SP_MODE),
                         true,
                         false,
                         WorldType.DEFAULT);

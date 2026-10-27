@@ -599,3 +599,37 @@ org/lwjgl/opengl/ARBShaderObjects	glUniform4ARB	(ILjava/nio/FloatBuffer;)V	glUni
 org/lwjgl/opengl/ARBShaderObjects	glUniformMatrix2ARB	(IZLjava/nio/FloatBuffer;)V	glUniformMatrix2fvARB	dev/xavier/stein/gfx/game/SteinGameGl
 org/lwjgl/opengl/ARBShaderObjects	glUniformMatrix3ARB	(IZLjava/nio/FloatBuffer;)V	glUniformMatrix3fvARB	dev/xavier/stein/gfx/game/SteinGameGl
 org/lwjgl/opengl/ARBShaderObjects	glUniformMatrix4ARB	(IZLjava/nio/FloatBuffer;)V	glUniformMatrix4fvARB	dev/xavier/stein/gfx/game/SteinGameGl
+# Integrated server, chunk loading spread over the ticks (engine/LazyChunks): PlayerInstance's constructor loads only
+# what is near a player or in memory; the rest loads before each PlayerManager update (WorldServer.tick), nearest
+# first, within the time the tick has left. removePlayer and processChunk leave a waiting chunk unloaded.
+ld	c	(II)Lamy;	load	dev/xavier/stein/bridge/engine/LazyChunks	static	lc$a.<init>
+lc	b	()V	updatePlayerInstances	dev/xavier/stein/bridge/engine/LazyChunks	static	le.c()V
+le	a	(II)Lamy;	chunkIfLoaded	dev/xavier/stein/bridge/engine/LazyChunks	static	lc$a.b(Llf;)V
+le	a	(II)Lamy;	chunkIfLoaded	dev/xavier/stein/bridge/engine/LazyChunks	static	lc$a.a()V
+# Saving chunks (engine/PendingTicks): writeChunkToNBT asks for the chunk's scheduled block updates and the game walks
+# every update of the world for each chunk (17 s autosaves, 76 s pause saves in a new world at distance 32). During
+# saveChunks (WorldServer.saveAllChunks) and unloadQueuedChunks (WorldServer.tick) one index answers every chunk.
+adm	a	(Lamy;Z)Ljava/util/List;	forChunk	dev/xavier/stein/bridge/engine/PendingTicks	static	anj.a(Lamy;Ladm;Ldn;)V
+amv	a	(ZLnu;)Z	saveChunks	dev/xavier/stein/bridge/engine/PendingTicks	static	le.a(ZLnu;)V
+amv	d	()Z	unloadQueuedChunks	dev/xavier/stein/bridge/engine/PendingTicks	static	le.c()V
+# setupTerrain's rebuildNear loop (engine/RebuildNear) over the visible chunks waiting for a build instead of the
+# whole list: newLinkedHashSet keeps the previous chunksToUpdate, the loop's iterator gets the waiting ones in list
+# order, a cancelled build task's mark is recorded; each RenderChunk holds its position in the list.
+com/google/common/collect/Sets	newLinkedHashSet	()Ljava/util/LinkedHashSet;	newSet	dev/xavier/stein/bridge/engine/RebuildNear	static	bfr.a(Lpk;DLbia;IZ)V
+java/util/List	iterator	()Ljava/util/Iterator;	iterator	dev/xavier/stein/bridge/engine/RebuildNear	static	bfr.a(Lpk;DLbia;IZ)V
+bht	a	(Z)V	markFromTask	dev/xavier/stein/bridge/engine/RebuildNear	static	bhn.e()V
+bht	sbSlot	I	-	-	field
+bht	sbSlotList	Ljava/lang/Object;	-	-	field
+# The search's face-to-face visibility kept in the RenderChunk (engine/ChunkVisibility): 36 bits per CompiledChunk.
+bht	sbVisOf	Ljava/lang/Object;	-	-	field
+bht	sbVis	J	-	-	field
+# The search's chunk corner kept in the RenderChunk (engine/ChunkCorner): the position's ints and the BlockPos they are from.
+bht	sbPosOf	Ljava/lang/Object;	-	-	field
+bht	sbX	I	-	-	field
+bht	sbY	I	-	-	field
+bht	sbZ	I	-	-	field
+# Which RenderChunks have tile entities (engine/TileChunks), for the entity loops' copy: setCompiledChunk and
+# stopCompileTask also queue the chunk; the render thread reads the queued ones (the after hooks above stay).
+bht	a	(Lbhq;)V	setCompiled	dev/xavier/stein/bridge/engine/TileChunks	static
+bht	h	()V	stopCompile	dev/xavier/stein/bridge/engine/TileChunks	static
+bht	sbTiles	Z	-	-	field

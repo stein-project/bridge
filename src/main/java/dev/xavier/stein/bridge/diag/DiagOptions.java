@@ -320,6 +320,37 @@ final class DiagOptions {
     static final int GEAR_PROTECTION = Opt.integer("steinbridge.diag.gearProtection", 4);
 
     /**
+     * {@code -Dsteinbridge.diag.gearArmor=material}: material of the test armor (diamond, iron,
+     * gold, chainmail, leather; default diamond).
+     */
+    static final String GEAR_ARMOR = Opt.text("steinbridge.diag.gearArmor", "diamond");
+
+    /**
+     * {@code -Dsteinbridge.diag.gearItems=item,item...}: items put in the hotbar from the second
+     * slot, then in the inventory (default: none).
+     */
+    static final String[] GEAR_ITEMS = list("steinbridge.diag.gearItems", ",", 0);
+
+    /**
+     * {@code -Dsteinbridge.diag.packAtSec=S:name}: at second S, switches to the resource pack
+     * folder or zip {@code name} (empty: none) and reloads the resources, as the pack screen does
+     * (default: off).
+     */
+    static final String PACK_AT = Opt.text("steinbridge.diag.packAtSec", "");
+
+    /**
+     * {@code -Dsteinbridge.diag.singleplayerMode=N}: game type of a world the singleplayer scene
+     * creates (0 survival, 1 creative; default 0).
+     */
+    static final int SP_MODE = Opt.integer("steinbridge.diag.singleplayerMode", 0);
+
+    /**
+     * {@code -Dsteinbridge.diag.creativeTabs=S:tab|...}: at second S, the open creative inventory
+     * switches to that tab index (8 combat, 11 the player's inventory; default: none).
+     */
+    static final String[] CREATIVE_TABS = list("steinbridge.diag.creativeTabs", "\\|", 0);
+
+    /**
      * {@code -Dsteinbridge.diag.reloadChunksEverySec=N}: reloads the terrain every N seconds
      * (default: off).
      */
