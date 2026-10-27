@@ -5,6 +5,7 @@
 //
 // Copyright (c) 2026 Breno Xavier
 // Recorded model parts (SteinEntityDeferred): the part's fixed geometry + per-instance data.
+#include "common/clip_depth.glsl"
 #include "common/entity_frame.glsl"
 #include "common/entity_light.glsl"
 layout(location = 0) in vec3 aPos;
@@ -27,7 +28,7 @@ layout(location = 5) flat out vec2 vFlags;
 void main() {
     vec4 p = vec4(aPos, 1.0);
     vec3 eye = vec3(dot(iRow0, p), dot(iRow1, p), dot(iRow2, p));
-    gl_Position = projection * vec4(eye, 1.0);
+    gl_Position = clipDepth(projection * vec4(eye, 1.0));
     vec3 st = vec3(aUv, 1.0);
     vUv = vec3(dot(iTex0.xyz, st), dot(iTex1.xyz, st), iTex0.w);
     int flags = int(iLight.z);

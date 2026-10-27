@@ -70,7 +70,11 @@ public final class SteinVkWindow {
             Log.info("gfx", String.valueOf(device.caps()));
         } catch (RuntimeException | LinkageError e) {
             SteinBackend.vulkanFailed();
-            SteinBackend.fellBack(SteinBackend.Fallback.NO_DEVICE, String.valueOf(e.getMessage()));
+            SteinBackend.fellBack(
+                    e instanceof SteinVkDevice.OldDriver
+                            ? SteinBackend.Fallback.OLD_DRIVER
+                            : SteinBackend.Fallback.NO_DEVICE,
+                    String.valueOf(e.getMessage()));
             glfwDestroyWindow(win);
             return NULL;
         }

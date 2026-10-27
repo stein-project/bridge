@@ -12,6 +12,7 @@
 // bytes and a marker in the normal's w. With the marker the vertex belongs to the name's background: no texture and with the byte color,
 // as the background Tessellator would give. No per-vertex lightmap (neither the text nor the background carries one). Without TEXT the shader is
 // the usual one, line by line.
+#include "common/clip_depth.glsl"
 #include "common/entity_frame.glsl"
 #include "common/entity_light.glsl"
 layout(location = 0) in vec3 aPos;
@@ -44,7 +45,7 @@ layout(location = 5) flat out vec2 vFlags;
 void main() {
     vec4 p = vec4(aPos, 1.0);
     vec3 eye = vec3(dot(iRow0, p), dot(iRow1, p), dot(iRow2, p));
-    gl_Position = projection * vec4(eye, 1.0);
+    gl_Position = clipDepth(projection * vec4(eye, 1.0));
     vec3 st = vec3(aUv, 1.0);
     vUv = vec2(dot(iTex0.xyz, st), dot(iTex1.xyz, st));
     vOverlay = (int(iLight.z) & 64) != 0 ? iOverlay : vec4(0.0);

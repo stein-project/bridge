@@ -25,6 +25,19 @@ public final class SteinVkOptions {
      */
     static final boolean VALIDATION = Opt.flag("steinbridge.gfx.vkValidation");
 
+    /**
+     * {@code -Dsteinbridge.gfx.vkNoDepthClipControl=true}: acts as if the device had no
+     * VK_EXT_depth_clip_control, as older drivers: the game goes to OpenGL (default: off; to test
+     * that path).
+     */
+    static final boolean NO_DEPTH_CLIP_CONTROL = Opt.flag("steinbridge.gfx.vkNoDepthClipControl");
+
+    /**
+     * {@code -Dsteinbridge.gfx.vkAllowOldDriver=true}: runs Vulkan on a device without
+     * VK_EXT_depth_clip_control anyway, with the shaders' depth remap (default: off).
+     */
+    static final boolean ALLOW_OLD_DRIVER = Opt.flag("steinbridge.gfx.vkAllowOldDriver");
+
     /** {@code -Dsteinbridge.gfx.vkNoPush=true}: does not use push descriptors (default: off). */
     static final boolean NO_PUSH = Opt.flag("steinbridge.gfx.vkNoPush");
 

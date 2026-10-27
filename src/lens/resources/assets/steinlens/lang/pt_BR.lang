@@ -49,6 +49,7 @@ steinlens.graphicsApi.unavailable=O Vulkan não abriu neste computador (%s), ent
 steinlens.graphicsApi.reason.no_driver=sem driver de Vulkan
 steinlens.graphicsApi.reason.no_window=o sistema de janelas recusou o Vulkan
 steinlens.graphicsApi.reason.no_device=sem placa de vídeo com Vulkan 1.2
+steinlens.graphicsApi.reason.old_driver=driver de vídeo antigo demais para o Vulkan
 steinlens.graphicsApi.crashed=Na última vez que o jogo abriu com Vulkan, ele fechou antes de aparecer, então voltou para o OpenGL. Escolha o Vulkan de novo no Stein Client para tentar outra vez
 steinlens.graphics=Gráficos
 steinlens.graphics.fast=Rápido
