@@ -46,6 +46,7 @@ import static org.lwjgl.glfw.GLFW.glfwSetWindowMonitor;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowPos;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowPosCallback;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowSize;
+import static org.lwjgl.glfw.GLFW.glfwSetWindowSizeLimits;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowTitle;
 import static org.lwjgl.glfw.GLFW.glfwShowWindow;
 import static org.lwjgl.glfw.GLFW.glfwSwapBuffers;
@@ -165,6 +166,9 @@ public final class Display {
             throw new IllegalStateException("SteinGfxOptions was loaded before the window");
         }
         Win.handle = win;
+        // the smallest window the game's screens are laid out for (320x240, the GUI's minimum at
+        // scale 1): below it, the screens overlap and the picture no longer fits
+        glfwSetWindowSizeLimits(win, MIN_WIDTH, MIN_HEIGHT, GLFW_DONT_CARE, GLFW_DONT_CARE);
         Win.windowedWidth = mode.getWidth();
         Win.windowedHeight = mode.getHeight();
         applyIcons(); // requested by the game before the window existed
@@ -304,6 +308,11 @@ public final class Display {
             errorCallback = null;
         }
     }
+
+    /** The smallest window, in screen coordinates. */
+    private static final int MIN_WIDTH = 320;
+
+    private static final int MIN_HEIGHT = 240;
 
     public static boolean isCreated() {
         return Win.isCreated();

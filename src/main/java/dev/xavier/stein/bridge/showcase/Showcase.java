@@ -9,14 +9,21 @@
 package dev.xavier.stein.bridge.showcase;
 
 import dev.xavier.stein.bridge.core.Log;
+import dev.xavier.stein.gfx.SteinPostFx;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.entity.EntityPlayerSP;
+import net.minecraft.client.multiplayer.PlayerControllerMP;
 import net.minecraft.client.multiplayer.WorldClient;
+import net.minecraft.client.network.NetHandlerPlayClient;
 import net.minecraft.client.particle.EffectRenderer;
 import net.minecraft.client.renderer.EntityRenderer;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.RenderGlobal;
 import net.minecraft.client.settings.GameSettings;
 import net.minecraft.entity.Entity;
+import net.minecraft.stats.StatFileWriter;
+import net.minecraft.util.BlockPos;
 import net.minecraft.util.MovingObjectPosition;
 
 /**
@@ -31,6 +38,10 @@ import net.minecraft.util.MovingObjectPosition;
  * player's physics all keep running on the real world, which stays connected. Around the swap the
  * aim (objectMouseOver, pointedEntity) is kept, the third-person view is off and the hand is not
  * drawn (it is the real player's).
+ *
+ * <p>Without a world (the main menu) there is no world drawing to swap into: the screen calls
+ * {@link #drawInMenu} itself, with a stand-in player and controller that only exist for the drawing
+ * (the lightmap and the aim read them). They belong to no server and are never ticked.
  *
  * <p>Day and night: the scene rests in the late afternoon (the sun low in the west, in front of the
  * camera) or before dawn (the moon low in the west). {@link #setNight} runs the clock forward in a
@@ -67,6 +78,11 @@ public final class Showcase {
     /** The settings the scene's chunks were built with; a change rebuilds them. */
     private static int builtFor;
 
+    /** The main menu's stand-ins for the player and its controller ({@link #drawInMenu}). */
+    private static EntityPlayerSP standIn;
+
+    private static PlayerControllerMP standInController;
+
     private Showcase() {}
 
     /** Whether the showcase is being drawn (mods' world hooks skip it). */
@@ -75,11 +91,12 @@ public final class Showcase {
     }
 
     /**
-     * Starts drawing the showcase (the first time, builds it). Only with a world loaded: the swap
-     * happens inside the world's own drawing. Render thread.
+     * Starts drawing the showcase (the first time, builds it). With a world loaded the swap happens
+     * inside the world's own drawing; without one, the screen calls {@link #drawInMenu}. Render
+     * thread.
      */
     public static void open() {
-        if (failed || active || Minecraft.getMinecraft().theWorld == null) {
+        if (failed || active) {
             return;
         }
         try {
@@ -100,7 +117,11 @@ public final class Showcase {
             return;
         }
         active = false;
-        Minecraft.getMinecraft().entityRenderer.lightmapUpdateNeeded = true;
+        Minecraft mc = Minecraft.getMinecraft();
+        mc.entityRenderer.lightmapUpdateNeeded = true;
+        if (mc.theWorld == null && scene != null && mc.renderViewEntity == scene.camera) {
+            mc.renderViewEntity = null; // the main menu's, see drawInMenu
+        }
     }
 
     /** Night or day, with the time-lapse between them. */
@@ -158,12 +179,13 @@ public final class Showcase {
         GameSettings gs = mc.gameSettings;
         int thirdPerson = gs.thirdPersonView;
         try {
-            prepare();
             mc.theWorld = scene.world;
             mc.renderGlobal = scene.renderGlobal;
             mc.renderViewEntity = scene.camera;
             mc.effectRenderer = scene.effects;
             gs.thirdPersonView = 0;
+            // after the swap: a reload places the chunks around the view entity, the camera
+            prepare();
             er.renderWorld(partialTicks, finishNanos);
         } finally {
             mc.theWorld = world;
@@ -175,6 +197,66 @@ public final class Showcase {
             er.pointedEntity = rendererPointed;
             gs.thirdPersonView = thirdPerson;
         }
+    }
+
+    /**
+     * The showcase as the screen's background in the main menu, where the game draws no world: the
+     * same drawing, with the stand-ins in place of the player and its controller, then the 2D
+     * projection back for the screen. Returns false when there is nothing to draw (a world is
+     * loaded, or the showcase is closed).
+     */
+    public static boolean drawInMenu(float partialTicks) {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (!active || mc.theWorld != null) {
+            return false;
+        }
+        if (standIn == null) {
+            NetHandlerPlayClient net =
+                    new NetHandlerPlayClient(mc, null, null, mc.getSession().getProfile());
+            standIn = new EntityPlayerSP(mc, scene.world, net, new StatFileWriter());
+            standInController = new PlayerControllerMP(mc, net);
+        }
+        EntityRenderer er = mc.entityRenderer;
+        // the fog's brightness follows the view entity in the world's ticks, which do not run
+        // here: as in EntityRenderer.updateRenderer, from the light at the camera
+        float light = scene.world.getLightBrightness(new BlockPos(scene.camera));
+        float far = mc.gameSettings.renderDistanceChunks / 32.0F;
+        er.fogColor1 = er.fogColor2 = light * (1.0F - far) + far;
+        // the field of view is multiplied by the hand's modifier, also kept by those ticks: it
+        // starts at 0 when the game opens on the menu (a field of view of nothing)
+        er.fovModifierHand = er.fovModifierHandPrev = 1.0F;
+        // the search for visible chunks is redone only when something marks it; in the world the
+        // player's own frames do, here nothing would after the first chunk is built
+        scene.renderGlobal.displayListEntitiesDirty = true;
+        EntityPlayerSP player = mc.thePlayer;
+        PlayerControllerMP controller = mc.playerController;
+        try {
+            mc.thePlayer = standIn;
+            mc.playerController = standInController;
+            renderWorld(er, partialTicks, System.nanoTime() + 1_000_000_000L / 60);
+            // what follows renderWorld in a world (updateCameraAndRender): the post-processing and
+            // the end of the frame's light and shadows
+            SteinPostFx.afterWorld();
+        } finally {
+            mc.thePlayer = player;
+            mc.playerController = controller;
+            // the chunk builders read the view entity on their own threads, at any time, and
+            // skip every chunk while it is null (as in the main menu): the camera stays
+            mc.renderViewEntity = scene.camera;
+            // what the game sets after drawing a world, for the screen over it
+            er.setupOverlayRendering();
+            GlStateManager.alphaFunc(516, 0.1F);
+        }
+        return true;
+    }
+
+    /**
+     * In place of Minecraft.getLimitFramerate in the game loop: while the showcase is open, the
+     * limit the player chose (the game's is 30 under any screen without a world).
+     */
+    public static int limitFramerate(Object minecraft) {
+        Minecraft mc = (Minecraft) minecraft;
+        return active ? mc.gameSettings.limitFramerate : mc.getLimitFramerate();
     }
 
     /** In place of EntityRenderer.renderHand in renderWorldPass: no hand in the showcase. */
@@ -193,6 +275,9 @@ public final class Showcase {
             from = to = ticks % 24000L;
         }
         ShowcaseWorld.hold(scene.camera);
+        // the lightmap is redone when the world's ticks ask; neither the main menu nor a paused
+        // game ticks, and the showcase's clock runs on its own: every frame (256 pixels)
+        Minecraft.getMinecraft().entityRenderer.lightmapUpdateNeeded = true;
         int key = settingsKey();
         if (key != builtFor) {
             builtFor = key;
@@ -208,6 +293,15 @@ public final class Showcase {
         key = key * 31 + gs.ambientOcclusion;
         key = key * 31 + gs.mipmapLevels;
         key = key * 31 + (gs.useVbo ? 1 : 0);
+        // the atlas itself: a resource reload (mipmaps, a pack) stitches it again a frame or more
+        // after the setting changed, with every texture in a new place; chunks built before it
+        // would show other textures
+        key =
+                key * 31
+                        + System.identityHashCode(
+                                Minecraft.getMinecraft()
+                                        .getTextureMapBlocks()
+                                        .getAtlasSprite("minecraft:blocks/stone"));
         return key;
     }
 }

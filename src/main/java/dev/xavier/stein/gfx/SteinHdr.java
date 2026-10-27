@@ -35,8 +35,10 @@ public final class SteinHdr {
 
     private static volatile boolean requested;
 
-    /** The Encode block: scale (paper white, peak, test mode) and the test's rectangle. */
-    private static final int ENCODE_BYTES = 32;
+    /**
+     * The Encode block: scale (paper white, peak, test mode, shadows), the test's rectangle, look.
+     */
+    private static final int ENCODE_BYTES = 48;
 
     /**
      * The peak test of the HDR calibration: inside {@link #testRect} the screen shows the chosen
@@ -56,6 +58,35 @@ public final class SteinHdr {
 
     private static volatile int peakNits = 1000;
 
+    /** The shadows, 0 to 100 (50: as drawn); see {@link #configure}. */
+    private static volatile int black = 50;
+
+    /** Stein's look (soft, vivid, moody colours) instead of the image as drawn. */
+    private static volatile boolean look = true;
+
+    /** The calibration is being made: the look stays off, each step judges the plain image. */
+    private static volatile boolean calibrating;
+
+    /**
+     * Quick quality (the option; the default): the game's images stay 8 bits and only the lights
+     * above white go through a 16-bit layer ({@link #lights}). Off (maximum quality): the whole
+     * frame in 16 bits.
+     */
+    private static volatile boolean quick = true;
+
+    /** The quality the framebuffers were made for (changes between frames). */
+    private static boolean quickNow = true;
+
+    /** The quick quality's lights layer, and the frame it was last written in. */
+    private static SteinTexture lightsLayer;
+
+    private static long lightsFrame = -1;
+
+    /** Frames presented (the lights layer counts only in the frame that wrote it). */
+    private static long frame;
+
+    private static boolean shot;
+
     /** The window offers scRGB (the swapchain says so at each recreation). */
     private static volatile boolean supported;
 
@@ -74,13 +105,85 @@ public final class SteinHdr {
     private SteinHdr() {}
 
     /**
-     * The Lens options (any thread; take effect at the next frame): on/off, and the calibration in
-     * nits. The {@code -D} keys of {@link SteinGfxOptions}, when given, win over the calibration.
+     * The Lens options (any thread; take effect at the next frame): on/off, and the calibration —
+     * the paper white and the peak in nits, and the shadows from 0 to 100. The shadows bend only
+     * the darkest part of the image (below 18% of the paper white, a mid grey) by a power, from 1.6
+     * (deeper) through 1 (50, as drawn) to 0.7 (lifted): black stays black, the mid tones and the
+     * white do not move, so a screen that swallows the darkest greys can show them again without
+     * the picture's contrast changing. The {@code -D} keys of {@link SteinGfxOptions}, when given,
+     * win over the calibration.
      */
-    public static void configure(boolean on, int paperWhite, int peak) {
+    public static void configure(
+            boolean on,
+            int paperWhite,
+            int peak,
+            int shadows,
+            boolean steinLook,
+            boolean quickQuality) {
         requested = on;
         whiteNits = paperWhite;
         peakNits = peak;
+        black = shadows;
+        look = steinLook;
+        quick = quickQuality;
+    }
+
+    /** Whether the game's framebuffers are 16 bits now: HDR at maximum quality. */
+    public static boolean wide() {
+        return active && !quickNow;
+    }
+
+    /** The scene past white (the Stein light, SteinPostFx.wideScene) as of the last frame. */
+    private static boolean sceneWide;
+
+    /**
+     * Whether the game's framebuffer colour is 16 bits: HDR at maximum quality, or the Stein light
+     * (its lights go past white until the post-processing's exposure).
+     */
+    public static boolean framebufferWide() {
+        return wide() || sceneWide;
+    }
+
+    /**
+     * Whether the post-processing writes the lights layer this frame: HDR at quick quality (the
+     * composite then draws the game's image clipped at white and the full light into the layer).
+     */
+    public static boolean layered() {
+        return active && quickNow;
+    }
+
+    /** The lights layer at the game's size (16 bits), made or remade when the size changes. */
+    public static SteinTexture lights(SteinDevice dev, int w, int h) {
+        if (lightsLayer == null || lightsLayer.width() != w || lightsLayer.height() != h) {
+            if (lightsLayer != null) {
+                lightsLayer.destroy();
+            }
+            lightsLayer =
+                    dev.createTexture(
+                            SteinTexture.Desc.target("hdr lights", SteinFormat.RGBA16F, w, h));
+        }
+        return lightsLayer;
+    }
+
+    /** The composite wrote the lights layer: it counts for this frame's encode. */
+    public static void lightsWritten() {
+        lightsFrame = frame;
+    }
+
+    /**
+     * The shadows' power for the slider (0 to 100): 1 at 50, up to 1.6 at 0 (deeper, for screens
+     * whose black goes all the way down) and down to 0.7 at 100 (lifted).
+     */
+    private static float shadowPower(int v) {
+        return v <= 50 ? 1f + 0.6f * (50 - v) / 50f : 1f - 0.3f * (v - 50) / 50f;
+    }
+
+    /**
+     * While the calibration's adjusting steps are shown: Stein's look off, so the white, the black
+     * and the brightness are judged on the plain image and every screen ends up the same.
+     */
+    public static void calibrating(boolean on) {
+        calibrating = on;
     }
 
     /**
@@ -100,12 +203,41 @@ public final class SteinHdr {
         return SteinGfxOptions.VULKAN && supported && !failed;
     }
 
-    /** The swapchain, after asking the window for its formats. */
+    /**
+     * The swapchain, after asking the window for its formats. When HDR is wanted and offered at the
+     * very first swapchain (the game opening), it is on from that first one: no frame goes out in
+     * SDR first, which the system would take for an SDR game (and offer its own HDR for it).
+     */
     public static void surfaceSupports(boolean scRgb) {
         if (scRgb != supported) {
             supported = scRgb;
             Log.info("gfx", "HDR output " + (scRgb ? "offered" : "not offered") + " by the window");
         }
+        if (!firstSwapchainSeen) {
+            firstSwapchainSeen = true;
+            // (not available(): this runs while the window is being made, before SteinGfxOptions
+            // may load; a window that offers scRGB is a Vulkan one)
+            if (scRgb && requested && !failed && !active) {
+                active = true;
+                recreateFramebuffer = true;
+                Log.info("gfx", "HDR output on from the first frame");
+            }
+        }
+    }
+
+    /** {@link #surfaceSupports} has seen the first swapchain. */
+    private static boolean firstSwapchainSeen;
+
+    /** The calibration's peak in nits (the system is told about it). */
+    public static int peakNits() {
+        return SteinGfxOptions.HDR_PEAK_SET ? (int) SteinGfxOptions.HDR_PEAK : peakNits;
+    }
+
+    /** The calibration's paper white in nits. */
+    public static int whiteNits() {
+        return SteinGfxOptions.HDR_PAPER_WHITE_SET
+                ? (int) SteinGfxOptions.HDR_PAPER_WHITE
+                : Math.max(80, whiteNits);
     }
 
     /** Whether this frame is drawn for HDR (16-bit image, scRGB swapchain). Render thread. */
@@ -119,11 +251,22 @@ public final class SteinHdr {
      * swapchain.
      */
     public static void betweenFrames() {
+        frame++;
         boolean want = requested && available();
         if (want != active) {
             active = want;
             recreateFramebuffer = true;
             Log.info("gfx", "HDR output " + (want ? "on" : "off"));
+        }
+        if (quick != quickNow) {
+            quickNow = quick;
+            recreateFramebuffer |= active;
+            Log.info("gfx", "HDR quality " + (quickNow ? "quick" : "maximum"));
+        }
+        boolean scene = SteinPostFx.wideScene();
+        if (scene != sceneWide) {
+            sceneWide = scene;
+            recreateFramebuffer = true;
         }
         if (recreateFramebuffer) {
             recreateFramebuffer = false;
@@ -177,25 +320,82 @@ public final class SteinHdr {
             MemoryUtil.memPutFloat(p, white / 80f);
             MemoryUtil.memPutFloat(p + 4, top / 80f);
             MemoryUtil.memPutFloat(p + 8, peakTest ? 1f : 0f);
-            MemoryUtil.memPutFloat(p + 12, 0f);
+            MemoryUtil.memPutFloat(p + 12, shadowPower(black));
             for (int i = 0; i < 4; i++) {
                 MemoryUtil.memPutFloat(p + 16 + 4L * i, testRect[i]);
             }
+            boolean layer =
+                    quickNow
+                            && lightsFrame == frame
+                            && lightsLayer != null
+                            && lightsLayer.width() == screen.width()
+                            && lightsLayer.height() == screen.height();
+            MemoryUtil.memPutFloat(p + 32, look && !calibrating ? 1f : 0f);
+            MemoryUtil.memPutFloat(p + 36, layer ? 1f : 0f);
+            MemoryUtil.memPutFloat(p + 40, quickNow ? 1f : 0f);
+            MemoryUtil.memPutFloat(p + 44, SteinGfxOptions.HDR_LAYER_VIEW ? 1f : 0f);
             block.commitRing();
             SteinCommands c = dev.beginPass(SteinRenderPass.discard("hdr encode", target));
             try {
                 c.bindPipeline(encode);
                 c.bindUniforms(0, block, at, ENCODE_BYTES);
                 c.bindTexture(0, screen, nearest);
+                // (unused without the layer: the screen stands in)
+                c.bindTexture(1, layer ? lightsLayer : screen, nearest);
                 c.draw(3, 1, 0, 0);
             } finally {
                 c.end();
+            }
+            if (SteinGfxOptions.HDR_SHOT_AT >= 0 && !shot) {
+                shotIfDue(dev);
             }
             return targetColor;
         } catch (RuntimeException | LinkageError e) {
             failed = true;
             Log.warn("gfx", "HDR output turned off for this session: " + e);
             return screen;
+        }
+    }
+
+    private static final long STARTED = System.nanoTime();
+
+    /**
+     * {@link SteinGfxOptions#HDR_SHOT_AT}: the encode's output, read back clipped to 8 bits, to
+     * screenshots/hdr-encode.png — what goes to the screen, which the game's own capture never
+     * sees.
+     */
+    private static void shotIfDue(SteinDevice dev) {
+        if (System.nanoTime() - STARTED < SteinGfxOptions.HDR_SHOT_AT * 1_000_000_000L) {
+            return;
+        }
+        shot = true;
+        int w = targetColor.width();
+        int h = targetColor.height();
+        java.nio.ByteBuffer px = MemoryUtil.memAlloc(w * h * 4);
+        try {
+            dev.readPixels(targetColor, 0, 0, w, h, px);
+            java.awt.image.BufferedImage img =
+                    new java.awt.image.BufferedImage(
+                            w, h, java.awt.image.BufferedImage.TYPE_INT_RGB);
+            for (int y = 0; y < h; y++) {
+                for (int x = 0; x < w; x++) {
+                    int i = ((h - 1 - y) * w + x) * 4;
+                    img.setRGB(
+                            x,
+                            y,
+                            (px.get(i) & 255) << 16
+                                    | (px.get(i + 1) & 255) << 8
+                                    | (px.get(i + 2) & 255));
+                }
+            }
+            java.io.File dir = new java.io.File(Minecraft.getMinecraft().mcDataDir, "screenshots");
+            dir.mkdirs();
+            javax.imageio.ImageIO.write(img, "png", new java.io.File(dir, "hdr-encode.png"));
+            Log.info("gfx", "HDR encode saved to screenshots/hdr-encode.png");
+        } catch (java.io.IOException | RuntimeException e) {
+            Log.warn("gfx", "HDR encode capture failed: " + e);
+        } finally {
+            MemoryUtil.memFree(px);
         }
     }
 
@@ -211,6 +411,7 @@ public final class SteinHdr {
                                 .cull(SteinPipeline.Cull.NONE)
                                 .uniforms("Encode", 0)
                                 .texture("screen", 0)
+                                .texture("lights", 1)
                                 .build());
         if (!encode.valid()) {
             throw new IllegalStateException("pipeline hdr encode did not link");

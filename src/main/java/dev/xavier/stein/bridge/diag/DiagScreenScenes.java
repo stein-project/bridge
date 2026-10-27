@@ -427,6 +427,27 @@ final class DiagScreenScenes {
         if (DiagOptions.MINIMIZE_AT >= 0 && minimizeStage < 2) {
             minimize(Scenes.elapsed());
         }
+        if (!resized && !DiagOptions.RESIZE_AT.isEmpty()) {
+            resize(Scenes.elapsed());
+        }
+    }
+
+    /** {@link DiagOptions#RESIZE_AT} done. */
+    private static boolean resized;
+
+    private static void resize(long elapsed) {
+        String[] p = DiagOptions.RESIZE_AT.split("[:x]");
+        if (elapsed < Long.parseLong(p[0].trim()) * 1_000_000_000L) {
+            return;
+        }
+        resized = true;
+        // a minimized window keeps its size: restored far outside the screens (it does not show
+        // up for whoever is at the computer), then resized
+        GLFW.glfwSetWindowPos(Win.handle, -20000, -20000);
+        GLFW.glfwRestoreWindow(Win.handle);
+        GLFW.glfwSetWindowSize(
+                Win.handle, Integer.parseInt(p[1].trim()), Integer.parseInt(p[2].trim()));
+        Log.info("diag", "window resized to " + p[1] + "x" + p[2]);
     }
 
     static void actionBarFrame() {

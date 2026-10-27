@@ -10,7 +10,7 @@ listed at the end.
 `dev.xavier.stein.bridge.lens.LensOptions`
 
 - `-Dsteinlens.config=file`: reads another configuration file instead of config/steinlens.json (default: unset).
-- `-Dsteinlens.diag.presetAtSec=S:P`: test, applies graphics slider position P after S seconds of play (default: unset).
+- `-Dsteinlens.diag.presetAtSec=S:P`: test, applies quality level P (0 Fast to 4 Ultra) after S seconds of play (default: unset).
 - `-Dsteinlens.customItems=true|false`: overrides the file's custom items setting without saving (default: unset, the file decides).
 - `-Dsteinlens.connectedTextures=true|false`: overrides the file's connected textures setting without saving (default: unset, the file decides).
 - `-Dsteinlens.bloom=0|1|2`: overrides the file's bloom (off, low, high) without saving (default: unset, the file decides).
@@ -72,6 +72,7 @@ listed at the end.
 - `-Dsteinbridge.diag.loaderMenuPage=N`: page the Loader menu opens on (default 0).
 - `-Dsteinbridge.diag.loaderMenuSelected=N`: mod list line selected when the Loader menu opens (default -1: none).
 - `-Dsteinbridge.diag.minimizeAtSec=N`: minimizes the window N seconds after startup (default: off).
+- `-Dsteinbridge.diag.resizeAtSec=S:WxH`: sets the window to W by H pixels S seconds after startup, as dragging its border would (default: off).
 - `-Dsteinbridge.diag.minimizeMs=N`: milliseconds the window stays minimized (default 3000).
 - `-Dsteinbridge.diag.soundOptionsAtSec=N`: opens the sound options N seconds after startup (default: off).
 - `-Dsteinbridge.diag.clicks=S:id,...`: button clicks on the open screen, by second and button id (default: none).
@@ -89,6 +90,8 @@ listed at the end.
 - `-Dsteinbridge.diag.graphicsAtSec=S:1,S:0...`: switches Fancy (1) or Fast (0) graphics at second S (default: none).
 - `-Dsteinbridge.diag.citAtSec=N`: runs the custom-item-textures scene N seconds after startup (default: off).
 - `-Dsteinbridge.diag.thirdPerson=N`: keeps the third-person view, 1 from behind or 2 from the front (default 0: off).
+- `-Dsteinbridge.diag.pitch=N`: keeps the player looking N degrees down (negative: up), every frame — the player's own shadow in first person (default: off).
+- `-Dsteinbridge.diag.yaw=N`: with `#PITCH`, keeps the player facing N degrees.
 - `-Dsteinbridge.diag.showcaseAtSec=N`: opens the video settings' showcase (the landscape drawn instead of the world) N seconds after startup, with a world loaded (default: off).
 - `-Dsteinbridge.diag.showcaseNightAtSec=N`: turns the showcase to night N seconds after startup, and back to day N seconds after that, alternating (default: off).
 
@@ -98,6 +101,7 @@ listed at the end.
 
 - `-Dsteinbridge.opt.noIdleLimit=true`: no frame limit while the game is idle (out of focus and title screen 30, Esc menu 60; default: limited).
 - `-Dsteinbridge.diag.idleLimit=true`: keeps the idle frame limit on the test bench too, where `-Dsteinbridge.diag.background` turns it off so measurements run at full speed (default: off).
+- `-Dsteinbridge.diag.loadingShot=true`: the loading screen saves its frame, through the game's own capture, to screenshots/loading.png when the opening's bar passes half (default: off).
 - `-Dsteinbridge.opt.vanillaActiveChunks=true`: turns the active-chunks bookkeeping optimisation off (default: on).
 - `-Dsteinbridge.opt.checkActiveChunks=true`: runs both active-chunk paths every tick and compares the sets (default: off).
 - `-Dsteinbridge.opt.vanillaChunkAt=true`: does the chunk lookup every frame instead of caching it per column (default: cached).
@@ -185,6 +189,8 @@ listed at the end.
 
 - `-Dsteinbridge.gfx.passStateCheck=true` (diagnostics): on every tracked pass, the queries to the driver, compared with what was tracked at opening and with the game's state at closing; counts and prints the divergences.
 - `-Dsteinbridge.gfx.gpuPassTiming=true` (diagnostics): GPU time of each pass (OpenGL or Vulkan timestamps), read a few frames later and printed every 5 s.
+- `-Dsteinbridge.diag.hdrLayerView=true` (diagnostics): with HDR's quick quality, the encode paints green where it took the light from the lights layer (default: off).
+- `-Dsteinbridge.diag.hdrShotAtSec=N` (diagnostics): N seconds after startup, saves the HDR encode's output (clipped to 8 bits) to screenshots/hdr-encode.png (default: off).
 - `-Dsteinbridge.gfx.recordFrameCheck=true` (diagnostics): on one frame in 300, each command is described at recording and again at replay, compared one by one, and the resources it uses are checked in the driver at replay time (buffer, texture, sampler and framebuffer still exist).
 - `-Dsteinbridge.gfx.frameSubmitStats=true` (diagnostics): submissions to the driver per frame and the reason (and the caller) of each submission outside the end of the frame, every 5 s.
 - `-Dsteinbridge.gfx.passTiming=true`: (diagnostics) measures the CPU time to open and close each pass and prints it periodically (default: off).

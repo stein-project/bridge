@@ -20,7 +20,9 @@ import static dev.xavier.stein.gfx.SteinPassTiming.*;
 
 import dev.xavier.stein.bridge.engine.GLMatrix;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.tileentity.TileEntityRendererDispatcher;
+import net.minecraft.entity.Entity;
 import net.minecraft.tileentity.TileEntity;
 
 import org.lwjgl.opengl.GL11;
@@ -99,6 +101,7 @@ public final class SteinEntityDeferred {
         lightsStale = false;
         SteinGlTrack.forgetNormal();
         SteinTileRetain.passBegin();
+        SteinEntityShadows.entityPass = true;
     }
 
     /**
@@ -131,7 +134,34 @@ public final class SteinEntityDeferred {
         if (namesLater) {
             drainNames();
         }
+        try {
+            SteinEntityShadows.firstPersonPlayer(Minecraft.getMinecraft().timer.renderPartialTicks);
+        } finally {
+            SteinEntityShadows.entityPass = false;
+        }
         stats();
+    }
+
+    /**
+     * The first-person player, whom the entity pass leaves out, recorded and drawn into the
+     * entities' shadow map only ({@link SteinEntityShadows}).
+     */
+    static void castPlayer(Entity player, float partial) {
+        SteinEntityShadows.castOnly = true;
+        capturing = true;
+        SteinLazyGl.activate();
+        try {
+            Minecraft.getMinecraft().getRenderManager().renderEntitySimple(player, partial);
+            SteinPlayerPose.drain();
+        } finally {
+            capturing = false;
+            SteinLazyGl.deactivate();
+            try {
+                flush();
+            } finally {
+                SteinEntityShadows.castOnly = false;
+            }
+        }
     }
 
     // ---- particles (renderer step 4): the same recording around the EffectRenderer passes ----
@@ -211,11 +241,13 @@ public final class SteinEntityDeferred {
      */
     public static void handBegin() {
         timeStart(4);
+        SteinShadows.hand(true); // the hand has its own projection: no shadows on it
         sessionBegin(true);
     }
 
     public static void handEnd() {
         sessionEnd();
+        SteinShadows.hand(false);
         timeEnd(4);
     }
 

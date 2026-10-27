@@ -27,6 +27,12 @@ final class SteinTerrainSlice {
      */
     final float[] born;
 
+    /** Its place among the shadows' casters (SteinShadows), -1 for none. */
+    int shadowIndex = -1;
+
+    /** Seen in the translucent layer: it casts no shadow. */
+    boolean translucent;
+
     SteinTerrainSlice(SteinTerrainRegion region, int first, int count, int x, int y, int z) {
         this.region = region;
         this.first = first;

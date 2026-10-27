@@ -60,27 +60,48 @@ public final class SteinPostFx {
     private static final int LUMA_MIPS = 7;
 
     /**
+     * How fast the mean luma follows the scene, in seconds (the time to go about two thirds of the
+     * way): slow enough that turning the camera does not make a bright surface pulse.
+     */
+    private static final double ADAPT_SECONDS = 0.6;
+
+    /** A pause longer than this (a screen in front, a loading) starts the mean over at once. */
+    private static final long ADAPT_RESET_NANOS = 1_000_000_000L;
+
+    /**
      * How much bloom luma around a pixel makes it a full light with HDR output: a lone bright texel
      * spreads to almost nothing, a glowing block to well past this.
      */
     private static final float HDR_GLOW_GAIN = 4f;
 
+    /** The sharpening levels and their strength. */
+    public static final int SHARPEN_MAX = 3;
+
+    private static final float[] SHARPEN_STRENGTH = {0f, 0.35f, 0.5f, 0.65f};
+
     /** The edge smoothing fades out between half of this and this, in blocks. */
     private static final float EDGE_DISTANCE = 32f;
 
-    /** Bytes of one pass's Post block (five vec4). */
-    private static final int BLOCK_BYTES = 80;
+    /** Bytes of one pass's Post block (nine vec4). */
+    private static final int BLOCK_BYTES = 176;
 
     /** One block being written (reused: no allocation per frame). */
     private static final float[] B = new float[BLOCK_BYTES / 4];
 
-    /** Passes per frame at most: the mean luma, the bloom's way down and up, and the composite. */
-    private static final int MAX_PASSES = 2 * SteinBloom.MAX_LEVELS + 2;
+    /**
+     * Passes per frame at most: the mean luma and its adaptation, the bloom's way down and up, the
+     * rays and the composite.
+     */
+    private static final int MAX_PASSES = 2 * SteinBloom.MAX_LEVELS + 4;
 
     private static final int RING_REGIONS = 4;
 
     private static volatile int bloom;
     private static volatile boolean edges;
+
+    /** Sharpening, 0 (off) to {@link #SHARPEN_MAX}. */
+    private static volatile int sharpen;
+
     private static boolean failed;
 
     /** The depth of the game's target could not be copied: no edge smoothing (logged once). */
@@ -90,8 +111,32 @@ public final class SteinPostFx {
     private static SteinPipeline bloomDown;
     private static SteinPipeline bloomUp;
     private static SteinPipeline composite;
+
+    /** The composite for HDR's quick quality: also writes the lights layer (SteinHdr). */
+    private static SteinPipeline compositeLayered;
+
+    /** The game's colour and the lights layer as one target, and what it was made of. */
+    private static SteinRenderTarget layeredTarget;
+
+    private static SteinTexture layeredGame;
+    private static SteinTexture layeredLights;
     private static SteinPipeline luma;
     private static SteinRenderTarget lumaTarget;
+    private static SteinPipeline adapt;
+
+    /** The atmosphere's light shafts (SteinAtmosphere), at half the size. */
+    private static SteinPipeline rays;
+
+    private static SteinRenderTarget raysTarget;
+
+    /**
+     * The adapted mean luma, 1x1, in two targets that take turns (read the last, write the new).
+     */
+    private static final SteinRenderTarget[] ADAPTED = new SteinRenderTarget[2];
+
+    private static int adaptedNow;
+    private static boolean adaptedFresh;
+    private static long adaptedAt;
     private static SteinSampler mipmapped;
     private static SteinSampler linear;
     private static SteinSampler nearest;
@@ -133,9 +178,10 @@ public final class SteinPostFx {
     }
 
     /** The Lens options (any thread; read on the render thread at the next frame). */
-    public static void configure(int bloomLevel, boolean smoothEdges) {
+    public static void configure(int bloomLevel, boolean smoothEdges, int sharpening) {
         bloom = Math.max(BLOOM_OFF, Math.min(BLOOM_HIGH, bloomLevel));
         edges = smoothEdges;
+        sharpen = Math.max(0, Math.min(SHARPEN_MAX, sharpening));
     }
 
     /** Whether the options can act: Stein GFX draws (not the fixed-function fallback). */
@@ -144,11 +190,23 @@ public final class SteinPostFx {
     }
 
     /**
+     * The Stein light is on (sun's shadows or glowing blocks): the world is drawn in 16 bits, its
+     * lights past white, and the composite brings it back with an exposure that follows the scene
+     * like an eye and a soft shoulder — the sun blinds, a torch in the dark burns.
+     */
+    public static boolean wideScene() {
+        return available() && (SteinShadows.level() > 0 || SteinGlow.level() > 0);
+    }
+
+    /**
      * In place of GlStateManager.clear in renderWorldPass: before the depth clear that precedes the
      * hand, the world's depth is copied for the edge smoothing.
      */
     public static void worldClear(int mask) {
-        if (mask == GL11.GL_DEPTH_BUFFER_BIT && edges && !noDepth && available()) {
+        if (mask == GL11.GL_DEPTH_BUFFER_BIT
+                && (edges || SteinAtmosphere.wanted())
+                && !noDepth
+                && available()) {
             try {
                 SteinDevice dev = SteinDevice.get();
                 SteinRenderTarget game = dev.gameTarget();
@@ -166,22 +224,31 @@ public final class SteinPostFx {
 
     /** After EntityRenderer.renderWorld, inside updateCameraAndRender. */
     public static void afterWorld() {
+        SteinDynamicLights.worldEnd(); // the world is drawn: the HUD and screens have none
+        SteinShadows.worldEnd();
         long thisFrame = frame++;
         int level = bloom;
         boolean smooth = edges && !noDepth;
         boolean hdr = SteinHdr.active();
-        if (!available() || level == BLOOM_OFF && !smooth && !hdr) {
+        boolean atmosphere = SteinAtmosphere.active() && !noDepth;
+        boolean wide = wideScene();
+        if (!available()
+                || level == BLOOM_OFF && !smooth && !hdr && !wide && sharpen == 0 && !atmosphere) {
+            SteinAtmosphere.worldEnd();
             return;
         }
         try {
-            run(level, smooth, hdr, worldFrame == thisFrame);
+            run(level, smooth, hdr, atmosphere, worldFrame == thisFrame);
         } catch (RuntimeException | LinkageError e) {
             failed = true;
             Log.warn("gfx", "post-processing turned off for this session: " + e);
+        } finally {
+            SteinAtmosphere.worldEnd();
         }
     }
 
-    private static void run(int level, boolean smooth, boolean hdr, boolean worldCopied) {
+    private static void run(
+            int level, boolean smooth, boolean hdr, boolean atmosphere, boolean worldCopied) {
         SteinDevice dev = SteinDevice.get();
         if (composite == null) {
             create(dev);
@@ -189,26 +256,51 @@ public final class SteinPostFx {
         SteinRenderTarget game = dev.gameTarget();
         int w = game.width();
         int h = game.height();
-        sceneSize(dev, w, h, smooth);
-        if (!dev.copyTarget(game, scene, smooth) && smooth) {
+        // the depths: for the edges and for the atmosphere
+        boolean depth = smooth || atmosphere;
+        sceneSize(dev, w, h, depth);
+        if (!dev.copyTarget(game, scene, depth) && depth) {
             noDepth = true;
             smooth = false;
+            atmosphere = false;
+            depth = false;
             Log.info(
-                    "gfx", "post-processing: the game's depth cannot be copied, no edge smoothing");
+                    "gfx",
+                    "post-processing: the game's depth cannot be copied, no edge smoothing nor"
+                            + " atmosphere");
         }
-        if (smooth && !worldCopied) {
+        if (depth && !worldCopied) {
             // no hand this frame (no clear before it): the depth now is the world's
             dev.copyTarget(game, world, true);
         }
-        if (level != BLOOM_OFF || hdr) {
+        boolean wide = wideScene() && sceneColor.desc().format == SteinFormat.RGBA16F;
+        if (level != BLOOM_OFF || hdr || wide) {
             BLOOM.size(dev, w, h);
         }
         // with HDR the bloom is always built: it says where the lights are, even when not added
-        int levels = level == BLOOM_OFF && !hdr ? 0 : BLOOM.levels();
-        writeBlocks(dev, w, h, levels, level, smooth, hdr);
-        if (levels > 0 || hdr) {
+        int levels = level == BLOOM_OFF && !hdr && !wide ? 0 : BLOOM.levels();
+        boolean shafts = atmosphere && raysBlock(dev, w, h);
+        writeBlocks(dev, w, h, levels, level, smooth, hdr, atmosphere, shafts, wide);
+        SteinTexture mean = sceneColor;
+        if (levels > 0 || hdr || wide) {
             draw(dev, "post luma", lumaTarget, luma, AT[0], sceneColor, null, null, null);
             lumaTarget.color(0).generateMips();
+            // the first time the other target was never drawn: the luma image stands in (its value
+            // is not used, the first adaptation takes the mean whole)
+            SteinTexture before = adaptedFresh ? lumaTarget.color(0) : ADAPTED[adaptedNow].color(0);
+            adaptedFresh = false;
+            adaptedNow ^= 1;
+            draw(
+                    dev,
+                    "post adapt",
+                    ADAPTED[adaptedNow],
+                    adapt,
+                    AT[MAX_PASSES - 1],
+                    lumaTarget.color(0),
+                    before,
+                    null,
+                    null);
+            mean = ADAPTED[adaptedNow].color(0);
         }
         for (int i = 0; i < levels; i++) {
             SteinRenderTarget src = i == 0 ? scene : BLOOM.down(i - 1);
@@ -219,7 +311,7 @@ public final class SteinPostFx {
                     i == 0 ? bloomFirst : bloomDown,
                     AT[1 + i],
                     src.color(0),
-                    i == 0 ? lumaTarget.color(0) : null,
+                    i == 0 ? mean : null,
                     null,
                     null);
         }
@@ -237,22 +329,54 @@ public final class SteinPostFx {
                     null,
                     null);
         }
+        if (shafts) {
+            draw(
+                    dev,
+                    "post rays",
+                    raysTarget,
+                    rays,
+                    AT[MAX_PASSES - 2],
+                    worldDepth,
+                    null,
+                    null,
+                    null);
+        }
         SteinTexture bloomed = levels == 0 ? sceneColor : BLOOM.result();
+        boolean layered = hdr && SteinHdr.layered();
         draw(
                 dev,
                 "post composite",
-                game,
-                composite,
+                layered ? layered(dev, game) : game,
+                layered ? compositeLayered : composite,
                 AT[1 + 2 * levels],
                 sceneColor,
                 bloomed,
-                smooth ? worldDepth : sceneColor,
-                smooth ? sceneDepth : sceneColor,
+                depth ? worldDepth : sceneColor,
+                depth ? sceneDepth : sceneColor,
                 // (only read with HDR; never bound before it was first drawn)
-                levels > 0 || hdr ? lumaTarget.color(0) : sceneColor);
+                mean,
+                shafts ? raysTarget.color(0) : sceneColor);
+        if (layered) {
+            SteinHdr.lightsWritten();
+        }
     }
 
-    /** One full-screen pass with up to four textures (see the five-texture one). */
+    /** The game's colour and the lights layer together, remade when either changes. */
+    private static SteinRenderTarget layered(SteinDevice dev, SteinRenderTarget game) {
+        SteinTexture color = game.color(0);
+        SteinTexture lights = SteinHdr.lights(dev, color.width(), color.height());
+        if (layeredTarget == null || layeredGame != color || layeredLights != lights) {
+            if (layeredTarget != null) {
+                layeredTarget.destroy();
+            }
+            layeredTarget = dev.createTarget(new SteinTexture[] {color, lights}, null);
+            layeredGame = color;
+            layeredLights = lights;
+        }
+        return layeredTarget;
+    }
+
+    /** One full-screen pass with up to four textures (see the six-texture one). */
     private static void draw(
             SteinDevice dev,
             String name,
@@ -263,7 +387,35 @@ public final class SteinPostFx {
             SteinTexture b,
             SteinTexture c,
             SteinTexture d) {
-        draw(dev, name, target, pipeline, at, a, b, c, d, null);
+        draw(dev, name, target, pipeline, at, a, b, c, d, null, null);
+    }
+
+    /**
+     * The rays' pass: its target at a quarter of the size and its block (written apart from the
+     * others, before them); false when there are no rays to draw.
+     */
+    private static boolean raysBlock(SteinDevice dev, int w, int h) {
+        int rw = Math.max(1, w / 2);
+        int rh = Math.max(1, h / 2);
+        if (!SteinAtmosphere.rays(B, w, h)) {
+            java.util.Arrays.fill(B, 0f);
+            return false;
+        }
+        if (raysTarget == null
+                || raysTarget.color(0).width() != rw
+                || raysTarget.color(0).height() != rh) {
+            if (raysTarget != null) {
+                raysTarget.color(0).destroy();
+                raysTarget.destroy();
+            }
+            SteinTexture t =
+                    dev.createTexture(
+                            SteinTexture.Desc.target("post rays", SteinFormat.RGBA16F, rw, rh));
+            raysTarget = dev.createTarget(new SteinTexture[] {t}, null);
+        }
+        texel(w, h, rw, rh);
+        AT[MAX_PASSES - 2] = block(dev.caps().uniformAlignment);
+        return true;
     }
 
     /**
@@ -282,16 +434,19 @@ public final class SteinPostFx {
             SteinTexture b,
             SteinTexture c,
             SteinTexture d,
-            SteinTexture e) {
+            SteinTexture e,
+            SteinTexture f) {
         SteinRenderPass pass =
-                pipeline == composite
+                pipeline == composite || pipeline == compositeLayered
                         ? SteinRenderPass.keep(name, target)
                         : SteinRenderPass.discard(name, target);
         SteinCommands cmd = dev.beginPass(pass);
         try {
             cmd.bindPipeline(pipeline);
             cmd.bindUniforms(0, blocks, at, BLOCK_BYTES);
-            cmd.bindTexture(0, a, linear);
+            // the adaptation reads the luma image's last mipmap; the rays, the world's depth
+            cmd.bindTexture(
+                    0, a, pipeline == adapt ? mipmapped : pipeline == rays ? nearest : linear);
             if (b != null) {
                 cmd.bindTexture(1, b, pipeline == bloomFirst ? mipmapped : linear);
             }
@@ -303,6 +458,9 @@ public final class SteinPostFx {
             }
             if (e != null) {
                 cmd.bindTexture(4, e, mipmapped);
+            }
+            if (f != null) {
+                cmd.bindTexture(5, f, linear);
             }
             cmd.draw(3, 1, 0, 0);
         } finally {
@@ -316,16 +474,35 @@ public final class SteinPostFx {
      * / size drawn), params, params2, params3 (see the shaders).
      */
     private static void writeBlocks(
-            SteinDevice dev, int w, int h, int levels, int level, boolean smooth, boolean hdr) {
+            SteinDevice dev,
+            int w,
+            int h,
+            int levels,
+            int level,
+            boolean smooth,
+            boolean hdr,
+            boolean atmosphere,
+            boolean shafts,
+            boolean wide) {
         int align = dev.caps().uniformAlignment;
         texel(w, h, LUMA_SIZE, LUMA_SIZE);
         AT[0] = block(align);
+        // the adaptation: the share of the way to the mean now, from the time since the last frame
+        long now = System.nanoTime();
+        long since = now - adaptedAt;
+        adaptedAt = now;
+        B[4] =
+                since > ADAPT_RESET_NANOS
+                        ? 1f
+                        : (float) (1.0 - Math.exp(-since / 1e9 / ADAPT_SECONDS));
+        B[5] = LUMA_MIPS - 1;
+        AT[MAX_PASSES - 1] = block(align);
         int sw = w;
         int sh = h;
         for (int i = 0; i < levels; i++) {
             SteinTexture d = BLOOM.down(i).color(0);
             texel(sw, sh, d.width(), d.height());
-            threshold(4);
+            threshold(4, wide);
             B[8] = BLOOM_KNEE;
             AT[1 + i] = block(align);
             sw = d.width();
@@ -339,19 +516,24 @@ public final class SteinPostFx {
         }
         texel(w, h, w, h);
         B[4] =
-                levels == 0 || level == BLOOM_OFF
+                levels == 0 || level == BLOOM_OFF && !wide
                         ? 0f
-                        : BLOOM_STRENGTH[level]
+                        : BLOOM_STRENGTH[Math.max(level, BLOOM_LOW)]
                                 * (float) SteinGfxOptions.POST_BLOOM_STRENGTH
                                 / levels;
+        B[5] = SHARPEN_STRENGTH[sharpen];
         B[7] = smooth ? 1f : 0f;
         B[8] = SteinGfxOptions.POST_EDGE_VIEW ? 1f : 0f;
         B[9] = (float) SteinGfxOptions.POST_EDGE_RATIO;
         B[10] = (float) SteinGfxOptions.POST_EDGE_FLOOR;
         B[11] = hdr ? (float) SteinGfxOptions.HDR_BOOST : 0f;
-        threshold(12);
+        threshold(12, wide);
         B[17] = HDR_GLOW_GAIN;
         B[18] = EDGE_DISTANCE;
+        B[19] = wide ? 1f : 0f;
+        if (atmosphere) {
+            SteinAtmosphere.composite(B, shafts);
+        }
         AT[1 + 2 * levels] = block(align);
         blocks.commitRing();
     }
@@ -365,13 +547,14 @@ public final class SteinPostFx {
 
     /**
      * The adaptive threshold at {@code B[at..at+3]}: the lowest, the factor on the mean luma, the
-     * highest, and the mean's mipmap level.
+     * highest, and the mean's mipmap level (0: the adapted mean is 1x1).
      */
-    private static void threshold(int at) {
-        B[at] = BLOOM_MIN_THRESHOLD;
-        B[at + 1] = BLOOM_MEAN_FACTOR;
-        B[at + 2] = BLOOM_MAX_THRESHOLD;
-        B[at + 3] = LUMA_MIPS - 1;
+    private static void threshold(int at, boolean wide) {
+        // a scene past white: what goes past it glows (the sun, the lights), the sky and sand not
+        B[at] = wide ? 0.9f : BLOOM_MIN_THRESHOLD;
+        B[at + 1] = wide ? 1.2f : BLOOM_MEAN_FACTOR;
+        B[at + 2] = wide ? 1.4f : BLOOM_MAX_THRESHOLD;
+        B[at + 3] = 0f;
     }
 
     /** Writes {@link #B} as one block in the ring, clears it and returns the block's offset. */
@@ -391,7 +574,14 @@ public final class SteinPostFx {
 
     /** The copy of the game's image at its size; the depth only while the edges need it. */
     private static void sceneSize(SteinDevice dev, int w, int h, boolean depth) {
-        boolean resized = sceneColor == null || sceneColor.width() != w || sceneColor.height() != h;
+        // the copy in the game image's own format (16 bits with HDR or the Stein light)
+        SteinTexture gameColor = dev.gameTarget().color(0);
+        SteinFormat sceneFormat = gameColor != null ? gameColor.desc().format : SteinFormat.RGBA8;
+        boolean resized =
+                sceneColor == null
+                        || sceneColor.width() != w
+                        || sceneColor.height() != h
+                        || sceneColor.desc().format != sceneFormat;
         if (!resized && depth == (sceneDepth != null)) {
             return;
         }
@@ -412,8 +602,7 @@ public final class SteinPostFx {
         }
         if (sceneColor == null) {
             sceneColor =
-                    dev.createTexture(
-                            SteinTexture.Desc.target("post scene", SteinFormat.RGBA8, w, h));
+                    dev.createTexture(SteinTexture.Desc.target("post scene", sceneFormat, w, h));
         }
         if (depth && sceneDepth == null) {
             sceneDepth =
@@ -454,8 +643,33 @@ public final class SteinPostFx {
                         "bloom",
                         "depth",
                         "handDepth",
-                        "average");
+                        "average",
+                        "rays");
+        // the layered one writes alpha: the layer's, and the game's own alpha given back unchanged
+        compositeLayered =
+                pipeline(
+                        dev,
+                        "post composite hdr",
+                        vertex,
+                        "post_composite_hdr.frag",
+                        false,
+                        "scene",
+                        "bloom",
+                        "depth",
+                        "handDepth",
+                        "average",
+                        "rays");
         luma = pipeline(dev, "post luma", vertex, "post_luma.frag", false, "src");
+        rays = pipeline(dev, "post rays", vertex, "post_rays.frag", false, "depth");
+        adapt = pipeline(dev, "post adapt", vertex, "post_adapt.frag", false, "src", "previous");
+        for (int i = 0; i < ADAPTED.length; i++) {
+            SteinTexture t =
+                    dev.createTexture(
+                            SteinTexture.Desc.target("post adapted", SteinFormat.RGBA16F, 1, 1));
+            ADAPTED[i] = dev.createTarget(new SteinTexture[] {t}, null);
+        }
+        adaptedAt = 0L; // the first frame takes the mean as it is
+        adaptedFresh = true;
         SteinTexture lumaTexture =
                 dev.createTexture(
                         new SteinTexture.Desc(

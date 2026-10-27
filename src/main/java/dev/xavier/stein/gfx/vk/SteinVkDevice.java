@@ -69,6 +69,7 @@ import org.lwjgl.glfw.GLFWVulkan;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.EXTDepthClipControl;
+import org.lwjgl.vulkan.EXTHdrMetadata;
 import org.lwjgl.vulkan.KHRDynamicRendering;
 import org.lwjgl.vulkan.KHRPortabilitySubset;
 import org.lwjgl.vulkan.KHRPushDescriptor;
@@ -175,6 +176,9 @@ public final class SteinVkDevice extends SteinDevice {
     final boolean pushDescriptors;
     final boolean depthClipControl;
 
+    /** VK_EXT_hdr_metadata: the HDR swapchain tells the system the calibration's light levels. */
+    final boolean hdrMetadata;
+
     /** Logical operations on the colour (SteinPipeline.LogicOp): an optional feature. */
     final boolean logicOp;
 
@@ -268,6 +272,9 @@ public final class SteinVkDevice extends SteinDevice {
                             && !SteinVkOptions.NO_PUSH;
             boolean clipExt =
                     devExt.contains(EXTDepthClipControl.VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME);
+            hdrMetadata =
+                    surface != VK_NULL_HANDLE
+                            && devExt.contains(EXTHdrMetadata.VK_EXT_HDR_METADATA_EXTENSION_NAME);
 
             // ---- resources the GPU has ----
             VkPhysicalDeviceDepthClipControlFeaturesEXT clipQ =
@@ -342,6 +349,9 @@ public final class SteinVkDevice extends SteinDevice {
             }
             if (devExt.contains(KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME)) {
                 dext.put(stack.UTF8(KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME));
+            }
+            if (hdrMetadata) {
+                dext.put(stack.UTF8(EXTHdrMetadata.VK_EXT_HDR_METADATA_EXTENSION_NAME));
             }
             dext.flip();
             VkDeviceQueueCreateInfo.Buffer qci = VkDeviceQueueCreateInfo.calloc(1, stack);
@@ -477,6 +487,8 @@ public final class SteinVkDevice extends SteinDevice {
                         + pushDescriptors
                         + ", depth clip control "
                         + depthClipControl
+                        + ", HDR metadata "
+                        + hdrMetadata
                         + ", DEPTH24 "
                         + (depth24 == VK_FORMAT_D32_SFLOAT ? "as D32F" : "X8_D24"));
     }

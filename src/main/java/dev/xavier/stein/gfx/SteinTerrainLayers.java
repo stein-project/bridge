@@ -188,6 +188,7 @@ final class SteinTerrainLayers {
             layerCache[ordinal] = d;
         }
         layer = d;
+        ordinalNow = ordinal;
         n = 0;
         checking = false;
         listSame = false;
@@ -222,7 +223,13 @@ final class SteinTerrainLayers {
         return true;
     }
 
+    /** The layer being listed (3: translucent). */
+    private static int ordinalNow;
+
     static void add(Object handle) {
+        if (ordinalNow == 3) {
+            SteinShadows.translucent(handle); // water and stained glass cast no shadow
+        }
         if (n == list.length) {
             list = Arrays.copyOf(list, n * 2);
         }

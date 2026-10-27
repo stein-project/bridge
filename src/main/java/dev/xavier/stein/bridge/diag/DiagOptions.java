@@ -238,6 +238,12 @@ final class DiagOptions {
     static final long MINIMIZE_AT = Opt.number("steinbridge.diag.minimizeAtSec", -1L);
 
     /**
+     * {@code -Dsteinbridge.diag.resizeAtSec=S:WxH}: sets the window to W by H pixels S seconds
+     * after startup, as dragging its border would (default: off).
+     */
+    static final String RESIZE_AT = Opt.text("steinbridge.diag.resizeAtSec", "");
+
+    /**
      * {@code -Dsteinbridge.diag.minimizeMs=N}: milliseconds the window stays minimized (default
      * 3000).
      */
@@ -342,6 +348,15 @@ final class DiagOptions {
      * from the front (default 0: off).
      */
     static final int THIRD_PERSON = Opt.integer("steinbridge.diag.thirdPerson", 0);
+
+    /**
+     * {@code -Dsteinbridge.diag.pitch=N}: keeps the player looking N degrees down (negative: up),
+     * every frame — the player's own shadow in first person (default: off).
+     */
+    static final int PITCH = Opt.integer("steinbridge.diag.pitch", -1000);
+
+    /** {@code -Dsteinbridge.diag.yaw=N}: with {@link #PITCH}, keeps the player facing N degrees. */
+    static final int YAW = Opt.integer("steinbridge.diag.yaw", -1000);
 
     /**
      * {@code -Dsteinbridge.diag.showcaseAtSec=N}: opens the video settings' showcase (the landscape

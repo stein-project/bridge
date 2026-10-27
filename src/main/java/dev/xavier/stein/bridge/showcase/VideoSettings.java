@@ -37,7 +37,9 @@ public final class VideoSettings {
         /** A track from 0 to 1 ({@link Entry#fraction}, {@link Entry#setFraction}). */
         SLIDER,
         /** Shown only: a value that is chosen elsewhere. */
-        INFO
+        INFO,
+        /** Does something when clicked ({@link Entry#next}): opens a step-by-step, for one. */
+        ACTION
     }
 
     /** One option. */
@@ -65,6 +67,18 @@ public final class VideoSettings {
          * "hdr", "hdrWhite", "hdrPeak"); null for the rest.
          */
         public String id;
+
+        /**
+         * Where a track starts out ({@link #fraction}), for screens that begin from the default
+         * (the HDR calibration); negative when it has none.
+         */
+        public double byDefault = -1;
+
+        /** Sets {@link #byDefault} and returns the option. */
+        public Entry byDefault(double f) {
+            this.byDefault = f;
+            return this;
+        }
 
         /** Names the option ({@link #id}) and returns it. */
         public Entry id(String name) {
@@ -147,6 +161,17 @@ public final class VideoSettings {
                     fraction,
                     setFraction,
                     onRelease);
+        }
+
+        /** Runs {@code run} when clicked; {@code value} is the text on its button. */
+        public static Entry action(
+                Supplier<String> label,
+                Supplier<String> value,
+                Supplier<String> hint,
+                BooleanSupplier enabled,
+                Runnable run) {
+            return new Entry(
+                    Kind.ACTION, label, value, hint, enabled, null, run, run, null, null, false);
         }
 
         /** Shown only. */

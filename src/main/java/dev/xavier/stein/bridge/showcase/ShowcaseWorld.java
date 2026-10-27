@@ -52,10 +52,10 @@ final class ShowcaseWorld {
     private static final double EYE_ABOVE = 3.4;
 
     /**
-     * West, turned a little to the left: the video settings' panel covers the left of the screen,
+     * West, turned a little to the right: the video settings' panel covers the right of the screen,
      * so the lake, the sun and the moon sit in the part that shows.
      */
-    private static final float YAW_WEST = 72f;
+    private static final float YAW_WEST = 108f;
 
     private static final float PITCH_UP = -3f;
 

@@ -273,7 +273,7 @@ public final class SteinGameTexture extends SteinTexture {
             // a framebuffer's colour holds the lights above white with HDR output (SteinHdr: the
             // game recreates its framebuffer when that changes)
             SteinFormat f =
-                    SteinHdr.active() && format != SteinFormat.DEPTH24
+                    SteinHdr.framebufferWide() && format != SteinFormat.DEPTH24
                             ? SteinFormat.RGBA16F
                             : format;
             return new Desc(label, Kind.TEXTURE_2D, f, width, height, 1, mips, true);

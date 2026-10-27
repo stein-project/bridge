@@ -16,6 +16,7 @@ import dev.xavier.stein.bridge.showcase.VideoSettings.Section;
 import dev.xavier.stein.gfx.SteinBackend;
 import dev.xavier.stein.gfx.SteinHdr;
 import dev.xavier.stein.gfx.SteinPostFx;
+import dev.xavier.stein.gfx.SteinShadows;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.resources.I18n;
@@ -29,11 +30,20 @@ import java.util.function.IntSupplier;
 import java.util.function.Supplier;
 
 /**
- * Every image option, by topic — General, Camera, Light and shadows, Image, Sky and weather,
- * Textures, Players and items, 1.7 animations, Performance — as {@link VideoSettings} data: the
- * game's own options and Stein's side by side in the topic they belong to. "Graphics" is the Fast
- * to Fancy selector that also sets the game's performance options ({@link Presets}); "3D Anaglyph"
- * is not offered ({@link Lens} turns it off if it is on).
+ * Every image option, by topic, as {@link VideoSettings} data: the game's own options and Stein's
+ * side by side in the topic they belong to.
+ *
+ * <ul>
+ *   <li><b>General</b>: what most players change — the quality level, which sets the options of the
+ *       other topics ({@link Presets}) and replaces the game's Fast/Fancy, the graphics API, the
+ *       distance, the frame limit, the screen and the brightness;
+ *   <li><b>Image</b>: light, particles, Stein's post-processing and HDR;
+ *   <li><b>World</b>: sky, weather and textures;
+ *   <li><b>Camera and players</b>, <b>1.7 animations</b> and <b>Performance</b>.
+ * </ul>
+ *
+ * <p>"3D Anaglyph" is not offered ({@link Lens} turns it off if it is on). Every track applies
+ * while it is dragged.
  *
  * <p>The game's options change the way its own buttons change them (setOptionValue for steps,
  * setOptionFloatValue for ranges), so they keep behaving like the game's: the game reloads its
@@ -44,11 +54,17 @@ final class VideoModel implements VideoSettings.Source {
     /** Nametag distances, in blocks; 0 = the game's. */
     private static final int[] NAMETAG_STEPS = {0, 48, 32, 16, 8};
 
-    /** Cloud heights above the game's, in blocks. */
-    private static final int[] CLOUD_STEPS = {0, 16, 32, 64, 128};
+    /** The highest the clouds go above the game's, in blocks (in steps of 4). */
+    private static final int CLOUD_MAX = 128;
 
     /** Chunks sent per frame; 0 = as in the game. */
     private static final int[] UPLOAD_STEPS = {0, 1, 2, 4, 8};
+
+    /** Anisotropic filtering, 1 = off. */
+    private static final int[] ANISOTROPY_STEPS = {1, 2, 4, 8, 16};
+
+    /** The game's highest mipmap level. */
+    private static final int MIPMAP_MAX = 4;
 
     /** Limits of the stored terrain, in MB. */
     private static final int[] KEEP_STEPS = {256, 512, 1024, 2048};
@@ -57,7 +73,7 @@ final class VideoModel implements VideoSettings.Source {
     static final int HDR_WHITE_MIN = 80;
 
     static final int HDR_WHITE_MAX = 400;
-    static final int HDR_PEAK_MIN = 400;
+    static final int HDR_PEAK_MIN = 200;
     static final int HDR_PEAK_MAX = 2000;
 
     private final Lens mod;
@@ -79,12 +95,10 @@ final class VideoModel implements VideoSettings.Source {
     public List<Section> sections() {
         sections = new ArrayList<>();
         general();
-        camera();
-        light();
         image();
-        sky();
-        textures();
-        players();
+        light();
+        world();
+        camera();
         animations();
         performance();
         List<Section> out = sections;
@@ -105,31 +119,46 @@ final class VideoModel implements VideoSettings.Source {
 
     // ---- the topics ----
 
+    /**
+     * What most players change: the quality level, the graphics API, the distance, the frame limit,
+     * the screen, the interface size and the brightness.
+     */
     private void general() {
         topic("general");
         entries.add(
-                Entry.slider(
-                        () -> tr("steinlens.graphics"),
-                        () -> tr("steinlens.graphics." + Presets.current().key()),
-                        () -> tr("steinlens.graphics.hint"),
+                Entry.choice(
+                        () -> tr("steinlens.quality"),
+                        () -> {
+                            Presets.Position p = Presets.current(c);
+                            return tr(
+                                    p == null
+                                            ? "steinlens.quality.custom"
+                                            : "steinlens.quality." + p.key());
+                        },
+                        () -> tr("steinlens.quality.hint"),
                         null,
-                        () -> Presets.current().ordinal() / (double) Presets.MAX_POSITION,
-                        f -> preset((int) Math.round(f * Presets.MAX_POSITION)),
-                        true));
-        game(GameSettings.Options.RENDER_DISTANCE, true);
-        game(GameSettings.Options.FRAMERATE_LIMIT, false);
-        game(GameSettings.Options.ENABLE_VSYNC, false);
-        game(GameSettings.Options.USE_FULLSCREEN, false);
-        game(GameSettings.Options.GUI_SCALE, false);
-        game(GameSettings.Options.GAMMA, false);
-        game(GameSettings.Options.PARTICLES, false);
+                        null,
+                        () -> preset(1),
+                        () -> preset(-1)));
         graphicsApi();
+        game(GameSettings.Options.RENDER_DISTANCE);
+        game(GameSettings.Options.FRAMERATE_LIMIT);
+        game(GameSettings.Options.ENABLE_VSYNC);
+        game(GameSettings.Options.USE_FULLSCREEN);
+        game(GameSettings.Options.GUI_SCALE);
+        game(GameSettings.Options.GAMMA);
     }
 
-    /** A preset position: the game's and Stein's options together, the chunks rebuilt. */
-    private void preset(int position) {
-        Presets.Position p = Presets.at(position);
-        if (p == Presets.current()) {
+    /**
+     * The next or previous quality level: the game's and Stein's options together, the chunks
+     * rebuilt. From Custom, it starts at the game's Fancy.
+     */
+    private void preset(int by) {
+        Presets.Position now = Presets.current(c);
+        int from =
+                now == null ? Presets.Position.FANCY.ordinal() - Integer.signum(by) : now.ordinal();
+        Presets.Position p = Presets.at(from + by);
+        if (p == now) {
             return;
         }
         if (Presets.apply(mod, p)) {
@@ -164,56 +193,139 @@ final class VideoModel implements VideoSettings.Source {
                         () -> hint));
     }
 
-    private void camera() {
-        topic("camera");
-        game(GameSettings.Options.VIEW_BOBBING, false);
-        toggle(
-                "steinlens.dynamicFov",
-                () -> c.dynamicFov,
-                () -> c.dynamicFov = !c.dynamicFov,
-                null);
-        toggleText(
-                "steinlens.zoom",
-                () -> c.zoom,
-                () -> c.zoom = !c.zoom,
-                () -> tr("steinlens.zoom.hint", zoomKeyName()),
-                null);
-        toggle(
-                "steinlens.zoomSmooth",
-                () -> c.zoomSmoothCamera,
-                () -> c.zoomSmoothCamera = !c.zoomSmoothCamera,
-                () -> c.zoom);
-    }
-
+    /**
+     * Light and shadows (only where Stein GFX draws): the sun's shadows in levels, the light that
+     * comes with them, the moonlight, the darkness, the dynamic lights and the atmosphere.
+     */
     private void light() {
         topic("light");
-        game(GameSettings.Options.AMBIENT_OCCLUSION, false);
-        game(GameSettings.Options.ENTITY_SHADOWS, false);
+        BooleanSupplier shadowsCan = SteinShadows::available;
+        choice(
+                "steinlens.shadows",
+                () ->
+                        !shadowsCan.getAsBoolean() || c.shadows == 0
+                                ? tr("options.off")
+                                : tr("steinlens.shadows." + c.shadows),
+                () -> c.shadows = (c.shadows + 1) % 4,
+                () -> c.shadows = (c.shadows + 3) % 4,
+                shadowsCan);
+        BooleanSupplier gfx = SteinPostFx::available;
+        toggle(
+                "steinlens.moonlight",
+                shown(() -> c.moonlight, gfx),
+                () -> c.moonlight = !c.moonlight,
+                gfx);
+        toggle(
+                "steinlens.darkness",
+                shown(() -> c.darkness, gfx),
+                () -> c.darkness = !c.darkness,
+                gfx);
+        choice(
+                "steinlens.glowingBlocks",
+                () ->
+                        !gfx.getAsBoolean() || c.glowingBlocks == 0
+                                ? tr("options.off")
+                                : tr("steinlens.glowingBlocks." + c.glowingBlocks),
+                () -> c.glowingBlocks = (c.glowingBlocks + 1) % 3,
+                () -> c.glowingBlocks = (c.glowingBlocks + 2) % 3,
+                gfx);
+        toggle(
+                "steinlens.dynamicLights",
+                shown(() -> c.dynamicLights, gfx),
+                () -> c.dynamicLights = !c.dynamicLights,
+                gfx);
+        choice(
+                "steinlens.atmosphere",
+                () ->
+                        !gfx.getAsBoolean() || c.atmosphere == 0
+                                ? tr("options.off")
+                                : tr("steinlens.atmosphere." + c.atmosphere),
+                () -> c.atmosphere = (c.atmosphere + 1) % 3,
+                () -> c.atmosphere = (c.atmosphere + 2) % 3,
+                gfx);
     }
 
-    /** Stein's post-processing (SteinPostFx, SteinHdr): only where Stein GFX draws. */
+    /**
+     * How the picture is lit and finished: the game's light and particles, Stein's post-processing
+     * (only where Stein GFX draws) and HDR (only where the screen and the API can show it).
+     */
     private void image() {
         topic("image");
+        game(GameSettings.Options.AMBIENT_OCCLUSION);
+        game(GameSettings.Options.ENTITY_SHADOWS);
+        game(GameSettings.Options.PARTICLES);
         BooleanSupplier post = SteinPostFx::available;
         choice(
                 "steinlens.bloom",
                 () ->
-                        c.bloom == SteinPostFx.BLOOM_HIGH
-                                ? tr("steinlens.bloom.high")
-                                : c.bloom == SteinPostFx.BLOOM_LOW
-                                        ? tr("steinlens.bloom.low")
-                                        : tr("options.off"),
+                        !post.getAsBoolean() || c.bloom == SteinPostFx.BLOOM_OFF
+                                ? tr("options.off")
+                                : c.bloom == SteinPostFx.BLOOM_HIGH
+                                        ? tr("steinlens.bloom.high")
+                                        : c.bloom == SteinPostFx.BLOOM_LOW
+                                                ? tr("steinlens.bloom.low")
+                                                : tr("options.off"),
                 () -> c.bloom = (c.bloom + 1) % 3,
                 () -> c.bloom = (c.bloom + 2) % 3,
                 post);
         toggle(
                 "steinlens.smoothEdges",
-                () -> c.smoothEdges,
+                shown(() -> c.smoothEdges, post),
                 () -> c.smoothEdges = !c.smoothEdges,
                 post);
-        toggle("steinlens.hdr", () -> c.hdr, () -> c.hdr = !c.hdr, SteinHdr::available);
+        filters(post);
+        BooleanSupplier hdrCan = SteinHdr::available;
+        toggle("steinlens.hdr", shown(() -> c.hdr, hdrCan), () -> c.hdr = !c.hdr, hdrCan);
         last("hdr");
         BooleanSupplier hdrOn = () -> c.hdr && SteinHdr.available();
+        entries.add(
+                Entry.choice(
+                        () -> tr("steinlens.hdrLook"),
+                        () ->
+                                tr(
+                                        c.hdrLook
+                                                ? "steinlens.hdrLook.stein"
+                                                : "steinlens.hdrLook.natural"),
+                        () -> tr("steinlens.hdrLook.hint"),
+                        hdrOn,
+                        null,
+                        () -> c.hdrLook = !c.hdrLook,
+                        null));
+        entries.add(
+                Entry.choice(
+                        () -> tr("steinlens.hdrQuality"),
+                        () ->
+                                tr(
+                                        c.hdrQuick
+                                                ? "steinlens.hdrQuality.quick"
+                                                : "steinlens.hdrQuality.max"),
+                        () -> tr("steinlens.hdrQuality.hint"),
+                        hdrOn,
+                        null,
+                        () -> c.hdrQuick = !c.hdrQuick,
+                        null));
+        nits(
+                "steinlens.hdrPeak",
+                () -> c.hdrPeak,
+                v -> c.hdrPeak = v,
+                HDR_PEAK_MIN,
+                HDR_PEAK_MAX,
+                25,
+                hdrOn);
+        last("hdrPeak").byDefault(fraction(LensConfig.HDR_PEAK, HDR_PEAK_MIN, HDR_PEAK_MAX));
+        entries.add(
+                Entry.slider(
+                        () -> tr("steinlens.hdrBlack"),
+                        () -> {
+                            int v = c.hdrBlack - 50;
+                            return v == 0 ? tr("steinlens.default") : (v > 0 ? "+" : "") + v;
+                        },
+                        () -> tr("steinlens.hdrBlack.hint"),
+                        hdrOn,
+                        () -> c.hdrBlack / 100.0,
+                        f -> c.hdrBlack = (int) Math.round(f * 100),
+                        false));
+        last("hdrBlack").byDefault(LensConfig.HDR_BLACK / 100.0);
         nits(
                 "steinlens.hdrWhite",
                 () -> c.hdrWhite,
@@ -222,28 +334,59 @@ final class VideoModel implements VideoSettings.Source {
                 HDR_WHITE_MAX,
                 10,
                 hdrOn);
-        last("hdrWhite");
-        nits(
-                "steinlens.hdrPeak",
-                () -> c.hdrPeak,
-                v -> c.hdrPeak = v,
-                HDR_PEAK_MIN,
-                HDR_PEAK_MAX,
-                50,
-                hdrOn);
-        last("hdrPeak");
+        last("hdrWhite").byDefault(fraction(LensConfig.HDR_WHITE, HDR_WHITE_MIN, HDR_WHITE_MAX));
     }
 
-    private void sky() {
-        topic("sky");
-        game(GameSettings.Options.RENDER_CLOUDS, false);
+    /**
+     * The texture filters (SteinTextureFilter, SteinPostFx), only where Stein GFX draws:
+     * anisotropic filtering and the supersampled pixels (both with mipmaps: their taps stay inside
+     * each texture's cell of the atlas, known only then) and the sharpening.
+     */
+    private void filters(BooleanSupplier post) {
+        GameSettings s = Minecraft.func_71410_x().field_71474_y;
+        BooleanSupplier mips = () -> s.field_151442_I > 0 && post.getAsBoolean();
         steps(
-                "steinlens.cloudHeight",
-                CLOUD_STEPS,
-                () -> c.cloudHeight,
-                v -> c.cloudHeight = v,
-                v -> v > 0 ? tr("steinlens.cloudHeight.blocks", v) : tr("steinlens.default"),
-                null);
+                "steinlens.anisotropy",
+                ANISOTROPY_STEPS,
+                () -> mips.getAsBoolean() ? c.anisotropy : 1,
+                v -> c.anisotropy = v,
+                v -> v > 1 ? v + "x" : tr("options.off"),
+                mips);
+        toggle(
+                "steinlens.supersample",
+                shown(() -> c.supersample, mips),
+                () -> c.supersample = !c.supersample,
+                mips);
+        choice(
+                "steinlens.sharpen",
+                () ->
+                        !post.getAsBoolean() || c.sharpen == 0
+                                ? tr("options.off")
+                                : tr("steinlens.sharpen." + c.sharpen),
+                () -> c.sharpen = (c.sharpen + 1) % (SteinPostFx.SHARPEN_MAX + 1),
+                () ->
+                        c.sharpen =
+                                (c.sharpen + SteinPostFx.SHARPEN_MAX)
+                                        % (SteinPostFx.SHARPEN_MAX + 1),
+                post);
+    }
+
+    /** The world around: sky and weather, then the textures of blocks and items. */
+    private void world() {
+        topic("world");
+        game(GameSettings.Options.RENDER_CLOUDS);
+        entries.add(
+                Entry.slider(
+                        () -> tr("steinlens.cloudHeight"),
+                        () ->
+                                c.cloudHeight > 0
+                                        ? tr("steinlens.cloudHeight.blocks", c.cloudHeight)
+                                        : tr("steinlens.default"),
+                        () -> tr("steinlens.cloudHeight.hint"),
+                        null,
+                        () -> c.cloudHeight / (double) CLOUD_MAX,
+                        f -> c.cloudHeight = (int) Math.round(f * CLOUD_MAX / 4) * 4,
+                        false));
         choice(
                 "steinlens.fog",
                 () ->
@@ -256,12 +399,8 @@ final class VideoModel implements VideoSettings.Source {
                 () -> c.fog = (c.fog + 2) % 3,
                 null);
         toggle("steinlens.rain", () -> c.rain, () -> c.rain = !c.rain, null);
-    }
-
-    private void textures() {
-        topic("textures");
-        game(GameSettings.Options.MIPMAP_LEVELS, true);
-        game(GameSettings.Options.BLOCK_ALTERNATIVES, false);
+        mipmaps();
+        game(GameSettings.Options.BLOCK_ALTERNATIVES);
         toggleText(
                 "steinlens.connectedTextures",
                 () -> c.connectedTextures,
@@ -290,8 +429,47 @@ final class VideoModel implements VideoSettings.Source {
                         () -> c.glint = (c.glint + 2) % 3));
     }
 
-    private void players() {
-        topic("players");
+    /**
+     * The mipmap levels, step by step instead of a track: each change reloads every texture of the
+     * game (seconds), which a track would do at every step of a drag.
+     */
+    private void mipmaps() {
+        GameSettings s = Minecraft.func_71410_x().field_71474_y;
+        GameSettings.Options o = GameSettings.Options.MIPMAP_LEVELS;
+        entries.add(
+                Entry.choice(
+                        () -> tr(o.func_74378_d()),
+                        () -> valueOf(s.func_74297_c(o)),
+                        null,
+                        null,
+                        null,
+                        () -> s.func_74304_a(o, (s.field_151442_I + 1) % (MIPMAP_MAX + 1)),
+                        () ->
+                                s.func_74304_a(
+                                        o, (s.field_151442_I + MIPMAP_MAX) % (MIPMAP_MAX + 1))));
+    }
+
+    /** The camera, then how the other players and their names are shown. */
+    private void camera() {
+        topic("camera");
+        game(GameSettings.Options.FOV);
+        game(GameSettings.Options.VIEW_BOBBING);
+        toggle(
+                "steinlens.dynamicFov",
+                () -> c.dynamicFov,
+                () -> c.dynamicFov = !c.dynamicFov,
+                null);
+        toggleText(
+                "steinlens.zoom",
+                () -> c.zoom,
+                () -> c.zoom = !c.zoom,
+                () -> tr("steinlens.zoom.hint", zoomKeyName()),
+                null);
+        toggle(
+                "steinlens.zoomSmooth",
+                () -> c.zoomSmoothCamera,
+                () -> c.zoomSmoothCamera = !c.zoomSmoothCamera,
+                () -> c.zoom);
         entries.add(
                 Entry.choice(
                         () -> tr("steinlens.armor"),
@@ -349,7 +527,7 @@ final class VideoModel implements VideoSettings.Source {
 
     private void performance() {
         topic("performance");
-        game(GameSettings.Options.USE_VBO, false);
+        game(GameSettings.Options.USE_VBO);
         toggle(
                 "steinlens.directRender",
                 () -> c.directRender,
@@ -394,9 +572,21 @@ final class VideoModel implements VideoSettings.Source {
 
     // ---- building blocks ----
 
+    /**
+     * What a switch shows: off where it cannot act (an option of Stein GFX or of Vulkan on another
+     * renderer), while the saved choice stays as it is for when it can.
+     */
+    private static BooleanSupplier shown(BooleanSupplier value, BooleanSupplier can) {
+        return () -> value.getAsBoolean() && can.getAsBoolean();
+    }
+
     /** Names the option just added, for the screens that look for it (the HDR calibration). */
-    private void last(String id) {
-        entries.get(entries.size() - 1).id(id);
+    private Entry last(String id) {
+        return entries.get(entries.size() - 1).id(id);
+    }
+
+    private static double fraction(int value, int min, int max) {
+        return (value - min) / (double) (max - min);
     }
 
     private void topic(String id) {
@@ -405,7 +595,7 @@ final class VideoModel implements VideoSettings.Source {
     }
 
     /** A game option, changed as the game's own button would change it. */
-    private void game(GameSettings.Options o, boolean onRelease) {
+    private void game(GameSettings.Options o) {
         GameSettings s = Minecraft.func_71410_x().field_71474_y;
         Supplier<String> label = () -> tr(o.func_74378_d());
         Supplier<String> value = () -> valueOf(s.func_74297_c(o));
@@ -418,7 +608,7 @@ final class VideoModel implements VideoSettings.Source {
                             null,
                             () -> o.func_148266_c(s.func_74296_a(o)),
                             f -> s.func_74304_a(o, o.func_148262_d((float) f)),
-                            onRelease));
+                            false));
             return;
         }
         BooleanSupplier state = o.func_74382_b() ? () -> s.func_74308_b(o) : null;

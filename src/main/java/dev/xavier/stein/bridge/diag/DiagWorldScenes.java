@@ -289,6 +289,17 @@ final class DiagWorldScenes {
         if (DiagOptions.THIRD_PERSON > 0) {
             keepThirdPerson();
         }
+        if (DiagOptions.PITCH > -1000) {
+            EntityPlayerSP p = net.minecraft.client.Minecraft.getMinecraft().thePlayer;
+            if (p != null) {
+                p.rotationPitch = DiagOptions.PITCH;
+                p.prevRotationPitch = DiagOptions.PITCH;
+                if (DiagOptions.YAW > -1000) {
+                    p.rotationYaw = DiagOptions.YAW;
+                    p.prevRotationYaw = DiagOptions.YAW;
+                }
+            }
+        }
     }
 
     private static boolean showcaseOpened;

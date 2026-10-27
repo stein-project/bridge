@@ -112,11 +112,17 @@ final class SteinDeferredFrame {
             // before any draw (barrier in the dispatch)
             SteinPoseGpu.dispatch(c, instances, commands);
         }
+        if (SteinEntityShadows.castOnly) {
+            return; // the first-person player: only into the entities' shadow map
+        }
         c.bindVertexBuffer(0, SteinModelInstancer.geometry(), 0);
         passVb0 = SteinModelInstancer.geometry();
         c.bindVertexBuffer(1, instances, 0);
         c.bindUniforms(0, frame, frameAt, FRAME_BYTES);
         c.bindTexture(1, lightmap, linear);
+        SteinShadows.ensure(SteinDevice.get());
+        c.bindTexture(2, SteinShadows.texture(), SteinShadows.sampler());
+        c.bindTexture(3, SteinEntityShadows.texture(), SteinShadows.sampler());
         if (strictOrder) {
             // Strict order in segments: in the order they were opened, each with its pipeline and
             // its texture.
@@ -158,6 +164,7 @@ final class SteinDeferredFrame {
         Arrays.fill(segGroup, 0, segs, null);
         segs = 0;
         c.end();
+        SteinEntityShadows.cast(order);
         try {
             SteinPoseGpu.afterFlush(instances, commands);
         } finally {

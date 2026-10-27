@@ -100,7 +100,13 @@ public final class SteinTerrain {
     /** Draws (chunks per layer) per ring region; the frame moves on to the next if it fills up. */
     private static final int RING_DRAWS = 64 * 1024;
 
-    private static final int FRAME_BYTES = 192;
+    static final int FRAME_BYTES = 192 + SteinDynamicLights.BYTES + SteinShadows.BYTES;
+
+    /** The shadows' block (SteinShadows), after the dynamic lights. */
+    private static final int FRAME_SHADOW = 192 + SteinDynamicLights.BYTES;
+
+    /** The dynamic lights' block (SteinDynamicLights), after the anim vector. */
+    private static final int FRAME_DYNAMIC = 192;
 
     // Byte offsets in the Frame uniform block (terrain.vert / terrain.frag); the projection is at
     // 0.
@@ -116,6 +122,8 @@ public final class SteinTerrain {
     private static final int FRAME_TEXTURE_ON = 172;
     private static final int FRAME_TIME = 176;
     private static final int FRAME_FADE_SECONDS = 180;
+    private static final int FRAME_SUPERSAMPLE = 184;
+    private static final int FRAME_ANISOTROPY = 188;
 
     private static final Map<Long, SteinTerrainRegion> REGIONS = new HashMap<>();
 
@@ -163,11 +171,12 @@ public final class SteinTerrain {
                 dev.createBuffer(
                                 new SteinBuffer.Desc(
                                         "terrain: frame",
-                                        16384L * RING_REGIONS,
+                                        65536L * RING_REGIONS,
                                         SteinBuffer.Memory.UPLOAD,
                                         SteinBuffer.Usage.UNIFORM))
                         .ring(RING_REGIONS);
         SteinTerrainPipelines.create(dev);
+        SteinShadows.ensure(dev);
         if (!origins.mapped() || !commands.mapped() || !frameUbo.mapped()) {
             Log.info("gfx", "Stein terrain off: buffer has no address (mapping failed)");
             return false;
@@ -295,7 +304,9 @@ public final class SteinTerrain {
         }
         // The chunk will change range: the draws kept with the current list stop being valid.
         SteinTerrainLayers.epoch++;
-        return new SteinTerrainSlice(r, first, count, x, y, z);
+        SteinTerrainSlice slice = new SteinTerrainSlice(r, first, count, x, y, z);
+        SteinShadows.added(slice);
+        return slice;
     }
 
     private static void convert(long src, long dst, int count) {
@@ -346,6 +357,7 @@ public final class SteinTerrain {
 
     /** The chunk dropped the layer (new build, empty, or chunk deleted). */
     public static void release(Object handle) {
+        SteinShadows.removed((SteinTerrainSlice) handle);
         PENDING.add(new Pending((SteinTerrainSlice) handle, frame));
         SteinChunkFade.departure(
                 ((SteinTerrainSlice) handle).x,
@@ -437,8 +449,12 @@ public final class SteinTerrain {
         if (!reserveRings(dev, count)) {
             return;
         }
-        writeRings(d, count, vx, vy, vz);
         int textures = importGameTextures(dev);
+        // the shadow map and the frame's light before the first layer's colour (once per world
+        // drawing), and before its Frame block, which carries them
+        SteinShadows.prepare(
+                dev, GLMatrix.current(), vx, vy, vz, (textures & ATLAS_BOUND) != 0 ? atlas : null);
+        writeRings(d, count, vx, vy, vz);
         int key = SteinTerrainPipelines.stateKey();
         SteinPipeline pipeline;
         if (d.pipe != null && d.pipeKey == key) {
@@ -568,6 +584,9 @@ public final class SteinTerrain {
         if ((textures & LIGHTMAP_BOUND) != 0) {
             cmd.bindTexture(1, lightmap, null);
         }
+        cmd.bindTexture(2, SteinShadows.texture(), SteinShadows.sampler());
+        cmd.bindTexture(3, SteinEntityShadows.texture(), SteinShadows.sampler());
+        cmd.bindTexture(4, SteinGlow.mask(SteinDevice.get()), SteinGlow.sampler());
         SteinBuffer bound = null;
         int start = 0;
         for (int r = 0; r < d.runs && start < count; r++) {
@@ -595,6 +614,17 @@ public final class SteinTerrain {
             runs++;
             start = end;
         }
+    }
+
+    /** The single terrain buffer (one-buffer mode), or null before any upload. */
+    static SteinBuffer oneBuffer() {
+        SteinTerrainRegion r = REGIONS.get(0L);
+        return r == null ? null : r.buffer;
+    }
+
+    /** The common index buffer (quads as two triangles). */
+    static SteinBuffer indices() {
+        return indices;
     }
 
     private static long reserve(SteinBuffer ring, long bytes, int alignment) {
@@ -629,10 +659,13 @@ public final class SteinTerrain {
             boolean fog = SteinGameState.fog();
             // always the fog color: the fading-in chunk comes out of it, even without fog turned
             // on in the layer
-            SteinCoreGl.glGetFloatv(GL11.GL_FOG_COLOR, b);
+            FloatBuffer fogColor = stack.mallocFloat(4);
+            SteinCoreGl.glGetFloatv(GL11.GL_FOG_COLOR, fogColor);
             for (int k = 0; k < 4; k++) {
-                MemoryUtil.memPutFloat(p + FRAME_FOG_COLOR + k * 4L, b.get(k));
+                MemoryUtil.memPutFloat(p + FRAME_FOG_COLOR + k * 4L, fogColor.get(k));
             }
+            // the atmosphere keeps this camera for the post-processing (the first layer only)
+            SteinAtmosphere.capture(b, m, fogColor);
             int mode = SteinGameState.fogMode();
             MemoryUtil.memPutFloat(
                     p + FRAME_FOG_MODE, mode == GL11.GL_EXP ? 1f : mode == GL11.GL_EXP2 ? 2f : 0f);
@@ -647,6 +680,12 @@ public final class SteinTerrain {
             MemoryUtil.memPutFloat(p + FRAME_TEXTURE_ON, SteinGameState.texture2D(0) ? 1f : 0f);
             MemoryUtil.memPutFloat(p + FRAME_TIME, SteinChunkFade.now());
             MemoryUtil.memPutFloat(p + FRAME_FADE_SECONDS, SteinChunkFade.FADE_SECONDS);
+            MemoryUtil.memPutFloat(
+                    p + FRAME_SUPERSAMPLE, SteinTextureFilter.supersample() ? 1f : 0f);
+            MemoryUtil.memPutFloat(p + FRAME_ANISOTROPY, SteinTextureFilter.anisotropy());
+            SteinDynamicLights.update(m);
+            SteinDynamicLights.write(p + FRAME_DYNAMIC);
+            SteinShadows.write(p + FRAME_SHADOW);
         }
     }
 

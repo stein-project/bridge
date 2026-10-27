@@ -124,7 +124,7 @@ final class SteinDeferredResources {
                 dev.createBuffer(
                                 new SteinBuffer.Desc(
                                         "entities: frame",
-                                        16384L * REGIONS,
+                                        65536L * REGIONS,
                                         SteinBuffer.Memory.UPLOAD,
                                         SteinBuffer.Usage.UNIFORM))
                         .ring(REGIONS);
@@ -220,6 +220,8 @@ final class SteinDeferredResources {
                         .layout(text ? SteinTextGpu.layout() : dyn ? dynLayout : layout)
                         .texture("tex", 0)
                         .texture("lightmap", 1)
+                        .texture("shadowMap", 2)
+                        .texture("casterMap", 3)
                         .uniforms("Frame", 0);
         if ((full & KEY_NOALPHA) != 0) {
             b.alphaWrite(false);

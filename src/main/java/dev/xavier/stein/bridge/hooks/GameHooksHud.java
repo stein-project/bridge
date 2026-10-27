@@ -10,6 +10,7 @@ package dev.xavier.stein.bridge.hooks;
 
 import dev.xavier.stein.bridge.SteinBridge;
 import dev.xavier.stein.bridge.engine.FrameTime;
+import dev.xavier.stein.bridge.engine.LoadingScreen;
 import dev.xavier.stein.bridge.showcase.Showcase;
 import dev.xavier.stein.gfx.SteinDevice;
 import dev.xavier.stein.gfx.SteinGfxOptions;
@@ -24,7 +25,10 @@ import net.minecraft.client.gui.GuiNewChat;
 import net.minecraft.client.gui.GuiOverlayDebug;
 import net.minecraft.client.gui.GuiPlayerTabOverlay;
 import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.client.gui.inventory.GuiContainer;
+import net.minecraft.client.gui.inventory.GuiContainerCreative;
+import net.minecraft.client.gui.inventory.GuiInventory;
 import net.minecraft.client.network.NetworkPlayerInfo;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.inventory.Slot;
@@ -99,6 +103,11 @@ final class GameHooksHud {
             }
         }
         ((GuiScreen) screen).drawScreen(mouseX, mouseY, partialTicks);
+        if (screen instanceof GuiInventory || screen instanceof GuiContainerCreative) {
+            // Stein's mark, where the loading screen has it
+            LoadingScreen.inventoryLogo(
+                    new ScaledResolution(Minecraft.getMinecraft()).getScaleFactor());
+        }
         if (GameHooks.SINK != null) {
             try {
                 GameHooks.SINK.afterDrawScreen(screen, mouseX, mouseY, partialTicks);

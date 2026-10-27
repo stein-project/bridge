@@ -41,10 +41,12 @@ layout(location = 2) out vec2 vLight;
 layout(location = 3) out float vFogDist;
 layout(location = 4) flat out vec4 vOverlay;
 layout(location = 5) flat out vec2 vFlags;
+layout(location = 6) out vec3 vEye;
 void main() {
     vec4 p = vec4(aPos, 1.0);
     vec3 eye = vec3(dot(iRow0, p), dot(iRow1, p), dot(iRow2, p));
     gl_Position = projection * vec4(eye, 1.0);
+    vEye = eye;
     vec3 st = vec3(aUv, 1.0);
     vUv = vec2(dot(iTex0.xyz, st), dot(iTex1.xyz, st));
     vOverlay = (int(iLight.z) & 64) != 0 ? iOverlay : vec4(0.0);
@@ -56,9 +58,9 @@ void main() {
         flags |= 32;
     }
     vec3 aNormal = aNormalMark.xyz;
-    vec4 c = (flags & 8) != 0 ? (background ? aColorByte : aColor) : iColor;
+    vec4 c = (flags & 8) != 0 ? (background ? aColorByte : aColor) * iColor : iColor;
 #else
-    vec4 c = (flags & 8) != 0 ? aColor : iColor;
+    vec4 c = (flags & 8) != 0 ? aColor * iColor : iColor;
 #endif
     if ((flags & 1) != 0) {
         vec3 n0 = (flags & 512) != 0 ? iOverlay.xyz : aNormal;

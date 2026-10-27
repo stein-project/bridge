@@ -138,6 +138,9 @@ final class SteinDeferredLights {
             MemoryUtil.memPutFloat(p + 164, SteinGameState.fogDensity());
             MemoryUtil.memPutFloat(p + 168, SteinGameState.fogStart());
             MemoryUtil.memPutFloat(p + 172, SteinGameState.fogEnd());
+            // the dynamic lights (after pad), only while the world is drawn
+            SteinDynamicLights.write(p + 192);
+            SteinShadows.write(p + 192 + SteinDynamicLights.BYTES);
         }
     }
 }

@@ -105,14 +105,64 @@ final class LensConfig {
     /** Smoothing of object outlines (where the depth breaks; textures stay sharp). */
     boolean smoothEdges = false;
 
+    /** Anisotropic filtering: 1 (off), 2, 4, 8 or 16 (SteinTextureFilter). */
+    int anisotropy = 1;
+
+    /** The terrain's pixels sampled four times (SteinTextureFilter). */
+    boolean supersample = false;
+
+    /** Sharpening, 0 (off) to 3 (SteinPostFx). */
+    int sharpen = 0;
+
+    /**
+     * Light carried by entities: a torch in hand, a glowstone on the ground (SteinDynamicLights).
+     */
+    boolean dynamicLights = false;
+
+    /** The atmosphere: 0 off, 1 soft, 2 strong (SteinAtmosphere). */
+    int atmosphere = 0;
+
+    /** The sun's shadows (SteinShadows): 0 off, 1 low, 2 medium, 3 high. */
+    int shadows = 0;
+
+    /** Moonlight: open sky turns blue at night (SteinWorldLight). */
+    boolean moonlight = false;
+
+    /** Darkness: the weak lights fall towards black (SteinWorldLight). */
+    boolean darkness = false;
+
+    /** Glowing blocks: 0 off, 1 on, 2 intense (SteinGlow). */
+    int glowingBlocks = 0;
+
     /** HDR output (Vulkan with an HDR screen): lights brighter than the white of the menus. */
     boolean hdr = false;
 
+    /** The HDR calibration's starting points (the calibration begins from them). */
+    static final int HDR_WHITE = 200;
+
+    static final int HDR_PEAK = 1000;
+    static final int HDR_BLACK = 50;
+
     /** HDR calibration: the white of the menus and the world, in nits. */
-    int hdrWhite = 200;
+    int hdrWhite = HDR_WHITE;
 
     /** HDR calibration: the screen's peak brightness, in nits. */
-    int hdrPeak = 1000;
+    int hdrPeak = HDR_PEAK;
+
+    /**
+     * HDR calibration: the shadows, 0 to 100; 50 leaves them as drawn, less deepens them, more
+     * lifts them (SteinHdr).
+     */
+    int hdrBlack = HDR_BLACK;
+
+    /** HDR in Stein's look (soft, vivid, moody) or as drawn (SteinHdr). */
+    boolean hdrLook = true;
+
+    /**
+     * HDR's quick quality (the frame in 8 bits, the lights in a 16-bit layer) or the maximum (the
+     * whole frame in 16 bits), SteinHdr.
+     */
+    boolean hdrQuick = true;
 
     void load(File file) {
         if (!file.isFile()) {
@@ -160,9 +210,25 @@ final class LensConfig {
             oldArmorHurt = bool(o, "oldArmorHurt", oldArmorHurt);
             bloom = integer(o, "bloom", bloom, 0, 2);
             smoothEdges = bool(o, "smoothEdges", smoothEdges);
+            anisotropy = integer(o, "anisotropy", anisotropy, 1, 16);
+            supersample = bool(o, "supersample", supersample);
+            sharpen = integer(o, "sharpen", sharpen, 0, 3);
+            dynamicLights = bool(o, "dynamicLights", dynamicLights);
+            atmosphere = integer(o, "atmosphere", atmosphere, 0, 2);
+            // (a switch before the levels: on = medium)
+            shadows =
+                    o.has("shadows") && o.get("shadows").getAsJsonPrimitive().isBoolean()
+                            ? (o.get("shadows").getAsBoolean() ? 2 : 0)
+                            : integer(o, "shadows", shadows, 0, 3);
+            moonlight = bool(o, "moonlight", moonlight);
+            darkness = bool(o, "darkness", darkness);
+            glowingBlocks = integer(o, "glowingBlocks", glowingBlocks, 0, 2);
             hdr = bool(o, "hdr", hdr);
             hdrWhite = integer(o, "hdrWhite", hdrWhite, 80, 1000);
             hdrPeak = integer(o, "hdrPeak", hdrPeak, 200, 10000);
+            hdrBlack = integer(o, "hdrBlack", hdrBlack, 0, 100);
+            hdrLook = bool(o, "hdrLook", hdrLook);
+            hdrQuick = bool(o, "hdrQuick", hdrQuick);
         } catch (Exception e) {
             Log.info("lens", file + " unreadable, using defaults: " + e);
         }
@@ -223,9 +289,21 @@ final class LensConfig {
         o.addProperty("oldArmorHurt", oldArmorHurt);
         o.addProperty("bloom", bloom);
         o.addProperty("smoothEdges", smoothEdges);
+        o.addProperty("anisotropy", anisotropy);
+        o.addProperty("supersample", supersample);
+        o.addProperty("sharpen", sharpen);
+        o.addProperty("dynamicLights", dynamicLights);
+        o.addProperty("atmosphere", atmosphere);
+        o.addProperty("shadows", shadows);
+        o.addProperty("moonlight", moonlight);
+        o.addProperty("darkness", darkness);
+        o.addProperty("glowingBlocks", glowingBlocks);
         o.addProperty("hdr", hdr);
         o.addProperty("hdrWhite", hdrWhite);
         o.addProperty("hdrPeak", hdrPeak);
+        o.addProperty("hdrBlack", hdrBlack);
+        o.addProperty("hdrLook", hdrLook);
+        o.addProperty("hdrQuick", hdrQuick);
         file.getAbsoluteFile().getParentFile().mkdirs();
         try (Writer w =
                 new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8)) {

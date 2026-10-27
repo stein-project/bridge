@@ -178,9 +178,11 @@ final class SteinDeferredDynamic {
         if (session) {
             kindCaptured[sessionKind]++;
         }
-        dynR = r;
-        dynG = g;
-        dynB = b;
+        // the sun, the moon and the beacon's beam past white with the Stein light (SteinGlow)
+        float boost = textured ? SteinGlow.boost(tex) : 1f;
+        dynR = r * boost;
+        dynG = g * boost;
+        dynB = b * boost;
         dynA = a;
         dynLmU = SteinGameState.lightmapU();
         dynLmV = SteinGameState.lightmapV();

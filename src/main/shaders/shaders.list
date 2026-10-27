@@ -26,5 +26,13 @@ post_bloom_first.frag frag     post_bloom_down.frag  FIRST
 post_bloom_down.frag  frag     post_bloom_down.frag
 post_bloom_up.frag    frag     post_bloom_up.frag
 post_composite.frag   frag     post_composite.frag
+post_composite_hdr.frag frag   post_composite.frag   HDR_LAYER
 post_luma.frag        frag     post_luma.frag
+post_adapt.frag       frag     post_adapt.frag
+post_rays.frag        frag     post_rays.frag
+loading.frag          frag     loading.frag
+shadow_cast.frag      frag     shadow_cast.frag
+shadow_cast.vert      vert     terrain.vert          SHADOW_CAST
+entity_cast.frag      frag     entity_cast.frag
+entity_cast_gametex.frag frag  entity_cast.frag      GAME_TEX
 hdr_encode.frag       frag     hdr_encode.frag

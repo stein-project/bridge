@@ -6,6 +6,9 @@
 // Copyright (c) 2026 Breno Xavier
 // The terrain (SteinTerrain): a 16-byte vertex, the chunk origin per instance.
 #include "common/terrain_frame.glsl"
+#ifdef SHADOW_CAST
+#include "common/shadow_distort.glsl"
+#endif
 layout(location = 0) in uvec4 aPos;     // local position * 1024 + 16 * 1024; light in w (block | sky << 8)
 layout(location = 1) in vec4 aColor;
 layout(location = 2) in uvec2 aUv;      // texture coordinate * 32768 (exact atlas edges)
@@ -15,14 +18,19 @@ layout(location = 1) out vec2 vUv;
 layout(location = 2) out vec2 vLight;
 layout(location = 3) out float vFogDist;
 layout(location = 4) out float vFade;    // 0 just appeared, 1 fully in
+layout(location = 5) out vec3 vEye;
 void main() {
     vec3 p = vec3(aPos.xyz) * (1.0 / 1024.0) - 16.0 + iOrigin.xyz;   // exact: no gaps
     vec4 eye = modelview * vec4(p, 1.0);
     gl_Position = projection * eye;
+#ifdef SHADOW_CAST
+    gl_Position.xy = shadowDistort(gl_Position.xy);   // (an ortho projection: w is 1)
+#endif
     vColor = aColor;
     vUv = vec2(aUv) * (1.0 / 32768.0);
     vLight = vec2(float(aPos.w & 255u), float(aPos.w >> 8));
     vFogDist = abs(eye.z);
+    vEye = eye.xyz;
     // Chunk fading in (like newer versions): goes from the sky color to its own, fast at first and slow at the end.
     float t = (anim.y > 0.0 && iOrigin.w > 0.0) ? clamp((anim.x - iOrigin.w) / anim.y, 0.0, 1.0) : 1.0;
     vFade = 1.0 - (1.0 - t) * (1.0 - t);

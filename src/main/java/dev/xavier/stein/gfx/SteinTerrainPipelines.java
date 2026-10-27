@@ -52,6 +52,11 @@ final class SteinTerrainPipelines {
     private static SteinPipelineCache pipelines;
     private static final Map<Integer, SteinPipeline> byKey = new HashMap<>();
 
+    /** The terrain's vertex layout (the shadow map draws the same geometry). */
+    static SteinVertexLayout layout() {
+        return layout;
+    }
+
     /** Loads the terrain shaders and builds the vertex layout and the pipeline cache. */
     static void create(SteinDevice dev) {
         // src/main/shaders/terrain.vert and terrain.frag (ALPHA_TEST: the variant with discard),
@@ -128,6 +133,9 @@ final class SteinTerrainPipelines {
                         .layout(layout)
                         .texture("tex", 0)
                         .texture("lightmap", 1)
+                        .texture("shadowMap", 2)
+                        .texture("casterMap", 3)
+                        .texture("glowMask", 4)
                         .uniforms("Frame", 0);
         if ((key & BLEND_BIT) != 0) {
             SteinPipeline.Factor[] f = SteinPipeline.Factor.values();

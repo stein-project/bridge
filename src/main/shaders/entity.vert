@@ -24,10 +24,12 @@ layout(location = 2) out vec2 vLight;
 layout(location = 3) out float vFogDist;
 layout(location = 4) flat out vec4 vOverlay;
 layout(location = 5) flat out vec2 vFlags;
+layout(location = 6) out vec3 vEye;
 void main() {
     vec4 p = vec4(aPos, 1.0);
     vec3 eye = vec3(dot(iRow0, p), dot(iRow1, p), dot(iRow2, p));
     gl_Position = projection * vec4(eye, 1.0);
+    vEye = eye;
     vec3 st = vec3(aUv, 1.0);
     vUv = vec3(dot(iTex0.xyz, st), dot(iTex1.xyz, st), iTex0.w);
     int flags = int(iLight.z);

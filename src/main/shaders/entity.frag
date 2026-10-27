@@ -10,6 +10,9 @@
 // GAME_TEX: the game's texture directly (sampler2D, the layer does not count) instead of the array.
 #include "common/entity_frame.glsl"
 #include "common/fog.glsl"
+#include "common/dynamic_light.glsl"
+#include "common/shadow.glsl"
+#include "common/world_light.glsl"
 #ifdef GAME_TEX
 layout(set = 0, binding = 1) uniform sampler2D tex;
 #else
@@ -22,8 +25,10 @@ layout(location = 2) in vec2 vLight;
 layout(location = 3) in float vFogDist;
 layout(location = 4) flat in vec4 vOverlay;
 layout(location = 5) flat in vec2 vFlags;
+layout(location = 6) in vec3 vEye;
 layout(location = 0) out vec4 color;
 void main() {
+    float shadow = sunShadow(vEye, false);   // (derivatives: before any discard)
     int flags = int(vFlags.x);
 #ifdef GAME_TEX
     vec4 t = texture(tex, vUv.xy);   // always sampled (derivatives outside of branches)
@@ -43,7 +48,10 @@ void main() {
         if (overlay) {
             c.rgb = mix(c.rgb, vOverlay.rgb, vOverlay.a);
         }
-        c.rgb *= texture(lightmap, (vLight + 8.0) / 256.0).rgb;
+        vec2 light = vec2(dynamicBlockLight(vEye, vLight.x), vLight.y);
+        vec3 full = texture(lightmap, (light + 8.0) / 256.0).rgb;
+        vec3 block = texture(lightmap, vec2(light.x + 8.0, 8.0) / 256.0).rgb;
+        c.rgb *= worldLight(full, block, light, shadow);
     }
     if ((flags & 4) != 0) {
         c.rgb = applyFog(c.rgb, fogColor.rgb, fog, vFogDist);

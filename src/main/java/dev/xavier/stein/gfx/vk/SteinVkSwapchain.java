@@ -44,6 +44,7 @@ import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_TRANSFER_BIT;
 import static org.lwjgl.vulkan.VK10.VK_SHARING_MODE_EXCLUSIVE;
 import static org.lwjgl.vulkan.VK10.VK_SUCCESS;
 import static org.lwjgl.vulkan.VK10.vkCmdBlitImage;
+import static org.lwjgl.vulkan.VK10.vkCmdClearColorImage;
 import static org.lwjgl.vulkan.VK10.vkCreateSemaphore;
 import static org.lwjgl.vulkan.VK10.vkDestroySemaphore;
 import static org.lwjgl.vulkan.VK10.vkDeviceWaitIdle;
@@ -54,9 +55,13 @@ import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.gfx.SteinHdr;
 
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.vulkan.EXTHdrMetadata;
+import org.lwjgl.vulkan.VkClearColorValue;
 import org.lwjgl.vulkan.VkCommandBuffer;
 import org.lwjgl.vulkan.VkFormatProperties;
+import org.lwjgl.vulkan.VkHdrMetadataEXT;
 import org.lwjgl.vulkan.VkImageBlit;
+import org.lwjgl.vulkan.VkImageSubresourceRange;
 import org.lwjgl.vulkan.VkPresentInfoKHR;
 import org.lwjgl.vulkan.VkSemaphoreCreateInfo;
 import org.lwjgl.vulkan.VkSurfaceCapabilitiesKHR;
@@ -195,6 +200,9 @@ final class SteinVkSwapchain {
             index = ip.get(0);
         }
         blit(screen, images[index]);
+        if (hdr) {
+            metadata();
+        }
         long ready = presentReady[index];
         frameValue[slot] = device.submit(acquired[slot], VK_PIPELINE_STAGE_TRANSFER_BIT, ready);
         try (MemoryStack stack = MemoryStack.stackPush()) {
@@ -219,7 +227,11 @@ final class SteinVkSwapchain {
         }
     }
 
-    /** Copies the screen into the swapchain image, flipping the rows. */
+    /**
+     * Copies the screen into the swapchain image, flipping the rows. When their sizes differ (the
+     * frame a resize is caught in, or a window the driver will not size so), the picture keeps its
+     * proportion, centred on black, instead of being stretched.
+     */
     private void blit(SteinVkTexture screen, long image) {
         VkCommandBuffer c = device.outside();
         screen.toLayout(c, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL);
@@ -236,6 +248,21 @@ final class SteinVkSwapchain {
                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
         int sw = screen.width();
         int sh = screen.height();
+        int dx = 0;
+        int dy = 0;
+        int dw = width;
+        int dh = height;
+        if ((long) sw * height != (long) sh * width) {
+            // fit: the largest rectangle of the screen's proportion inside the image
+            if ((long) sw * height > (long) sh * width) {
+                dh = Math.max(1, (int) ((long) width * sh / sw));
+                dy = (height - dh) / 2;
+            } else {
+                dw = Math.max(1, (int) ((long) height * sw / sh));
+                dx = (width - dw) / 2;
+            }
+            clearBlack(c, image);
+        }
         try (MemoryStack stack = MemoryStack.stackPush()) {
             VkImageBlit.Buffer region = VkImageBlit.calloc(1, stack);
             region.get(0)
@@ -254,9 +281,9 @@ final class SteinVkSwapchain {
             region.get(0).srcOffsets(0).set(0, 0, 0);
             region.get(0).srcOffsets(1).set(sw, sh, 1);
             // OpenGL's row 0 (the bottom) becomes the swapchain's last row
-            region.get(0).dstOffsets(0).set(0, height, 0);
-            region.get(0).dstOffsets(1).set(width, 0, 1);
-            boolean scaled = sw != width || sh != height;
+            region.get(0).dstOffsets(0).set(dx, dy + dh, 0);
+            region.get(0).dstOffsets(1).set(dx + dw, dy, 1);
+            boolean scaled = sw != dw || sh != dh;
             vkCmdBlitImage(
                     c,
                     screen.image(),
@@ -276,6 +303,60 @@ final class SteinVkSwapchain {
                 VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
                 VK_IMAGE_LAYOUT_PRESENT_SRC_KHR);
         screen.toRest(c);
+    }
+
+    /** The calibration the system was last told about (peak and white packed); -1 for none. */
+    private long metadataFor = -1;
+
+    /**
+     * With HDR output, tells the system the picture's light levels (VK_EXT_hdr_metadata): scRGB's
+     * primaries (BT.709) and white point (D65), the calibration's peak as the most light and the
+     * paper white as the frame average. Windows and the screen then know the game is HDR and how
+     * bright it goes. Again only when the calibration changes.
+     */
+    private void metadata() {
+        if (!device.hdrMetadata) {
+            return;
+        }
+        int peak = SteinHdr.peakNits();
+        int white = SteinHdr.whiteNits();
+        long key = (long) peak << 32 | white;
+        if (key == metadataFor) {
+            return;
+        }
+        metadataFor = key;
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            VkHdrMetadataEXT.Buffer m = VkHdrMetadataEXT.calloc(1, stack);
+            m.get(0).sType$Default();
+            m.get(0).displayPrimaryRed().set(0.640f, 0.330f);
+            m.get(0).displayPrimaryGreen().set(0.300f, 0.600f);
+            m.get(0).displayPrimaryBlue().set(0.150f, 0.060f);
+            m.get(0).whitePoint().set(0.3127f, 0.3290f);
+            m.get(0).maxLuminance(peak);
+            m.get(0).minLuminance(0.0f);
+            m.get(0).maxContentLightLevel(peak);
+            m.get(0).maxFrameAverageLightLevel(white);
+            EXTHdrMetadata.vkSetHdrMetadataEXT(device.vk(), stack.longs(swapchain), m);
+            Log.info(
+                    "gfx",
+                    "vulkan: HDR metadata sent (peak " + peak + " nits, white " + white + ")");
+        }
+    }
+
+    /** The swapchain image all black (the bars around a picture of another proportion). */
+    private static void clearBlack(VkCommandBuffer c, long image) {
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            VkClearColorValue black = VkClearColorValue.calloc(stack);
+            black.float32(0, 0f).float32(1, 0f).float32(2, 0f).float32(3, 1f);
+            VkImageSubresourceRange range =
+                    VkImageSubresourceRange.calloc(stack)
+                            .aspectMask(VK_IMAGE_ASPECT_COLOR_BIT)
+                            .baseMipLevel(0)
+                            .levelCount(1)
+                            .baseArrayLayer(0)
+                            .layerCount(1);
+            vkCmdClearColorImage(c, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, black, range);
+        }
     }
 
     private boolean sizeChanged() {
@@ -369,6 +450,7 @@ final class SteinVkSwapchain {
             swapchain = lp.get(0);
             width = w;
             height = h;
+            metadataFor = -1; // a new swapchain: the light levels go again
             IntBuffer n = stack.mallocInt(1);
             vkGetSwapchainImagesKHR(device.vk(), swapchain, n, null);
             LongBuffer list = stack.mallocLong(n.get(0));

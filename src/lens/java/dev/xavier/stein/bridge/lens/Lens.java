@@ -20,8 +20,14 @@ import dev.xavier.stein.bridge.engine.Visuals;
 import dev.xavier.stein.bridge.hooks.GameHooks;
 import dev.xavier.stein.bridge.hooks.HookSink;
 import dev.xavier.stein.bridge.showcase.VideoSettings;
+import dev.xavier.stein.gfx.SteinAtmosphere;
+import dev.xavier.stein.gfx.SteinDynamicLights;
+import dev.xavier.stein.gfx.SteinGlow;
 import dev.xavier.stein.gfx.SteinHdr;
 import dev.xavier.stein.gfx.SteinPostFx;
+import dev.xavier.stein.gfx.SteinShadows;
+import dev.xavier.stein.gfx.SteinTextureFilter;
+import dev.xavier.stein.gfx.SteinWorldLight;
 
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
@@ -276,8 +282,8 @@ public final class Lens implements HookSink {
     }
 
     /**
-     * {@code -Dsteinlens.diag.presetAtSec=S:P} (test): at S seconds of play, position P of the
-     * graphics slider, through the same path as the slider on release.
+     * {@code -Dsteinlens.diag.presetAtSec=S:P} (test): at S seconds of play, quality level P,
+     * through the same path as the quality choice.
      */
     private static final String DIAG_PRESET = LensOptions.DIAG_PRESET_AT_SEC;
 
@@ -298,7 +304,7 @@ public final class Lens implements HookSink {
             return;
         }
         diagPresetDone = true;
-        // Like the slider on release: the preset is applied (slider position: 0 Fast, 1 Fancy).
+        // As the quality choice does (0 Fast, 1 Fancy, 2 Medium, 3 High, 4 Ultra).
         Presets.apply(this, Presets.at(Integer.parseInt(p[1].trim())));
         Log.info("lens", "diag: preset " + p[1]);
     }
@@ -424,8 +430,20 @@ public final class Lens implements HookSink {
         ChunkKeep.setMode(config.keepChunks, config.keepChunksMb);
         Rain.setHidden(!config.rain);
         OldAnimations.set(config.oldAnimations, oldAnimationParts(config));
-        SteinPostFx.configure(config.bloom, config.smoothEdges);
-        SteinHdr.configure(config.hdr, config.hdrWhite, config.hdrPeak);
+        SteinPostFx.configure(config.bloom, config.smoothEdges, config.sharpen);
+        SteinTextureFilter.configure(config.anisotropy, config.supersample);
+        SteinDynamicLights.configure(config.dynamicLights);
+        SteinAtmosphere.configure(config.atmosphere);
+        SteinShadows.configure(config.shadows);
+        SteinWorldLight.configure(config.moonlight, config.darkness);
+        SteinGlow.configure(config.glowingBlocks);
+        SteinHdr.configure(
+                config.hdr,
+                config.hdrWhite,
+                config.hdrPeak,
+                config.hdrBlack,
+                config.hdrLook,
+                config.hdrQuick);
     }
 
     /** The enabled parts of the 1.7 animations, in OldAnimations' bits. */

@@ -10,6 +10,7 @@ package dev.xavier.stein.bridge.hooks;
 
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.bridge.engine.FrameTime;
+import dev.xavier.stein.bridge.engine.LoadingScreen;
 import dev.xavier.stein.bridge.showcase.Showcase;
 import dev.xavier.stein.gfx.SteinGfxSelfTest;
 
@@ -93,6 +94,7 @@ public final class GameHooks {
 
     /** Before startGame (ave.am), in Minecraft.run. */
     public static void beforeStartGame() {
+        LoadingScreen.startupBegin();
         if (SINK != null) {
             try {
                 SINK.beforeStartGame();
@@ -104,6 +106,7 @@ public final class GameHooks {
 
     /** After startGame. */
     public static void afterStartGame() {
+        LoadingScreen.startupEnd();
         SteinGfxSelfTest.runIfRequested();
         if (SINK != null) {
             try {

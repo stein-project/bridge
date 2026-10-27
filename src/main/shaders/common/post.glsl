@@ -11,6 +11,12 @@ layout(std140, set = 0, binding = 0) uniform Post {
     vec4 params2;   // per pass
     vec4 params3;   // per pass
     vec4 params4;   // per pass
+    vec4 params5;   // per pass (the composite: the atmosphere, SteinAtmosphere)
+    vec4 params6;
+    vec4 params7;
+    vec4 params8;
+    vec4 params9;   // the composite: xyz the sun (or moon) in eye space, w how much the mist thickens towards it
+    vec4 params10;  // the composite: rgb the light the mist takes towards the sun (or moon)
 };
 
 // The luma from which the scene counts as a light: the mean luma (mipmap t.w of `average`) times t.y, between t.x

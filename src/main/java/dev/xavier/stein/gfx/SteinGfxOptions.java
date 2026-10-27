@@ -69,6 +69,18 @@ public final class SteinGfxOptions {
     public static final boolean GPU_PASS_TIMING = Opt.flag("steinbridge.gfx.gpuPassTiming");
 
     /**
+     * {@code -Dsteinbridge.diag.hdrLayerView=true} (diagnostics): with HDR's quick quality, the
+     * encode paints green where it took the light from the lights layer (default: off).
+     */
+    public static final boolean HDR_LAYER_VIEW = Opt.flag("steinbridge.diag.hdrLayerView");
+
+    /**
+     * {@code -Dsteinbridge.diag.hdrShotAtSec=N} (diagnostics): N seconds after startup, saves the
+     * HDR encode's output (clipped to 8 bits) to screenshots/hdr-encode.png (default: off).
+     */
+    public static final long HDR_SHOT_AT = Opt.number("steinbridge.diag.hdrShotAtSec", -1L);
+
+    /**
      * The recorded frame is sent to the driver at once ({@code gl.SteinGlFrame}): the OpenGL passes
      * become command lists, replayed at the end of the frame (Display.update) or earlier, at a
      * synchronisation point (the game uploads a texture, reads the screen, deletes a texture or

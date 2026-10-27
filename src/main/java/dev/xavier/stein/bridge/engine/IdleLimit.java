@@ -10,6 +10,7 @@ package dev.xavier.stein.bridge.engine;
 
 import dev.xavier.stein.bridge.core.CoreOptions;
 import dev.xavier.stein.bridge.core.Win;
+import dev.xavier.stein.bridge.showcase.Showcase;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiIngameMenu;
@@ -19,9 +20,10 @@ import org.lwjgl.glfw.GLFW;
 
 /**
  * Frame limit while nobody is playing: out of focus (another window in front, minimized) and on the
- * title screen, 30 per second; on the Esc menu, 60. Drawing 300 frames of a screen nobody is
- * looking at only heats the processor and the graphics card. The limit the player chose still
- * applies when it is lower.
+ * title screen, 30 per second; on the Esc menu, 60. Not while the video settings show their
+ * landscape: there the frame rate is part of what is being judged. Drawing 300 frames of a screen
+ * nobody is looking at only heats the processor and the graphics card. The limit the player chose
+ * still applies when it is lower.
  *
  * <p>Called at the end of each frame (Display.update, after the buffer swap). On the render thread.
  */
@@ -88,8 +90,8 @@ public final class IdleLimit {
         }
         Minecraft mc = Minecraft.getMinecraft();
         GuiScreen screen = mc == null ? null : mc.currentScreen;
-        if (screen == null) {
-            return 0;
+        if (screen == null || Showcase.active()) {
+            return 0; // playing, or the video settings' showcase: the player's own limit
         }
         if (mc.theWorld == null) {
             return IDLE_FPS; // the title screen and its screens: options, servers, worlds

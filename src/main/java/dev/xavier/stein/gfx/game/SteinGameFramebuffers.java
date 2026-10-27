@@ -307,7 +307,9 @@ public final class SteinGameFramebuffers {
     private static SteinRenderTarget screen() {
         int w = Math.max(1, Display.getWidth());
         int h = Math.max(1, Display.getHeight());
-        SteinFormat format = SteinHdr.active() ? SteinFormat.RGBA16F : SteinFormat.RGBA8;
+        // 16 bits also with the Stein light: the sun and the lights go past white until the
+        // post-processing's exposure brings them back (SteinPostFx.wideScene)
+        SteinFormat format = SteinHdr.framebufferWide() ? SteinFormat.RGBA16F : SteinFormat.RGBA8;
         if (screen == null
                 || screenColor.width() != w
                 || screenColor.height() != h

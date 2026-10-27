@@ -29,7 +29,7 @@ final class SteinInstanceWriter {
     static final int RING_PARTS = 64 * 1024;
 
     static final int REGIONS = 3;
-    static final int FRAME_BYTES = 192;
+    static final int FRAME_BYTES = 192 + SteinDynamicLights.BYTES + SteinShadows.BYTES;
 
     /** Dynamic vertices per ring region. */
     static final int RING_VERTS = 256 * 1024;

@@ -271,7 +271,18 @@ bfk	b	(FI)V	handEnd	dev/xavier/stein/gfx/SteinEntityDeferred	after	bfk.a(IFJ)V
 # happens inside, the post-processing after still applies), and the real player's hand is not drawn in it.
 bfk	b	(FJ)V	renderWorld	dev/xavier/stein/bridge/showcase/Showcase	static	bfk.a(FJ)V
 bfk	b	(FI)V	renderHand	dev/xavier/stein/bridge/showcase/Showcase	static	bfk.a(IFJ)V
+# ... and the game's frame limit (getLimitFramerate, 30 under any screen without a world) is the player's own while it
+# is open: the video settings show what each option costs.
+ave	j	()I	limitFramerate	dev/xavier/stein/bridge/showcase/Showcase	static	ave.av()V
+ave	j	()I	limitFramerate	dev/xavier/stein/bridge/showcase/Showcase	static	ave.k()Z
 bfk	b	(FJ)V	afterWorld	dev/xavier/stein/gfx/SteinPostFx	after	bfk.a(FJ)V
+# Stein's loading screen (engine/LoadingScreen, Stein GFX only): in place of the 1.8.9 splash in startGame; before each
+# resource listener (registered in startGame, and at every reload), a frame with the bar; and the fade at the end of a
+# load, inside the game's frame (before the framebuffer is unbound in the game loop).
+ave	a	(Lbmj;)V	splash	dev/xavier/stein/bridge/engine/LoadingScreen	static	ave.am()V
+bnj	a	(Lbni;)V	listener	dev/xavier/stein/bridge/engine/LoadingScreen	static	bnn.a(Lbnj;)V
+bnj	a	(Lbni;)V	listener	dev/xavier/stein/bridge/engine/LoadingScreen	static	bnn.c()V
+bfw	e	()V	fadeOut	dev/xavier/stein/bridge/engine/LoadingScreen	before	ave.av()V
 # The depth clear before the hand (GlStateManager.clear(GL_DEPTH_BUFFER_BIT) in renderWorldPass) takes the world's depth
 # away: the edge smoothing copies it first.
 bfl	m	(I)V	worldClear	dev/xavier/stein/gfx/SteinPostFx	static	bfk.a(IFJ)V
@@ -373,6 +384,9 @@ bbo	a	(Lpk;FFFFFF)V	baseDrawn	dev/xavier/stein/bridge/engine/ArmorGlint	after	bk
 # New renderer: the round shadow's draw (Render.renderShadow) marked — black texture, light irrelevant, recordable.
 bfx	b	()V	shadowBegin	dev/xavier/stein/gfx/SteinTessCapture	before	biv.c(Lpk;DDDFF)V
 bfx	b	()V	shadowEnd	dev/xavier/stein/gfx/SteinTessCapture	after	biv.c(Lpk;DDDFF)V
+# With the sun's shadows (SteinShadows) the round one under the entities goes away: RenderManager.isRenderShadow()
+# inside Render.doRenderShadowAndFire answers false (the player's setting stays as it is).
+biu	a	()Z	roundShadow	dev/xavier/stein/gfx/SteinShadows	static	biv.b(Lpk;DDDFF)V
 # DataWatcher: the watched objects of each entity in an array by id (DataWatchers), instead of the HashMap on each read.
 pz	sbWatched	[Ljava/lang/Object;	-	-	field
 # Entity.getFlag (pk.g; isSneaking, isInvisible, isBurning...): the flags byte (id 0) mirrored in an int on the entity

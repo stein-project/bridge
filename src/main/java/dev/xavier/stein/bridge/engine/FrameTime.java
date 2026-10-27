@@ -132,6 +132,42 @@ public final class FrameTime {
     private static final long NANOS_PER_SECOND = 1_000_000_000L;
     private static final double NANOS_PER_MILLI = 1e6;
 
+    /** The frames of {@link #recent}, sorted there (no allocation per call). */
+    private static final long[] RECENT = new long[RING];
+
+    /**
+     * The last {@code seconds}: frames per second into {@code out[0]} and the 1% low (the frame
+     * rate of the slowest 1% of the frames) into {@code out[1]}; 0 for both without frames. For the
+     * video settings, a few times per second.
+     */
+    public static void recent(double seconds, double[] out) {
+        long now = System.nanoTime();
+        long since = now - (long) (seconds * NANOS_PER_SECOND);
+        long sum = 0L;
+        int n = 0;
+        for (int i = 1; i <= RING; i++) {
+            int k = (head - i) & (RING - 1);
+            if (END[k] == 0L || END[k] < since) {
+                break;
+            }
+            RECENT[n++] = DURATION[k];
+            sum += DURATION[k];
+        }
+        if (n == 0 || sum == 0L) {
+            out[0] = 0.0;
+            out[1] = 0.0;
+            return;
+        }
+        Arrays.sort(RECENT, 0, n);
+        int slow = Math.max(1, n / 100);
+        long slowSum = 0L;
+        for (int i = n - slow; i < n; i++) {
+            slowSum += RECENT[i];
+        }
+        out[0] = n * (double) NANOS_PER_SECOND / sum;
+        out[1] = slow * (double) NANOS_PER_SECOND / slowSum;
+    }
+
     /** The F3 line: average and worst frame of the last second. */
     public static String describe() {
         long since = System.nanoTime() - NANOS_PER_SECOND;

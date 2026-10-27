@@ -8,39 +8,169 @@
 
 package dev.xavier.stein.bridge.lens;
 
+import dev.xavier.stein.gfx.SteinPostFx;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.GameSettings;
 
 /**
- * The two positions of the graphics selector ({@link VideoModel}), which also apply to the game's
- * own options:
+ * The quality levels of the video settings ({@link VideoModel}): one choice that sets the options
+ * of every other topic, the game's and Stein's, from the lightest to the richest. The render
+ * distance is not one of them: it is the player's own choice, on its own line.
  *
  * <ul>
  *   <li><b>Fast</b>: the lightest the game can be — fast graphics, no clouds, few particles, no
  *       smooth lighting, no ground shadow, no rain, direct drawing (without the intermediate
- *       frame), compact angles and the render distance at 8 chunks at most (if already lower, it
- *       stays);
- *   <li><b>Fancy</b>: the game as Mojang ships it — clouds and particles back, smooth lighting at
- *       maximum and the ground shadow.
+ *       frame), compact angles;
+ *   <li><b>Fancy</b>: the game as Mojang ships it;
+ *   <li><b>Medium</b>: Fancy with a soft bloom and 4x anisotropic filtering;
+ *   <li><b>High</b>: soft bloom, smooth edges, 8x anisotropic, supersampled pixels, light
+ *       sharpening;
+ *   <li><b>Ultra</b>: strong bloom, smooth edges, 16x anisotropic, supersampled pixels, medium
+ *       sharpening, HDR at maximum quality (the others: quick).
  * </ul>
  *
- * <p>The render distance only goes down in Fast, and does not come back by itself: whoever wants it
- * larger picks it on its own line.
+ * <p>Light and shadows: Medium has low shadows; High medium shadows, moonlight and darkness; Ultra
+ * high shadows, moonlight and darkness.
+ *
+ * <p>When an option is changed by hand the level becomes "Custom" ({@link #current} returns null):
+ * the options are compared with each level, only those a level sets and that change the picture.
  */
 final class Presets {
 
-    /** A slider position; the order is the slider's, from left to right. */
+    /** A level; the order is the selector's, from the lightest. */
     enum Position {
-        FAST("fast"),
-        FANCY("fancy");
+        FAST(
+                "fast",
+                false,
+                0,
+                0,
+                2,
+                false,
+                SteinPostFx.BLOOM_OFF,
+                false,
+                1,
+                false,
+                0,
+                true,
+                false,
+                0,
+                0),
+        FANCY(
+                "fancy",
+                true,
+                2,
+                2,
+                0,
+                true,
+                SteinPostFx.BLOOM_OFF,
+                false,
+                1,
+                false,
+                0,
+                true,
+                false,
+                0,
+                0),
+        MEDIUM(
+                "medium",
+                true,
+                2,
+                2,
+                0,
+                true,
+                SteinPostFx.BLOOM_LOW,
+                false,
+                4,
+                false,
+                0,
+                true,
+                true,
+                0,
+                1),
+        HIGH(
+                "high",
+                true,
+                2,
+                2,
+                0,
+                true,
+                SteinPostFx.BLOOM_LOW,
+                true,
+                8,
+                true,
+                1,
+                true,
+                true,
+                1,
+                2),
+        ULTRA(
+                "ultra",
+                true,
+                2,
+                2,
+                0,
+                true,
+                SteinPostFx.BLOOM_HIGH,
+                true,
+                16,
+                true,
+                2,
+                false,
+                true,
+                2,
+                3);
 
         private final String key;
+        final boolean fancy;
+        final int smoothLighting;
+        final int clouds;
+        final int particles;
+        final boolean shadows;
+        final int bloom;
+        final boolean smoothEdges;
+        final int anisotropy;
+        final boolean supersample;
+        final int sharpen;
+        final boolean hdrQuick;
+        final boolean dynamicLights;
+        final int atmosphere;
+        final int sunShadows;
 
-        Position(String key) {
+        Position(
+                String key,
+                boolean fancy,
+                int smoothLighting,
+                int clouds,
+                int particles,
+                boolean shadows,
+                int bloom,
+                boolean smoothEdges,
+                int anisotropy,
+                boolean supersample,
+                int sharpen,
+                boolean hdrQuick,
+                boolean dynamicLights,
+                int atmosphere,
+                int sunShadows) {
             this.key = key;
+            this.fancy = fancy;
+            this.smoothLighting = smoothLighting;
+            this.clouds = clouds;
+            this.particles = particles;
+            this.shadows = shadows;
+            this.bloom = bloom;
+            this.smoothEdges = smoothEdges;
+            this.anisotropy = anisotropy;
+            this.supersample = supersample;
+            this.sharpen = sharpen;
+            this.hdrQuick = hdrQuick;
+            this.dynamicLights = dynamicLights;
+            this.atmosphere = atmosphere;
+            this.sunShadows = sunShadows;
         }
 
-        /** Name of the position, for the translation key (steinlens.graphics.&lt;key&gt;). */
+        /** Name of the level, for the translation key (steinlens.quality.&lt;key&gt;). */
         String key() {
             return key;
         }
@@ -48,64 +178,85 @@ final class Presets {
 
     private static final Position[] POSITIONS = Position.values();
 
-    /** Highest slider position, as an index. */
+    /** Highest level, as an index. */
     static final int MAX_POSITION = POSITIONS.length - 1;
 
-    /** The position at a slider index (0 = Fast), clamped to the slider's range. */
+    /** The level at an index (0 = Fast), clamped. */
     static Position at(int index) {
         return POSITIONS[Math.clamp(index, 0, MAX_POSITION)];
     }
 
-    /** Maximum distance, in chunks, that "Fast" allows. */
-    private static final int FAST_DISTANCE = 8;
-
     private Presets() {}
 
-    /** Position from the current configuration: the game's graphics. */
-    static Position current() {
-        return Minecraft.func_71410_x().field_71474_y.field_74347_j
-                ? Position.FANCY
-                : Position.FAST;
+    /** The level the options are at now, or null when they match none (Custom). */
+    static Position current(LensConfig c) {
+        GameSettings s = Minecraft.func_71410_x().field_71474_y;
+        for (Position p : POSITIONS) {
+            if (s.field_74347_j == p.fancy
+                    && s.field_74348_k == p.smoothLighting
+                    && s.field_74345_l == p.clouds
+                    && s.field_74362_aa == p.particles
+                    && s.field_181151_V == p.shadows
+                    && c.bloom == p.bloom
+                    && c.smoothEdges == p.smoothEdges
+                    && c.anisotropy == p.anisotropy
+                    && c.supersample == p.supersample
+                    && c.sharpen == p.sharpen
+                    && c.hdrQuick == p.hdrQuick
+                    && c.dynamicLights == p.dynamicLights
+                    && c.atmosphere == p.atmosphere
+                    && c.shadows == p.sunShadows
+                    && c.moonlight == (p.sunShadows >= 2)
+                    && c.darkness == (p.sunShadows >= 2)
+                    && c.glowingBlocks == glowOf(p)) {
+                return p;
+            }
+        }
+        return null;
     }
 
     /**
-     * Applies the position: game and Stein options. Returns true when the terrain needs to be
-     * rebuilt (fast/fancy graphics and smooth lighting change the chunk mesh) — the caller rebuilds
-     * once, when the selector is released, and not at every position the drag crosses.
+     * Applies the level: game and Stein options. Returns true when the terrain needs to be rebuilt
+     * (fast/fancy graphics and smooth lighting change the chunk mesh).
      */
-    static boolean apply(Lens mod, Position position) {
+    static boolean apply(Lens mod, Position p) {
         Minecraft mc = Minecraft.func_71410_x();
         GameSettings s = mc.field_71474_y;
         LensConfig c = mod.config;
-        boolean fancy = position == Position.FANCY;
-        boolean rebuild = s.field_74347_j != fancy;
-        s.field_74347_j = fancy;
-        if (position == Position.FAST) {
-            rebuild |= s.field_74348_k != 0;
-            s.field_74348_k = 0; // smooth lighting off
-            s.field_151451_c = Math.min(s.field_151451_c, FAST_DISTANCE); // render distance
-            s.field_74345_l = 0; // clouds off
-            s.field_74362_aa = 2; // minimal particles
-            s.field_181151_V = false; // ground shadow
-            s.field_178881_t = true; // VBO (faster than lists)
-            c.directRender = true;
-            c.compactAngles = true;
-            c.rain = false;
+        boolean rebuild = s.field_74347_j != p.fancy || s.field_74348_k != p.smoothLighting;
+        s.field_74347_j = p.fancy;
+        s.field_74348_k = p.smoothLighting;
+        s.field_74345_l = p.clouds;
+        s.field_74362_aa = p.particles;
+        s.field_181151_V = p.shadows;
+        s.field_178881_t = true; // VBO (faster than lists)
+        c.bloom = p.bloom;
+        c.smoothEdges = p.smoothEdges;
+        c.anisotropy = p.anisotropy;
+        c.supersample = p.supersample;
+        c.sharpen = p.sharpen;
+        c.hdrQuick = p.hdrQuick;
+        c.dynamicLights = p.dynamicLights;
+        c.atmosphere = p.atmosphere;
+        c.shadows = p.sunShadows;
+        c.moonlight = p.sunShadows >= 2; // High and Ultra: the Stein night
+        c.darkness = p.sunShadows >= 2;
+        c.glowingBlocks = glowOf(p);
+        boolean fast = p == Position.FAST;
+        c.directRender = fast;
+        c.compactAngles = fast;
+        c.rain = !fast;
+        if (fast) {
             c.fog = 0;
             c.cloudHeight = 0;
-        } else {
-            rebuild |= s.field_74348_k != 2;
-            s.field_74348_k = 2; // smooth lighting at maximum
-            s.field_74345_l = 2; // fancy clouds
-            s.field_74362_aa = 0; // all particles
-            s.field_181151_V = true;
-            s.field_178881_t = true;
-            c.directRender = false;
-            c.compactAngles = false;
-            c.rain = true;
         }
         s.func_74303_b();
         mod.changed();
         return rebuild;
+    }
+
+    /** Glowing blocks: on from Medium, intense in Ultra. */
+    private static int glowOf(Position p) {
+        return p.sunShadows >= 3 ? 2 : p.sunShadows >= 1 ? 1 : 0;
     }
 }
