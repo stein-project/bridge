@@ -23,7 +23,7 @@ import java.util.Locale;
 import java.util.Properties;
 
 /**
- * The graphics API Stein GFX draws with: OpenGL (the default) or Vulkan. The player picks it in the
+ * The graphics API Stein GFX draws with: Vulkan (the default) or OpenGL. The player picks it in the
  * Stein Client, which writes it to {@code config/stein-graphics.properties} before starting the
  * game (the window is created for one API, so it is chosen before the game opens; the video options
  * only show it). {@code -Dsteinbridge.gfx.api=...} overrides the file for the session (the test
@@ -31,7 +31,8 @@ import java.util.Properties;
  *
  * <p>What was asked for and what is running can differ: when Vulkan does not start (no driver, no
  * GPU with Vulkan 1.2, the window refuses a surface) the game falls back to OpenGL and {@link
- * #fallback()} says why.
+ * #fallback()} says why. Without a saved choice (a first start, or a launcher that writes none) it
+ * is Vulkan: OpenGL only where Vulkan cannot run.
  *
  * <p>Pipeline: both — read before the window exists.
  */
@@ -87,16 +88,16 @@ public enum SteinBackend {
     private static long firstPresent;
 
     /**
-     * The API asked for at this start: the option, else the saved choice, else OpenGL. A saved
+     * The API asked for at this start: the option, else the saved choice, else Vulkan. A saved
      * Vulkan whose last start died before its first seconds goes back to OpenGL, saved too (the
      * video options say why), so a driver that crashes cannot keep the game from opening.
      */
     public static SteinBackend requested() {
         if (FORCED != null) {
-            return parse(FORCED, OPENGL);
+            return parse(FORCED, VULKAN);
         }
         Properties p = load();
-        SteinBackend api = parse(p.getProperty(KEY), OPENGL);
+        SteinBackend api = parse(p.getProperty(KEY), VULKAN);
         if (api == VULKAN && Boolean.parseBoolean(p.getProperty(STARTING))) {
             Log.warn("gfx", "the last start with Vulkan did not get through: back to OpenGL");
             crashedLastTime = true;
