@@ -53,6 +53,7 @@ final class BenchReport {
             List<String> segments,
             long start,
             boolean stopped,
+            File recording,
             Minecraft mc) {
         if (zip == null) {
             return "no report file";
@@ -89,6 +90,11 @@ final class BenchReport {
             }
             entry(zip, "gpu.csv", gpuCsv(results));
             entry(zip, "events.log", String.join("\n", Bench.events()) + "\n");
+            if (recording != null && recording.isFile()) {
+                zip.putNextEntry(new ZipEntry("recording.jfr"));
+                Files.copy(recording.toPath(), zip);
+                zip.closeEntry();
+            }
             zip.putNextEntry(new ZipEntry("console.log"));
             zip.write(BenchConsole.bytes());
             zip.closeEntry();
