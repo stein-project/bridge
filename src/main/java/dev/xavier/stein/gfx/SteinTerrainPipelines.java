@@ -55,6 +55,7 @@ final class SteinTerrainPipelines {
     private static final Map<Integer, SteinPipeline> byKey = new HashMap<>();
     private static final Map<Integer, SteinPipeline> prepassByKey = new HashMap<>();
     private static final Map<Integer, SteinPipeline> afterPrepassByKey = new HashMap<>();
+    private static final Map<Integer, SteinPipeline> opaqueByKey = new HashMap<>();
 
     /** Loads the terrain shaders and builds the vertex layout and the pipeline cache. */
     static void create(SteinDevice dev) {
@@ -160,6 +161,14 @@ final class SteinTerrainPipelines {
     }
 
     /**
+     * {@code key} without the alpha test: the state of the cutout faces whose texture is opaque
+     * ({@link SteinOpaqueCutout}); the same shader without its discard.
+     */
+    static int withoutAlpha(int key) {
+        return key & ~ALPHA_BIT;
+    }
+
+    /**
      * Whether a layer drawn with {@code key} may go out as a depth pre-pass plus a colour pass
      * ({@code terrainCutoutPrepass}): alpha test, no blending, depth test LEQUAL with writes. With
      * LEQUAL the pre-pass leaves the same depth the layer would; the colour pass with EQUAL and the
@@ -180,7 +189,14 @@ final class SteinTerrainPipelines {
     static SteinPipeline prepass(int key) {
         SteinPipeline p = prepassByKey.get(key);
         if (p == null) {
-            p = variant(key, "terrain depth ", fragmentDepth, false, SteinPipeline.Depth.LEQUAL);
+            p =
+                    variant(
+                            key,
+                            "terrain depth ",
+                            fragmentDepth,
+                            false,
+                            true,
+                            SteinPipeline.Depth.LEQUAL);
             prepassByKey.put(key, p);
         }
         return p;
@@ -190,14 +206,44 @@ final class SteinTerrainPipelines {
     static SteinPipeline afterPrepass(int key) {
         SteinPipeline p = afterPrepassByKey.get(key);
         if (p == null) {
-            p = variant(key, "terrain colour ", fragmentAlpha, true, SteinPipeline.Depth.EQUAL);
+            p =
+                    variant(
+                            key,
+                            "terrain colour ",
+                            fragmentAlpha,
+                            true,
+                            false,
+                            SteinPipeline.Depth.EQUAL);
             afterPrepassByKey.put(key, p);
         }
         return p;
     }
 
+    /**
+     * The faces without the alpha test ({@link SteinOpaqueCutout}) of a layer drawn with {@code
+     * key}: the state without the alpha test; on a layer with the pre-pass, with the pre-pass's
+     * invariant vertex, so that a face and the cutout face in the same plane (the grass side and
+     * its overlay) keep exactly the same depth.
+     */
+    static SteinPipeline opaqueFaces(int key) {
+        if (!prepassEligible(key)) {
+            return pipeline(withoutAlpha(key));
+        }
+        SteinPipeline p = opaqueByKey.get(key);
+        if (p == null) {
+            p = variant(key, "terrain opaque ", fragment, true, true, SteinPipeline.Depth.LEQUAL);
+            opaqueByKey.put(key, p);
+        }
+        return p;
+    }
+
     private static SteinPipeline variant(
-            int key, String name, SteinShader frag, boolean color, SteinPipeline.Depth depth) {
+            int key,
+            String name,
+            SteinShader frag,
+            boolean color,
+            boolean write,
+            SteinPipeline.Depth depth) {
         SteinPipeline.Builder b =
                 SteinPipeline.builder(name + Integer.toHexString(key))
                         .vertex(vertexInvariant)
@@ -206,7 +252,7 @@ final class SteinTerrainPipelines {
                         .texture("tex", 0)
                         .texture("lightmap", 1)
                         .uniforms("Frame", 0)
-                        .depth(depth, !color)
+                        .depth(depth, write)
                         .cull(
                                 (key & CULL_BIT) == 0
                                         ? SteinPipeline.Cull.NONE

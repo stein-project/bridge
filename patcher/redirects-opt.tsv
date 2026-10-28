@@ -77,6 +77,12 @@ bqs	f	()Z	useVbo	dev/xavier/stein/bridge/engine/ChunkArena
 bfz	a	(Lbfd;)V	upload	dev/xavier/stein/bridge/engine/ChunkArena	static	bho.a(Lbfd;Lbmt;)V
 bfh	a	(Ladf;)V	render	dev/xavier/stein/bridge/engine/ChunkArena	static	bfr.a(Ladf;)V
 bmt	c	()V	delete	dev/xavier/stein/bridge/engine/ChunkArena	static	bht.a()V
+# The layer of each upload (Stein GFX's opaque cutout faces): getVertexBufferByLayer (bht.b) in
+# ChunkRenderDispatcher.uploadChunk notes the layer just before uploadVertexBuffer runs.
+bht	b	(I)Lbmt;	uploadBuffer	dev/xavier/stein/bridge/engine/ChunkArena	static	bho.a(Ladf;Lbfd;Lbht;Lbhq;)Lcom/google/common/util/concurrent/ListenableFuture;
+# TextureUtil.uploadTextureMipmap of each texture in TextureMap.loadTextureAtlas: Stein GFX notes which
+# ones are opaque at every mipmap level (SteinOpaqueCutout), then uploads as before.
+bml	a	([[IIIIIZZ)V	uploadMipmap	dev/xavier/stein/gfx/SteinOpaqueCutout	static	bmh.b(Lbni;)V
 bmt	sbRegion	Ljava/lang/Object;	-	-	field
 bmt	sbFirst	I	-	-	field
 bmt	sbCount	I	-	-	field

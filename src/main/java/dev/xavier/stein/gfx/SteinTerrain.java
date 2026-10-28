@@ -75,18 +75,10 @@ public final class SteinTerrain {
     static final boolean ONE_BUFFER = SteinGfxOptions.TERRAIN_ONE_BUFFER;
 
     /**
-     * The game's vertex (BLOCK format): position 3 float, color 4 byte, texture 2 float, light 2
-     * short.
-     */
-    private static final int GAME_VERTEX = 28;
-
-    /**
      * Ours: position 3 ushort and the light in a ushort, color 4 byte, texture 2 ushort in 1/32768.
      */
     static final int VERTEX = 16;
 
-    private static final float POS_SCALE = 1024f;
-    private static final float POS_BIAS = 16f;
     private static final int REGION_SHIFT = 7; // 128 blocks
     static final int INITIAL_VERTICES = 1 << 18; // 4 MB
 
@@ -155,7 +147,11 @@ public final class SteinTerrain {
                 dev.createBuffer(
                                 new SteinBuffer.Desc(
                                         "terrain: commands",
-                                        (long) RING_DRAWS * COMMAND_BYTES * RING_REGIONS,
+                                        (long) RING_DRAWS
+                                                * COMMAND_BYTES
+                                                // a split layer has two commands per chunk
+                                                * (SteinOpaqueCutout.ENABLED ? 2 : 1)
+                                                * RING_REGIONS,
                                         SteinBuffer.Memory.UPLOAD,
                                         SteinBuffer.Usage.INDIRECT))
                         .ring(RING_REGIONS);
@@ -236,18 +232,17 @@ public final class SteinTerrain {
     }
 
     private static ByteBuffer scratch = MemoryUtil.memAlloc(1 << 20);
-    private static long clamped;
 
     /**
      * Upload of a chunk layer: {@code count} game vertices in {@code src} (BLOCK format, position
-     * relative to the chunk origin at {@code x, y, z}). Returns what the chunk keeps for drawing
-     * and for releasing later.
+     * relative to the chunk origin at {@code x, y, z}) of the game layer {@code layer} (its
+     * ordinal; -1: unknown). Returns what the chunk keeps for drawing and for releasing later.
      */
-    public static Object upload(long src, int count, int x, int y, int z) {
+    public static Object upload(long src, int count, int x, int y, int z, int layer) {
         long t0 = STATS ? System.nanoTime() : 0L;
         Object s;
         try {
-            s = uploadSlice(src, count, x, y, z);
+            s = uploadSlice(src, count, x, y, z, layer);
         } catch (RuntimeException | Error e) {
             // the upload runs in a game task that swallows the exception: without this the
             // chunk silently vanishes
@@ -271,7 +266,12 @@ public final class SteinTerrain {
         return s;
     }
 
-    private static Object uploadSlice(long src, int count, int x, int y, int z) {
+    /** The game layers drawn with the alpha test: CUTOUT_MIPPED and CUTOUT (ordinals). */
+    private static final int CUTOUT_MIPPED = 1;
+
+    private static final int CUTOUT = 2;
+
+    private static Object uploadSlice(long src, int count, int x, int y, int z, int layer) {
         int rx = x >> REGION_SHIFT;
         int rz = z >> REGION_SHIFT;
         long key = ONE_BUFFER ? 0L : ((long) rx << 32) ^ (rz & 0xFFFFFFFFL);
@@ -287,7 +287,17 @@ public final class SteinTerrain {
         }
         scratch.clear();
         scratch.limit(bytes);
-        convert(src, MemoryUtil.memAddress(scratch), count);
+        // Cutout layers: the faces that need no alpha test go first ({@link SteinOpaqueCutout}).
+        // Never the solid or the translucent layer, whose order the game sorts or relies on.
+        int opaque =
+                (layer == CUTOUT_MIPPED || layer == CUTOUT) && SteinOpaqueCutout.ready()
+                        ? SteinOpaqueCutout.classify(src, count)
+                        : 0;
+        if (opaque > 0 && opaque < count) {
+            SteinTerrainVertices.convertSplit(src, MemoryUtil.memAddress(scratch), count, opaque);
+        } else {
+            SteinTerrainVertices.convert(src, MemoryUtil.memAddress(scratch), count);
+        }
         int first = r.alloc(count);
         r.buffer.upload((long) first * VERTEX, scratch);
         if (count > indexVertices) {
@@ -295,36 +305,7 @@ public final class SteinTerrain {
         }
         // The chunk will change range: the draws kept with the current list stop being valid.
         SteinTerrainLayers.epoch++;
-        return new SteinTerrainSlice(r, first, count, x, y, z);
-    }
-
-    private static void convert(long src, long dst, int count) {
-        for (int i = 0; i < count; i++) {
-            long s = src + (long) i * GAME_VERTEX;
-            long d = dst + (long) i * VERTEX;
-            MemoryUtil.memPutShort(d, position(MemoryUtil.memGetFloat(s)));
-            MemoryUtil.memPutShort(d + 2, position(MemoryUtil.memGetFloat(s + 4)));
-            MemoryUtil.memPutShort(d + 4, position(MemoryUtil.memGetFloat(s + 8)));
-            int block = Math.min(MemoryUtil.memGetShort(s + 24) & 0xFFFF, 255);
-            int sky = Math.min(MemoryUtil.memGetShort(s + 26) & 0xFFFF, 255);
-            MemoryUtil.memPutShort(d + 6, (short) (block | sky << 8));
-            MemoryUtil.memPutInt(d + 8, MemoryUtil.memGetInt(s + 12));
-            MemoryUtil.memPutShort(d + 12, unit(MemoryUtil.memGetFloat(s + 16)));
-            MemoryUtil.memPutShort(d + 14, unit(MemoryUtil.memGetFloat(s + 20)));
-        }
-    }
-
-    private static short position(float v) {
-        int q = Math.round((v + POS_BIAS) * POS_SCALE);
-        if (q < 0 || q > 0xFFFF) {
-            clamped++;
-            q = Math.max(0, Math.min(0xFFFF, q));
-        }
-        return (short) q;
-    }
-
-    private static short unit(float v) {
-        return (short) Math.round(Math.max(0f, Math.min(1f, v)) * 32768f);
+        return new SteinTerrainSlice(r, first, count, opaque, x, y, z);
     }
 
     // ---- release (the range returns after the fence of the frame in which it was released) ----
@@ -434,7 +415,7 @@ public final class SteinTerrain {
             count = RING_DRAWS; // never seen: more chunks in a layer than a whole ring
         }
         SteinDevice dev = SteinDevice.get();
-        if (!reserveRings(dev, count)) {
+        if (!reserveRings(dev, count, d.split)) {
             return;
         }
         writeRings(d, count, vx, vy, vz);
@@ -452,10 +433,21 @@ public final class SteinTerrain {
         SteinCommands cmd = dev.beginPass(SteinRenderPass.keep("terrain", dev.gameTarget()));
         long t2 = STATS ? System.nanoTime() : 0L;
         try {
+            if (d.split) {
+                // the faces that need no alpha test first, with the pipeline without discard
+                // (early depth test kept), then the rest as the layer would draw
+                if (d.opaquePipe == null || d.opaquePipeKey != key) {
+                    d.opaquePipe = SteinTerrainPipelines.opaqueFaces(key);
+                    d.opaquePipeKey = key;
+                }
+                // a variant that did not compile: the layer's own pipeline (same image, discard)
+                SteinPipeline opaque = d.opaquePipe.valid() ? d.opaquePipe : pipeline;
+                recordDraws(cmd, d, count, opaque, textures, OPAQUE_PART);
+            }
             if (SteinTerrainPipelines.prepassEligible(key)) {
                 drawWithPrepass(cmd, d, count, key, pipeline, textures);
             } else {
-                recordDraws(cmd, d, count, pipeline, textures);
+                recordDraws(cmd, d, count, pipeline, textures, REST_PART);
             }
         } finally {
             cmd.end();
@@ -476,12 +468,18 @@ public final class SteinTerrain {
     private static long originAt;
 
     private static long commandAt;
+
+    /** The commands of the faces without the alpha test (split layers only), after the others. */
+    private static long opaqueCommandAt;
+
     private static long frameAt;
 
     /** Reserves the layer's origins, commands and Frame block in their rings; false = no room. */
-    private static boolean reserveRings(SteinDevice dev, int count) {
+    private static boolean reserveRings(SteinDevice dev, int count, boolean split) {
         originAt = reserve(origins, (long) count * ORIGIN_BYTES, ORIGIN_BYTES);
-        commandAt = indirect ? reserve(commands, (long) count * COMMAND_BYTES, 4) : 0;
+        long commandBytes = (long) count * COMMAND_BYTES;
+        commandAt = indirect ? reserve(commands, split ? 2 * commandBytes : commandBytes, 4) : 0;
+        opaqueCommandAt = commandAt + commandBytes;
         frameAt = reserve(frameUbo, FRAME_BYTES, dev.caps().uniformAlignment);
         return originAt >= 0 && commandAt >= 0 && frameAt >= 0;
     }
@@ -504,6 +502,12 @@ public final class SteinTerrain {
                     MemoryUtil.memAddress(d.commandBytes),
                     commands.address(commandAt),
                     (long) count * COMMAND_BYTES);
+            if (d.split) {
+                MemoryUtil.memCopy(
+                        MemoryUtil.memAddress(d.opaqueCommandBytes),
+                        commands.address(opaqueCommandAt),
+                        (long) count * COMMAND_BYTES);
+            }
         }
         writeFrame(
                 frameUbo.address(frameAt),
@@ -569,13 +573,18 @@ public final class SteinTerrain {
         SteinPipeline depth = SteinTerrainPipelines.prepass(key);
         SteinPipeline color = SteinTerrainPipelines.afterPrepass(key);
         if (!depth.valid() || !color.valid()) {
-            recordDraws(cmd, d, count, pipeline, textures);
+            recordDraws(cmd, d, count, pipeline, textures, REST_PART);
             return;
         }
-        recordDraws(cmd, d, count, depth, textures);
+        recordDraws(cmd, d, count, depth, textures, REST_PART);
         cmd.bindPipeline(color);
-        issueRuns(cmd, d, count);
+        issueRuns(cmd, d, count, REST_PART);
     }
+
+    /** Which faces of each chunk a draw covers: those without the alpha test, or the rest. */
+    private static final int OPAQUE_PART = 0;
+
+    private static final int REST_PART = 1;
 
     /** Binds the layer's state and issues its draws, one per run of chunks of the same region. */
     private static void recordDraws(
@@ -583,7 +592,8 @@ public final class SteinTerrain {
             SteinTerrainLayers.Layer d,
             int count,
             SteinPipeline pipeline,
-            int textures) {
+            int textures,
+            int part) {
         cmd.bindPipeline(pipeline);
         cmd.bindIndexBuffer(indices, SteinCommands.IndexType.UINT32);
         // the layer's origins start at its offset in the ring: the commands' base instance is
@@ -598,11 +608,16 @@ public final class SteinTerrain {
         if ((textures & LIGHTMAP_BOUND) != 0) {
             cmd.bindTexture(1, lightmap, null);
         }
-        issueRuns(cmd, d, count);
+        issueRuns(cmd, d, count, part);
     }
 
-    /** The layer's draws with what is bound: one per run of chunks of the same region. */
-    private static void issueRuns(SteinCommands cmd, SteinTerrainLayers.Layer d, int count) {
+    /**
+     * The layer's draws with what is bound: one per run of chunks of the same region, over the
+     * faces of {@code part} ({@link #REST_PART} is the whole chunk when the layer is not split).
+     */
+    private static void issueRuns(
+            SteinCommands cmd, SteinTerrainLayers.Layer d, int count, int part) {
+        long at = part == OPAQUE_PART ? opaqueCommandAt : commandAt;
         SteinBuffer bound = null;
         int start = 0;
         for (int r = 0; r < d.runs && start < count; r++) {
@@ -619,12 +634,16 @@ public final class SteinTerrain {
                 bound = vb;
             }
             if (indirect) {
-                cmd.drawIndexedIndirect(
-                        commands, commandAt + (long) start * COMMAND_BYTES, end - start);
+                cmd.drawIndexedIndirect(commands, at + (long) start * COMMAND_BYTES, end - start);
             } else {
                 SteinTerrainSlice[] order = d.order;
                 for (int k = start; k < end; k++) {
-                    cmd.drawIndexed(order[k].count / 4 * 6, 1, 0, order[k].first, k);
+                    SteinTerrainSlice s = order[k];
+                    int vertices = part == OPAQUE_PART ? s.opaque : s.count - s.opaque;
+                    if (vertices > 0) {
+                        int first = part == OPAQUE_PART ? s.first : s.first + s.opaque;
+                        cmd.drawIndexed(vertices / 4 * 6, 1, 0, first, k);
+                    }
                 }
             }
             runs++;
@@ -731,7 +750,9 @@ public final class SteinTerrain {
                 REGIONS.size(),
                 vertices * VERTEX / 1048576.0,
                 capacity * (double) VERTEX / 1048576.0,
-                clamped > 0 ? ", " + clamped + " vertices out of range" : "",
+                SteinTerrainVertices.clamped > 0
+                        ? ", " + SteinTerrainVertices.clamped + " vertices out of range"
+                        : "",
                 prepNs / 1e6 / statsFrames,
                 prepMax / 1e6,
                 openNs / 1e6 / statsFrames,
@@ -742,6 +763,16 @@ public final class SteinTerrain {
                 SteinTerrainLayers.levelOneHits,
                 SteinTerrainLayers.levelTwoHits,
                 SteinTerrainLayers.builds);
+        if (SteinOpaqueCutout.classified > 0) {
+            Log.info(
+                    "gfx",
+                    "terrain: opaque cutout faces: %d of %d cutout vertices uploaded draw without"
+                            + " the alpha test",
+                    SteinOpaqueCutout.moved,
+                    SteinOpaqueCutout.classified);
+            SteinOpaqueCutout.moved = 0;
+            SteinOpaqueCutout.classified = 0;
+        }
         SteinTerrainLayers.levelOneHits = 0;
         SteinTerrainLayers.levelTwoHits = 0;
         SteinTerrainLayers.builds = 0;
