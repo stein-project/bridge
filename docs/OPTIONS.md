@@ -303,6 +303,7 @@ listed at the end.
 - `-Dsteinbridge.gfx.vkEarlyUploads=false`: every texture upload is recorded where it happens, interrupting the open render, instead of going to the start of the submission when nothing recorded before it in the submission touches that texture (the animated textures on every client tick; default: on).
 - `-Dsteinbridge.gfx.vkSwapchainImages=N` (experiment): asks the window for N swapchain images, within what the surface allows; more images give the presentation engine slack, so a present waits less often (default: 0, the surface minimum plus one).
 - `-Dsteinbridge.gfx.vkMailbox=true` (experiment, visible): without VSync, MAILBOX before IMMEDIATE when the driver has it: no tearing, the newest finished frame replaces the one waiting for the refresh (default: off, IMMEDIATE first).
+- `-Dsteinbridge.gfx.vkParallelRecord=true` (experiment): the entity pass's bulk writes (the camera-corrected instances of retained tile entities and the indirect commands of the entity groups) run on the pose threads (`poseThreads`) at the flush instead of on the render thread, into the same reserved ring bytes; the draws are recorded as before, so the image is the same (default: off; without pose threads it writes on the render thread).
 
 ## Removed options
 

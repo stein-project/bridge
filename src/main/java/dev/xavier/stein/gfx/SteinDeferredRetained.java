@@ -150,6 +150,9 @@ final class SteinDeferredRetained {
         long p = instances.address(inst);
         if (fix == null) {
             MemoryUtil.memCopy(iblob, p, ibytes);
+        } else if (SteinParallelWrites.ON) {
+            // written with the other queued blocks at the start of the flush, across the threads
+            SteinParallelWrites.deferCorrected(p, data, n, fix);
         } else {
             writeCorrected(p, iblob, data, n, fix);
         }
