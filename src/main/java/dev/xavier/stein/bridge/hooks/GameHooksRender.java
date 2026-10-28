@@ -11,6 +11,7 @@ package dev.xavier.stein.bridge.hooks;
 import dev.xavier.stein.bridge.bench.BenchZones;
 import dev.xavier.stein.bridge.engine.ArmorTextures;
 import dev.xavier.stein.bridge.engine.RenderCheck;
+import dev.xavier.stein.gfx.SteinOpaqueCutout;
 
 import net.minecraft.block.Block;
 import net.minecraft.block.state.IBlockState;
@@ -102,7 +103,8 @@ final class GameHooksRender {
     /**
      * In place of loadTextureAtlas in TextureMap.loadSprites (on every resource reload, with the
      * models' textures already registered): the listener registers its own before the stitching —
-     * Forge's TextureStitchEvent.Pre.
+     * Forge's TextureStitchEvent.Pre. Around it, Stein GFX notes which textures are fully opaque
+     * ({@link SteinOpaqueCutout}).
      */
     static void loadTextureAtlas(Object map, Object resourceManager) {
         if (GameHooks.SINK != null) {
@@ -112,7 +114,9 @@ final class GameHooksRender {
                 GameHooks.fail("textureStitch", e);
             }
         }
+        SteinOpaqueCutout.beginStitch();
         ((TextureMap) map).loadTextureAtlas((IResourceManager) resourceManager);
+        SteinOpaqueCutout.endStitch(map);
     }
 
     /**

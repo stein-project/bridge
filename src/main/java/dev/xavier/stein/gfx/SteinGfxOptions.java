@@ -307,6 +307,17 @@ public final class SteinGfxOptions {
     static final boolean TERRAIN_CUTOUT_PREPASS = feature("terrainCutoutPrepass", false);
 
     /**
+     * {@code -Dsteinbridge.gfx.terrainOpaqueCutout=...}: in the alpha-tested terrain layers
+     * (leaves, grass, flowers, glass), the faces whose atlas texture is fully opaque at every
+     * mipmap level go first and draw without the alpha test, so the GPU keeps its early depth test
+     * on them; only the faces with transparent texels still discard. Same layer, texture filter and
+     * shading: the image changes only where two faces lie in the same plane (the opaque one now
+     * draws first) and on texture edges sampled with anisotropic filtering (default: off until
+     * compared on screen and measured on more GPUs).
+     */
+    static final boolean TERRAIN_OPAQUE_CUTOUT = feature("terrainOpaqueCutout", false);
+
+    /**
      * {@code -Dsteinbridge.gfx.terrainCache=...}: each terrain layer's draw kept between frames
      * (default: on).
      */
