@@ -35,6 +35,16 @@ final class SteinCameraCorrection {
     private static double[] cacheFix;
 
     /**
+     * The correction last computed, rewritten by the next one: every caller uses the result before
+     * asking again (SteinTileRetain re-emits the tile with it at once, SteinTileCheck compares at
+     * once), and a new array per retained tile per frame was most of this path's garbage.
+     */
+    private static final double[] FIX = new double[12];
+
+    /** Scratch for the inverse of the recorded rotation (render thread only, like the cache). */
+    private static final double[] RI = new double[9];
+
+    /**
      * The 3x4 correction (by rows) of the matrices recorded with the entry's camera to the current
      * camera: V1 * T(S0 - S1) * inverse(V0). Null = same camera (exact copy).
      */
@@ -71,11 +81,16 @@ final class SteinCameraCorrection {
             fix = NO_INVERSE;
         } else {
             double inv = 1.0 / det;
-            double[] ri = {
-                (f * j - g * i) * inv, (c * i - b * j) * inv, (b * g - c * f) * inv,
-                (g * h - d * j) * inv, (a * j - c * h) * inv, (c * d - a * g) * inv,
-                (d * i - f * h) * inv, (b * h - a * i) * inv, (a * f - b * d) * inv
-            };
+            double[] ri = RI;
+            ri[0] = (f * j - g * i) * inv;
+            ri[1] = (c * i - b * j) * inv;
+            ri[2] = (b * g - c * f) * inv;
+            ri[3] = (g * h - d * j) * inv;
+            ri[4] = (a * j - c * h) * inv;
+            ri[5] = (c * d - a * g) * inv;
+            ri[6] = (d * i - f * h) * inv;
+            ri[7] = (b * h - a * i) * inv;
+            ri[8] = (a * f - b * d) * inv;
             double tx = v[12];
             double ty = v[13];
             double tz = v[14];
@@ -83,7 +98,7 @@ final class SteinCameraCorrection {
             double wx = (e.sx - nx) - (ri[0] * tx + ri[1] * ty + ri[2] * tz);
             double wy = (e.sy - ny) - (ri[3] * tx + ri[4] * ty + ri[5] * tz);
             double wz = (e.sz - nz) - (ri[6] * tx + ri[7] * ty + ri[8] * tz);
-            fix = new double[12];
+            fix = FIX;
             for (int r = 0; r < 3; r++) {
                 double n0 = now[r];
                 double n1 = now[4 + r];

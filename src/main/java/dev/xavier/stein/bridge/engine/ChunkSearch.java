@@ -15,6 +15,7 @@ import net.minecraft.client.renderer.ViewFrustum;
 import net.minecraft.client.renderer.chunk.RenderChunk;
 import net.minecraft.client.renderer.culling.ICamera;
 import net.minecraft.entity.Entity;
+import net.minecraft.util.BlockPos;
 import net.minecraft.util.EnumFacing;
 
 import java.util.ArrayList;
@@ -43,6 +44,11 @@ final class ChunkSearch {
     private static ICamera bfsCamera;
     private static double bfsPt;
     private static int bfsFrame;
+    private static boolean bfsSpectator;
+
+    /** The search's renderChunksMany as the game's loop sees it (see {@link #many}). */
+    private static boolean bfsMany;
+
     private static List<Object> checkStart;
     private static List<?> previous;
 
@@ -83,9 +89,11 @@ final class ChunkSearch {
         Entity entity = (Entity) entityObj;
         ICamera camera = (ICamera) cameraObj;
         ChunkInfoFilter.lastRg = rg;
-        // A spectator inside a block changes a local variable of the search: the game's loop stays
-        // there.
-        armed = !VANILLA_BFS && !spectator;
+        // A spectator used to leave the search to the game's loop (a local variable of the search
+        // changes when the camera is inside a block); many() now computes that variable, so the
+        // bench's spectator passes take this search too instead of allocating per visited chunk.
+        armed = !VANILLA_BFS;
+        bfsSpectator = spectator;
         bfsRg = rg;
         bfsEntity = entity;
         bfsCamera = camera;
@@ -126,6 +134,7 @@ final class ChunkSearch {
             return empty;
         }
         armed = false;
+        bfsMany = many(bfsRg, bfsEntity, bfsPt, bfsSpectator);
         if (CHECK_BFS) {
             ChunkWatch.searches++;
             // The game does the search; at the end it is redone here and the two lists are
@@ -136,12 +145,12 @@ final class ChunkSearch {
         }
         List<Object> start = new ArrayList<>(q);
         q.clear();
-        if (SearchRate.keep(bfsRg, bfsEntity, start, previous)) {
+        if (SearchRate.keep(bfsRg, bfsEntity, start, previous, bfsMany)) {
             bfsRg.renderInfos = (List) previous;
             return true;
         }
         ChunkWatch.searches++;
-        SearchRate.searched(bfsRg, bfsEntity, start, ChunkGraph.compiledVersion);
+        SearchRate.searched(bfsRg, bfsEntity, start, ChunkGraph.compiledVersion, bfsMany);
         List<Object> out = (List<Object>) (List<?>) bfsRg.renderInfos;
         if (out instanceof ArrayList<Object> list && previous != null) {
             // the game's new list grew one copy at a time: 2.2 GB in 50 s at distance 32
@@ -171,7 +180,7 @@ final class ChunkSearch {
         int cx = vf.countChunksX;
         int cz = vf.countChunksZ;
         RenderChunk[] chunks = vf.renderChunks;
-        boolean many = rg.mc.renderChunksMany;
+        boolean many = bfsMany;
         int cap = chunks.length + start.size() + 1;
         if (qInfo.length < cap) {
             qInfo = new Object[cap];
@@ -258,6 +267,28 @@ final class ChunkSearch {
                 tail++;
             }
         }
+    }
+
+    /**
+     * The search loop's renderChunksMany (flag1 in setupTerrain): the option, turned off when a
+     * spectator's camera is inside an opaque block. The game makes that test only when the camera's
+     * section exists (inside the view frustum's height), on the camera block it built from the
+     * interpolated position plus the eye height; this is the same position, the same lookup and the
+     * same test. One BlockPos per search, and only for a spectator.
+     */
+    private static boolean many(RenderGlobal rg, Entity e, double partialTicks, boolean spectator) {
+        boolean many = rg.mc.renderChunksMany;
+        if (!many || !spectator) {
+            return many;
+        }
+        double x = e.lastTickPosX + (e.posX - e.lastTickPosX) * partialTicks;
+        double y = e.lastTickPosY + (e.posY - e.lastTickPosY) * partialTicks;
+        double z = e.lastTickPosZ + (e.posZ - e.lastTickPosZ) * partialTicks;
+        BlockPos camera = new BlockPos(x, y + (double) e.getEyeHeight(), z);
+        if (rg.viewFrustum.getRenderChunk(camera) == null) {
+            return true;
+        }
+        return !rg.theWorld.getBlockState(camera).getBlock().isOpaqueCube();
     }
 
     /** A ContainerLocalRenderInformation (a class that cannot be named here), counter 0. */
