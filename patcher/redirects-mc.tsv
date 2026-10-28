@@ -20,3 +20,7 @@ bgp	a	([IIIII)Z	empty	dev/xavier/stein/bridge/engine/ItemEdges	body
 # packet was lost (a hole in the world). The additions take the set's lock and the walk goes over a copy.
 java/util/Set	add	(Ljava/lang/Object;)Z	add	dev/xavier/stein/bridge/engine/ClassMapGuard	static	ne.a(Ljava/lang/Class;)V
 java/util/Set	iterator	()Ljava/util/Iterator;	iterator	dev/xavier/stein/bridge/engine/ClassMapGuard	static	ne.<init>
+# A player lost after a long teleport (engine/PlayerUnload): when the chunk they stood in before the teleport is unloaded
+# in the same tick, before updateEntities moves them, Chunk.onChunkUnload no longer unloads a player who is still in the
+# world (1.8.9 removed them from loadedEntityList and they were never ticked again until a dimension change).
+adm	c	(Ljava/util/Collection;)V	unloadEntities	dev/xavier/stein/bridge/engine/PlayerUnload	static	amy.d()V

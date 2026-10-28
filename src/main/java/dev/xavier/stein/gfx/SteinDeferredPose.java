@@ -68,6 +68,12 @@ final class SteinDeferredPose {
     static int[] poseBlockAt = new int[64];
 
     /**
+     * Per block, with {@link SteinEntityBatch} on: the CPU's copy of what the compute will write in
+     * each command (vertices, first vertex, instance), so the batching can regroup them by part.
+     */
+    static int[][] poseShadow = new int[64][];
+
+    /**
      * The on-GPU pose can record now (indirect draw; outside strict order, where a group flushes).
      */
     static boolean poseGpuAllowed() {
@@ -94,6 +100,7 @@ final class SteinDeferredPose {
             }
             if (poseBlocks == poseBlockAt.length) {
                 poseBlockAt = Arrays.copyOf(poseBlockAt, poseBlocks * 2);
+                poseShadow = Arrays.copyOf(poseShadow, poseBlocks * 2);
             }
             block = poseBlocks++;
             off = 0;
@@ -107,7 +114,34 @@ final class SteinDeferredPose {
         g.n += count;
         pending += count;
         parts += count;
+        if (SteinEntityBatch.ON) {
+            int need = (off + count) * 3;
+            int[] sh = poseShadow[block];
+            if (sh == null || sh.length < need) {
+                poseShadow[block] =
+                        sh == null
+                                ? new int[Math.max(need, 3 * 256)]
+                                : Arrays.copyOf(sh, Math.max(need, sh.length * 2));
+            }
+        }
         return (long) block << 32 | off;
+    }
+
+    /**
+     * Command {@code q} of {@code slot} (from {@link #poseSlots}), as the compute will write it:
+     * for {@link SteinEntityBatch}.
+     */
+    static void poseShadow(long slot, int q, int verts, int first, int instance) {
+        int[] sh = poseShadow[(int) (slot >>> 32)];
+        int k = ((int) slot + q) * 3;
+        sh[k] = verts;
+        sh[k + 1] = first;
+        sh[k + 2] = instance;
+    }
+
+    /** The commands of block {@code block} as {@link #poseShadow} recorded them. */
+    static int[] poseShadow(int block) {
+        return poseShadow[block];
     }
 
     static int poseBlockCount() {

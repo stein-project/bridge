@@ -1,0 +1,30 @@
+#version 450
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at https://mozilla.org/MPL/2.0/.
+//
+// Copyright (c) 2026 Breno Xavier
+// The instances of the batched entity groups (SteinEntityBatch), gathered part by part: instance i of the target is
+// instance remap[1 + i] of the entities' ring, so the copies of one part sit side by side and go out in a single
+// instanced command. One invocation per vec4 (8 per 128-byte instance): neighbouring invocations read and write
+// neighbouring memory.
+layout(local_size_x = 64) in;
+
+// word 0: how many instances; then the source instance of each one
+layout(std430, set = 0, binding = 0) readonly buffer BatchRemap {
+    uint remap[];
+};
+layout(std430, set = 0, binding = 1) readonly buffer BatchSource {
+    vec4 src[];
+};
+layout(std430, set = 0, binding = 2) writeonly buffer BatchTarget {
+    vec4 dst[];
+};
+
+void main() {
+    uint i = gl_GlobalInvocationID.x;
+    if (i >= remap[0] * 8u) {
+        return;
+    }
+    dst[i] = src[remap[1u + (i >> 3)] * 8u + (i & 7u)];
+}

@@ -314,7 +314,10 @@ final class SteinVkSwapchain {
                 return false;
             }
             vkDeviceWaitIdle(device.vk());
-            int count = caps.minImageCount() + 1;
+            int count =
+                    SteinVkOptions.SWAPCHAIN_IMAGES > 0
+                            ? Math.max(caps.minImageCount(), SteinVkOptions.SWAPCHAIN_IMAGES)
+                            : caps.minImageCount() + 1;
             if (caps.maxImageCount() > 0) {
                 count = Math.min(count, caps.maxImageCount());
             }
@@ -322,7 +325,14 @@ final class SteinVkSwapchain {
             if (mode != modeLogged) {
                 modeLogged = mode;
                 Log.info(
-                        "gfx", "vulkan: present mode " + modeName(mode) + " (vsync " + vsync + ")");
+                        "gfx",
+                        "vulkan: present mode "
+                                + modeName(mode)
+                                + " (vsync "
+                                + vsync
+                                + ", "
+                                + count
+                                + " images)");
             }
             format = surfaceFormat(stack);
             if (format == VK_FORMAT_UNDEFINED) {
@@ -412,7 +422,14 @@ final class SteinVkSwapchain {
         int[] wanted =
                 vsync
                         ? LATENCY_FIX ? new int[] {VK_PRESENT_MODE_FIFO_RELAXED_KHR} : new int[0]
-                        : new int[] {VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_MAILBOX_KHR};
+                        : SteinVkOptions.MAILBOX
+                                // no tearing, the newest frame replaces the waiting one
+                                ? new int[] {
+                                    VK_PRESENT_MODE_MAILBOX_KHR, VK_PRESENT_MODE_IMMEDIATE_KHR
+                                }
+                                : new int[] {
+                                    VK_PRESENT_MODE_IMMEDIATE_KHR, VK_PRESENT_MODE_MAILBOX_KHR
+                                };
         for (int want : wanted) {
             for (int i = 0; i < modes.capacity(); i++) {
                 if (modes.get(i) == want) {

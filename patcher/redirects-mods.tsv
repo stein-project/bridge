@@ -260,6 +260,10 @@ bew	bS	()Z	usingItem	dev/xavier/stein/bridge/engine/OldAnimations	static	ave.b(Z
 # The benchmark's CPU zones: the end of each zone, after every other rule of the same call (the begins are at the top
 # of redirects-opt.tsv).
 ave	s	()V	tickEnd	dev/xavier/stein/bridge/bench/BenchZones	after	ave.av
+bmj	e	()V	tickTexturesEnd	dev/xavier/stein/bridge/bench/BenchZones	after	ave.s()V
+bdb	i	()V	tickEntitiesEnd	dev/xavier/stein/bridge/bench/BenchZones	after	ave.s()V
+bdb	c	()V	tickWorldEnd	dev/xavier/stein/bridge/bench/BenchZones	after	ave.s()V
+bec	a	()V	tickParticlesEnd	dev/xavier/stein/bridge/bench/BenchZones	after	ave.s()V
 bfw	a	(Z)V	frameStartEnd	dev/xavier/stein/bridge/bench/BenchZones	after	ave.av
 bfk	a	(FJ)V	renderEnd	dev/xavier/stein/bridge/bench/BenchZones	after	ave.av
 bfw	c	(II)V	blitEnd	dev/xavier/stein/bridge/bench/BenchZones	after	ave.av

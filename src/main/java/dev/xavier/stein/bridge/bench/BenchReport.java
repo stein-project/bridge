@@ -8,6 +8,7 @@
 
 package dev.xavier.stein.bridge.bench;
 
+import dev.xavier.stein.bridge.core.CoreOptions;
 import dev.xavier.stein.bridge.core.Log;
 
 import net.minecraft.client.Minecraft;
@@ -80,9 +81,10 @@ final class BenchReport {
                 }
             }
             Map<String, double[]> tps = sampler == null ? Map.of() : sampler.tpsByPart();
+            Map<String, double[]> other = sampler == null ? Map.of() : sampler.otherCpuByPart();
             Map<String, Object> summary =
                     summary(frames, external, environment, results, start, stopped);
-            validation(summary, results, shots, tps, skipped, segments, environment);
+            validation(summary, results, shots, tps, other, skipped, segments, environment);
             entry(zip, "summary.json", BenchJson.write(summary));
             entry(zip, "summary.txt", text(summary, results));
             if (sampler != null) {
@@ -181,6 +183,7 @@ final class BenchReport {
             List<BenchStats> results,
             Map<BenchStats, BenchShots.Shot> shots,
             Map<String, double[]> tps,
+            Map<String, double[]> otherCpu,
             List<String> skipped,
             List<String> segments,
             Map<String, Object> environment) {
@@ -196,10 +199,20 @@ final class BenchReport {
         List<String> problems = new ArrayList<>();
         for (int i = 0; i < results.size(); i++) {
             BenchStats s = results.get(i);
-            Map<String, Object> checks = BenchChecks.of(s, shots.get(s), tps.get(s.name), gpu);
+            double[] other = otherCpu.get(s.name);
+            Map<String, Object> checks =
+                    BenchChecks.of(s, shots.get(s), tps.get(s.name), other, gpu);
             String status = BenchChecks.worst(checks);
             Map<String, Object> p = (Map<String, Object>) parts.get(i);
             p.put("status", status);
+            p.put("noisy", BenchChecks.noisy(other));
+            if (other != null) {
+                p.put("other_processes_cpu_pct_avg", BenchStats.round1(other[0]));
+                p.put("other_processes_cpu_pct_max", BenchStats.round1(other[1]));
+            }
+            if (s.aborted != null) {
+                p.put("stopped", s.aborted);
+            }
             p.put("checks", checks);
             if (shots.containsKey(s)) {
                 p.put("picture", picture(s));
@@ -238,9 +251,18 @@ final class BenchReport {
                 .append('\n');
         if (env != null) {
             b.append("window: ").append(env.get("window")).append('\n');
+            if (CoreOptions.DIAG_BACKGROUND) {
+                // asked for (the window stays out of the way): not a per-part warning
+                b.append("note: run in the background (-Dsteinbridge.diag.background), the window")
+                        .append(" minimized and out of focus on purpose; a part warns only if the")
+                        .append(" window was restored or resized during it\n");
+            }
             b.append("diagnostic options on: ")
                     .append(env.get("diagnostic_options_on"))
                     .append('\n');
+        }
+        if (env != null && env.get("setup") != null) {
+            b.append("setup: ").append(env.get("setup")).append('\n');
         }
         if (Boolean.TRUE.equals(summary.get("stopped_before_the_end"))) {
             b.append("STOPPED BEFORE THE END\n");
@@ -278,22 +300,25 @@ final class BenchReport {
                         "max ms",
                         "gpu ms",
                         "note"));
-        for (BenchStats s : results) {
+        List<Object> rows = (List<Object>) summary.get("parts");
+        for (int i = 0; i < results.size(); i++) {
+            BenchStats s = results.get(i);
             Map<String, Object> f = s.frameSummary();
             Map<String, Object> g = s.gpuSummary();
+            Map<String, Object> row = (Map<String, Object>) rows.get(i);
             b.append(
                     String.format(
                             Locale.ROOT,
                             "%-26s %7s %7s %8s %8s %8s %8s %8s  %s%n",
                             s.name,
-                            f.get("fps_avg"),
-                            f.get("fps_1pct_low"),
-                            f.get("fps_0_1pct_low"),
-                            f.get("ms_p50"),
-                            f.get("ms_p99"),
-                            f.get("ms_max"),
+                            f.getOrDefault("fps_avg", "-"),
+                            f.getOrDefault("fps_1pct_low", "-"),
+                            f.getOrDefault("fps_0_1pct_low", "-"),
+                            f.getOrDefault("ms_p50", "-"),
+                            f.getOrDefault("ms_p99", "-"),
+                            f.getOrDefault("ms_max", "-"),
                             g.getOrDefault("span_ms_avg", "-"),
-                            s.clean() ? "" : "window out of focus/minimized/resized"));
+                            note(s, row)));
         }
         b.append("\nWhere the CPU time of a frame goes (ms per frame, top zones)\n");
         for (BenchStats s : results) {
@@ -345,6 +370,28 @@ final class BenchReport {
             b.append('\n');
         }
         return b.toString();
+    }
+
+    /** The table's note: the part's status when it is not PASS, noisy, the window. */
+    private static String note(BenchStats s, Map<String, Object> row) {
+        List<String> n = new ArrayList<>();
+        Object status = row.get("status");
+        if (status != null && !BenchChecks.PASS.equals(status)) {
+            n.add(String.valueOf(status));
+        }
+        if (Boolean.TRUE.equals(row.get("noisy"))) {
+            n.add("noisy (other processes " + row.get("other_processes_cpu_pct_avg") + "% cpu)");
+        }
+        if (!s.clean()) {
+            n.add(
+                    CoreOptions.DIAG_BACKGROUND
+                            ? "window restored/resized in a background run"
+                            : "window out of focus/minimized/resized");
+        }
+        if (s.aborted != null) {
+            n.add("stopped: " + s.aborted);
+        }
+        return String.join("; ", n);
     }
 
     private static String gpuCsv(List<BenchStats> results) {

@@ -100,7 +100,8 @@ final class SteinDeferredKeys {
     // factors (4 bits each); 21 depth test; 22..24 depth function; 25 depth write; 26 cull;
     // 27 culled face (0 = front, 1 = back). Bits 28..31: KEY_DYNAMIC, KEY_STATIC, KEY_LINES,
     // KEY_GAMETEX. Upper bits (a long): 32..35 the texture filter; 36..55 the game's texture;
-    // 56..57 polygon offset; 58 KEY_TEXT; 59 KEY_LOGIC; 60 KEY_NOCOLOR; 61 KEY_NOALPHA.
+    // 56..57 polygon offset; 58 KEY_TEXT; 59 KEY_LOGIC; 60 KEY_NOCOLOR; 61 KEY_NOALPHA;
+    // 62 SteinGlintMerge.KEY_GLINT2.
 
     static final int KEY_CLASS_MASK = 15;
     static final int KEY_BLEND_BIT = 1 << 4;

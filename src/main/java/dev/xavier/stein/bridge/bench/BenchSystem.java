@@ -145,7 +145,7 @@ final class BenchSystem {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("pipeline", SteinGfxOptions.describe());
         m.put("stein_gfx", SteinGfxOptions.ENABLED);
-        m.put("api_requested", SteinBackend.requested().key);
+        m.put("api_requested", SteinBackend.peekRequested().key);
         m.put("api_running", SteinBackend.running().key);
         m.put("vulkan_fallback", String.valueOf(SteinBackend.fallback()));
         if (SteinGfxOptions.ENABLED) {

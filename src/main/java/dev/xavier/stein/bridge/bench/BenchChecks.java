@@ -8,6 +8,8 @@
 
 package dev.xavier.stein.bridge.bench;
 
+import dev.xavier.stein.bridge.core.CoreOptions;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,16 +32,26 @@ final class BenchChecks {
 
     /** The checks of one part: name to {status, detail}. */
     static Map<String, Object> of(
-            BenchStats s, BenchShots.Shot shot, double[] tps, boolean gpuExpected) {
+            BenchStats s,
+            BenchShots.Shot shot,
+            double[] tps,
+            double[] otherCpu,
+            boolean gpuExpected) {
         Map<String, Object> c = new LinkedHashMap<>();
         BenchScene.Part p = s.part;
         boolean world = p.dimension() != BenchScene.ANY_DIMENSION;
+        if (s.aborted != null) {
+            put(c, "stopped", FAIL, s.aborted);
+        }
         put(c, "frames", s.count >= 20 ? PASS : FAIL, s.count + " measured frames");
         put(
                 c,
                 "window",
                 s.clean() ? PASS : WARN,
-                s.unfocused
+                (CoreOptions.DIAG_BACKGROUND
+                                ? "background run, minimized throughout expected: "
+                                : "")
+                        + s.unfocused
                         + " frames out of focus, "
                         + s.minimized
                         + " minimized, "
@@ -58,6 +70,14 @@ final class BenchChecks {
                     "land_settled",
                     s.settled || !p.waitChunks() ? PASS : WARN,
                     s.settled ? "chunks done before measuring" : "still loading when measured");
+        }
+        if (s.biome >= 0 && s.biomeSamples > 0) {
+            double share = (double) s.biomeHits / s.biomeSamples;
+            put(
+                    c,
+                    "biome",
+                    share >= 0.8 ? PASS : share >= 0.5 ? WARN : FAIL,
+                    fmt(share * 100) + "% of the samples over " + BenchGuard.biomeName(s.biome));
         }
         if (p.minEntities() > 0) {
             double e = avg(s, 10);
@@ -119,7 +139,23 @@ final class BenchChecks {
                     tps[0] >= 19 && tps[1] >= 15 ? PASS : WARN,
                     "tps " + fmt(tps[0]) + " on average, lowest " + fmt(tps[1]));
         }
+        if (otherCpu != null) {
+            put(
+                    c,
+                    "quiet_machine",
+                    noisy(otherCpu) ? WARN : PASS,
+                    "other processes used "
+                            + fmt(otherCpu[0])
+                            + "% of the processor on average, "
+                            + fmt(otherCpu[1])
+                            + "% at most");
+        }
         return c;
+    }
+
+    /** Whether other processes competed for the processor while the part was measured. */
+    static boolean noisy(double[] otherCpu) {
+        return otherCpu != null && otherCpu[0] > BenchSampler.NOISY_OTHER_CPU_PCT;
     }
 
     /** The worst status of a part's checks. */

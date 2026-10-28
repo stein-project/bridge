@@ -74,4 +74,11 @@ public final class SteinGlOptions {
      * off).
      */
     static final boolean GPU_OP_TIMING = Opt.flag("steinbridge.gfx.gpuOpTiming");
+
+    /**
+     * {@code -Dsteinbridge.gfx.glDeviceWritten=false}: the buffers the GPU writes too (entity
+     * instances and commands) stay a single persistent mapping, as before, instead of a mapped CPU
+     * side copied into a device buffer (default: on).
+     */
+    static final boolean DEVICE_WRITTEN = Opt.flag("steinbridge.gfx.glDeviceWritten", true);
 }

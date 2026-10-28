@@ -263,15 +263,23 @@ public final class SteinPlayerPose {
             // On the GPU, the game thread only reads the entity and writes the records; the
             // compute shader runs at the flush.
             boolean gpu = GPU && SteinEntityDeferred.poseGpuAllowed() && SteinPoseGpu.ready();
+            // Nearest first (SteinPlayerPoseOrder): position i of the loop is job ord[i]; the CPU
+            // path keeps the game's order (j == i), its threads write by position.
+            boolean near = gpu && !GPU_CHECK && SteinPlayerPoseOrder.nearFirst(n);
+            int[] ord = SteinPlayerPoseOrder.order;
             // With the pose on the GPU the threads just sit idle.
             scratch0();
             int start = 0;
             while (start < n) {
                 int end = start;
+                // the blended records of this piece, still to come (they go after its loop)
+                int laterStates = 0;
+                int laterEntries = 0;
                 while (end < n) {
-                    int count = jPlanLen[end];
+                    int j = near ? ord[end] : end;
+                    int count = jPlanLen[j];
                     long at =
-                            gpu && !SteinPoseGpu.room(STATES, count)
+                            gpu && !SteinPoseGpu.room(STATES + laterStates, count + laterEntries)
                                     ? -2
                                     : SteinEntityDeferred.poseReserve(count);
                     if (at == -2 && end == start) {
@@ -283,14 +291,25 @@ public final class SteinPlayerPose {
                         break;
                     }
                     if (at < 0) {
-                        jPlanLen[end] = 0;
+                        jPlanLen[j] = 0;
                         end++;
                         continue;
                     }
                     int first = (int) (at / SteinEntityDeferred.POSE_INSTANCE_BYTES);
                     if (gpu) {
                         try {
-                            gpuPlayer(end, first);
+                            if (near && end == start) {
+                                SteinPlayerPoseOrder.enlistReversed(j);
+                            }
+                            if (near) {
+                                SteinPlayerPoseOrder.first[j] = first;
+                                laterStates += SteinPlayerPoseOrder.blendedStates[j];
+                                laterEntries += SteinPlayerPoseOrder.blendedEntries[j];
+                            }
+                            gpuPlayer(
+                                    j,
+                                    first,
+                                    near ? SteinPlayerPoseOrder.OPAQUE : SteinPlayerPoseOrder.ALL);
                         } catch (Throwable e) {
                             // Reads the entity before reserving commands: the player just does
                             // not appear in this frame, and the own pose turns off (the game takes
@@ -302,6 +321,9 @@ public final class SteinPlayerPose {
                         commands(end, first);
                     }
                     end++;
+                }
+                if (near) {
+                    blendedInGameOrder(start, end);
                 }
                 Throwable e =
                         gpu
@@ -319,6 +341,26 @@ public final class SteinPlayerPose {
             }
         } finally {
             clearJobs();
+        }
+    }
+
+    /**
+     * Nearest first: the blended states (glint, held item, translucent body) of the jobs at
+     * positions {@code [from, to)} of the order, handed over in the game's order, where the
+     * blending order shows.
+     */
+    private static void blendedInGameOrder(int from, int to) {
+        int[] jobsInOrder = SteinPlayerPoseOrder.gameOrder(from, to);
+        for (int i = 0, c = to - from; i < c; i++) {
+            int j = jobsInOrder[i];
+            if (jPlanLen[j] == 0 || SteinPlayerPoseOrder.player[j] < 0) {
+                continue; // no room, or reading it failed: the player is not in this frame
+            }
+            try {
+                gpuPlayer(j, SteinPlayerPoseOrder.first[j], SteinPlayerPoseOrder.BLENDED);
+            } catch (Throwable e) {
+                fail("reading the pose for the GPU", e);
+            }
         }
     }
 
@@ -510,9 +552,43 @@ public final class SteinPlayerPose {
      * writes its record, one record per state (with the commands reserved in the state's group, in
      * plan order) and one word per part. The part matrices, the instances and the commands come out
      * of the compute shader. Nothing is reserved before the read: an error in it only removes the
-     * player.
+     * player. {@code which} ({@link SteinPlayerPoseOrder}): all the states; only the opaque ones,
+     * writing the record (nearest first); or only the blended ones, on the record already written.
      */
-    private static void gpuPlayer(int j, int first) {
+    private static void gpuPlayer(int j, int first, int which) {
+        int player;
+        if (which == SteinPlayerPoseOrder.BLENDED) {
+            player = SteinPlayerPoseOrder.player[j];
+        } else {
+            player = gpuRecord(j);
+            if (which == SteinPlayerPoseOrder.OPAQUE) {
+                SteinPlayerPoseOrder.player[j] = player;
+            }
+        }
+        int at = jPlanAt[j];
+        int len = jPlanLen[j];
+        int s0 = j * STATES;
+        int k = 0;
+        while (k < len) {
+            // the states come in sequences in the plan (body, each piece, overlay, each glint pass)
+            int st = plan[(at + k) * 2 + 1];
+            int end = k + 1;
+            while (end < len && plan[(at + end) * 2 + 1] == st) {
+                end++;
+            }
+            if (which != SteinPlayerPoseOrder.ALL
+                    && SteinPlayerPoseOrder.blended(jKey[s0 + st])
+                            != (which == SteinPlayerPoseOrder.BLENDED)) {
+                k = end; // handed over in the other call
+                continue;
+            }
+            gpuState(j, first, player, k, end, st);
+            k = end;
+        }
+    }
+
+    /** Player {@code j}'s record for the compute shader (see {@link #gpuPlayer}); its index. */
+    private static int gpuRecord(int j) {
         float[] a = GPU_ARGS;
         args(jEntity[j], jMount[j], jPt[j], a);
         float[] r = GPU_ROOT;
@@ -541,49 +617,49 @@ public final class SteinPlayerPose {
         if (GPU_CHECK) {
             pose(j, scratch[0]); // the reference: the CPU computation, to compare after the flush
         }
+        return player;
+    }
+
+    /**
+     * The commands and records of state {@code st} of player {@code j}: its plan entries {@code [k,
+     * end)}, with the instances from {@code first + k}.
+     */
+    private static void gpuState(int j, int first, int player, int k, int end, int st) {
         int at = jPlanAt[j];
-        int len = jPlanLen[j];
         int s0 = j * STATES;
-        int k = 0;
-        while (k < len) {
-            // the states come in sequences in the plan (body, each piece, overlay, each glint pass)
-            int st = plan[(at + k) * 2 + 1];
-            int end = k + 1;
-            while (end < len && plan[(at + end) * 2 + 1] == st) {
-                end++;
+        long slot = SteinEntityDeferred.poseSlots(jKey[s0 + st], end - k);
+        // the held item: the fixed geometry range goes in the state (the compute shader does
+        // not have its list table)
+        boolean item = st >= ST_ITEM;
+        int itemFirst = item ? jHeldEntry[j].first[st - ST_ITEM] : -1;
+        int itemVerts = item ? jHeldEntry[j].verts[st - ST_ITEM] : 0;
+        int state =
+                SteinPoseGpu.state(
+                        player, slot, first + k, jState, (s0 + st) * REST, itemFirst, itemVerts);
+        for (int q = k; q < end; q++) {
+            int part = plan[(at + q) * 2];
+            if (SteinEntityBatch.ON) {
+                int list = item ? 0 : infos[jInfo[j]].models[part >>> 4].list[part & 15];
+                SteinEntityDeferred.poseShadow(
+                        slot,
+                        q - k,
+                        item ? itemVerts : SteinModelInstancer.vertexCount(list),
+                        item ? itemFirst : SteinModelInstancer.firstVertex(list),
+                        first + q);
             }
-            long slot = SteinEntityDeferred.poseSlots(jKey[s0 + st], end - k);
-            // the held item: the fixed geometry range goes in the state (the compute shader does
-            // not have its list table)
-            boolean item = st >= ST_ITEM;
-            int itemFirst = item ? jHeldEntry[j].first[st - ST_ITEM] : -1;
-            int itemVerts = item ? jHeldEntry[j].verts[st - ST_ITEM] : 0;
-            int state =
-                    SteinPoseGpu.state(
-                            player,
-                            slot,
-                            first + k,
-                            jState,
-                            (s0 + st) * REST,
-                            itemFirst,
-                            itemVerts);
-            for (int q = k; q < end; q++) {
-                int part = plan[(at + q) * 2];
-                if (GPU_CHECK) {
-                    int list = item ? 0 : infos[jInfo[j]].models[part >>> 4].list[part & 15];
-                    SteinPlayerPoseGpuCheck.checkExpect(
-                            scratch[0].mats,
-                            part,
-                            first + q,
-                            slot,
-                            q - k,
-                            (s0 + st) * REST,
-                            item ? itemVerts : SteinModelInstancer.vertexCount(list),
-                            item ? itemFirst : SteinModelInstancer.firstVertex(list));
-                }
-                SteinPoseGpu.entry(state, part);
+            if (GPU_CHECK) {
+                int list = item ? 0 : infos[jInfo[j]].models[part >>> 4].list[part & 15];
+                SteinPlayerPoseGpuCheck.checkExpect(
+                        scratch[0].mats,
+                        part,
+                        first + q,
+                        slot,
+                        q - k,
+                        (s0 + st) * REST,
+                        item ? itemVerts : SteinModelInstancer.vertexCount(list),
+                        item ? itemFirst : SteinModelInstancer.firstVertex(list));
             }
-            k = end;
+            SteinPoseGpu.entry(state, part);
         }
     }
 
@@ -669,6 +745,9 @@ public final class SteinPlayerPose {
         }
         if (GPU && SteinPoseGpu.ready()) {
             b.append(", pose on the GPU (").append(SteinPoseGpu.takeStats()).append(" in 5 s)");
+            if (SteinEntityBatch.ON) {
+                b.append(", ").append(SteinEntityBatch.takeStats()).append(" in 5 s");
+            }
         } else {
             b.append(", ").append(SteinPoseWorkers.count()).append(" threads besides the game's");
         }

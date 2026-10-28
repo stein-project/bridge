@@ -5,6 +5,8 @@
 //
 // Copyright (c) 2026 Breno Xavier
 // The terrain (SteinTerrain): a 16-byte vertex, the chunk origin per instance.
+// INVARIANT: the variant of the cutout depth pre-pass (SteinTerrain), whose two pipelines must compute the same
+// depth bit for bit (the colour pass tests EQUAL against the pre-pass).
 #include "common/terrain_frame.glsl"
 #include "common/clip_depth.glsl"
 layout(location = 0) in uvec4 aPos;     // local position * 1024 + 16 * 1024; light in w (block | sky << 8)
@@ -16,6 +18,9 @@ layout(location = 1) out vec2 vUv;
 layout(location = 2) out vec2 vLight;
 layout(location = 3) out float vFogDist;
 layout(location = 4) out float vFade;    // 0 just appeared, 1 fully in
+#ifdef INVARIANT
+invariant gl_Position;
+#endif
 void main() {
     vec3 p = vec3(aPos.xyz) * (1.0 / 1024.0) - 16.0 + iOrigin.xyz;   // exact: no gaps
     vec4 eye = modelview * vec4(p, 1.0);

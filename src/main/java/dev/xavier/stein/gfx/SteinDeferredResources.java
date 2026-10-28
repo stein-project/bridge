@@ -102,7 +102,8 @@ final class SteinDeferredResources {
                                             SteinBuffer.Usage.VERTEX))
                             .ring(REGIONS);
         }
-        // STORAGE: the on-GPU pose (SteinPoseGpu) writes the players' instances here
+        // STORAGE, GPU_WRITE: the on-GPU pose (SteinPoseGpu) writes the players' instances and
+        // their commands here (on OpenGL they then live in device memory; see SteinGlBuffer)
         instances =
                 dev.createBuffer(
                                 new SteinBuffer.Desc(
@@ -110,7 +111,8 @@ final class SteinDeferredResources {
                                         (long) RING_PARTS * INSTANCE_BYTES * REGIONS,
                                         SteinBuffer.Memory.UPLOAD,
                                         SteinBuffer.Usage.VERTEX,
-                                        SteinBuffer.Usage.STORAGE))
+                                        SteinBuffer.Usage.STORAGE,
+                                        SteinBuffer.Usage.GPU_WRITE))
                         .ring(REGIONS);
         commands =
                 dev.createBuffer(
@@ -118,7 +120,8 @@ final class SteinDeferredResources {
                                         "entities: commands",
                                         (long) RING_PARTS * COMMAND_BYTES * REGIONS,
                                         SteinBuffer.Memory.UPLOAD,
-                                        SteinBuffer.Usage.INDIRECT))
+                                        SteinBuffer.Usage.INDIRECT,
+                                        SteinBuffer.Usage.GPU_WRITE))
                         .ring(REGIONS);
         frame =
                 dev.createBuffer(
@@ -211,12 +214,23 @@ final class SteinDeferredResources {
         boolean dyn = (full & KEY_DYNAMIC) != 0;
         boolean gameTex = (full & KEY_GAMETEX) != 0;
         boolean text = (full & KEY_TEXT) != 0;
+        boolean glint2 = (full & SteinGlintMerge.KEY_GLINT2) != 0;
         SteinPipeline.Builder b =
                 SteinPipeline.builder(
                                 (text ? "entities text " : dyn ? "entities dynamic " : "entities ")
                                         + Integer.toHexString(key & 0x7FFFFFF0))
-                        .vertex(text ? SteinTextGpu.vertexShader() : dyn ? dynVertex : vertex)
-                        .fragment(dyn ? dynFragment : gameTex ? fragmentGameTex : fragment)
+                        .vertex(
+                                text
+                                        ? SteinTextGpu.vertexShader()
+                                        : dyn
+                                                ? dynVertex
+                                                : glint2 ? SteinGlintMerge.vertex() : vertex)
+                        .fragment(
+                                dyn
+                                        ? dynFragment
+                                        : gameTex
+                                                ? fragmentGameTex
+                                                : glint2 ? SteinGlintMerge.frag() : fragment)
                         .layout(text ? SteinTextGpu.layout() : dyn ? dynLayout : layout)
                         .texture("tex", 0)
                         .texture("lightmap", 1)

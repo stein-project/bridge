@@ -111,6 +111,7 @@ import java.nio.ByteBuffer;
 import java.nio.LongBuffer;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Set;
 
 /**
@@ -210,6 +211,16 @@ public final class SteinVkDevice extends SteinDevice {
     private long completedCache;
     private final long commandPool;
     private VkCommandBuffer cmd;
+
+    /**
+     * The early command buffer of the submission being recorded, submitted before {@link #cmd} in
+     * the same batch (null until a texture upload goes there: {@link SteinVkTexture#upload}).
+     */
+    private VkCommandBuffer early;
+
+    /** The textures with uploads in {@link #early}, put back to rest at the submission. */
+    private final ArrayList<SteinVkTexture> earlyTextures = new ArrayList<>();
+
     private final ArrayDeque<Pending> inflight = new ArrayDeque<>();
     private final ArrayDeque<VkCommandBuffer> freeCmds = new ArrayDeque<>();
     private final ArrayDeque<Pending> retired = new ArrayDeque<>();
@@ -613,34 +624,56 @@ public final class SteinVkDevice extends SteinDevice {
     /** The current submission's command buffer (starts one if there is none). */
     VkCommandBuffer cmd() {
         if (cmd == null) {
-            VkCommandBuffer c = freeCmds.poll();
-            try (MemoryStack stack = MemoryStack.stackPush()) {
-                if (c == null) {
-                    PointerBuffer pp = stack.mallocPointer(1);
-                    check(
-                            vkAllocateCommandBuffers(
-                                    device,
-                                    VkCommandBufferAllocateInfo.calloc(stack)
-                                            .sType$Default()
-                                            .commandPool(commandPool)
-                                            .level(VK_COMMAND_BUFFER_LEVEL_PRIMARY)
-                                            .commandBufferCount(1),
-                                    pp),
-                            "command buffer");
-                    c = new VkCommandBuffer(pp.get(0), device);
-                }
-                dynamic.forget(); // a begun command buffer holds no dynamic state yet
-                check(
-                        vkBeginCommandBuffer(
-                                c,
-                                VkCommandBufferBeginInfo.calloc(stack)
-                                        .sType$Default()
-                                        .flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)),
-                        "begin command buffer");
-            }
-            cmd = c;
+            dynamic.forget(); // a begun command buffer holds no dynamic state yet
+            cmd = beginCommandBuffer();
         }
         return cmd;
+    }
+
+    /**
+     * The submission's early command buffer (starts one if there is none): what is recorded here
+     * runs before everything in {@link #cmd()} of the same submission. Only for work that nothing
+     * recorded so far in the submission depends on.
+     */
+    VkCommandBuffer early() {
+        if (early == null) {
+            early = beginCommandBuffer();
+        }
+        return early;
+    }
+
+    /** {@code t} received uploads in {@link #early()}: it goes back to rest at the submission. */
+    void earlyTexture(SteinVkTexture t) {
+        earlyTextures.add(t);
+    }
+
+    /** A free (or new) primary command buffer, begun for one submission. */
+    private VkCommandBuffer beginCommandBuffer() {
+        VkCommandBuffer c = freeCmds.poll();
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            if (c == null) {
+                PointerBuffer pp = stack.mallocPointer(1);
+                check(
+                        vkAllocateCommandBuffers(
+                                device,
+                                VkCommandBufferAllocateInfo.calloc(stack)
+                                        .sType$Default()
+                                        .commandPool(commandPool)
+                                        .level(VK_COMMAND_BUFFER_LEVEL_PRIMARY)
+                                        .commandBufferCount(1),
+                                pp),
+                        "command buffer");
+                c = new VkCommandBuffer(pp.get(0), device);
+            }
+            check(
+                    vkBeginCommandBuffer(
+                            c,
+                            VkCommandBufferBeginInfo.calloc(stack)
+                                    .sType$Default()
+                                    .flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)),
+                    "begin command buffer");
+        }
+        return c;
     }
 
     /**
@@ -704,6 +737,15 @@ public final class SteinVkDevice extends SteinDevice {
         }
         VkCommandBuffer c = cmd();
         check(vkEndCommandBuffer(c), "end command buffer");
+        VkCommandBuffer e = early;
+        if (e != null) {
+            for (int i = 0; i < earlyTextures.size(); i++) {
+                earlyTextures.get(i).endEarly(e);
+            }
+            earlyTextures.clear();
+            check(vkEndCommandBuffer(e), "end early command buffer");
+            early = null;
+        }
         long value = submitted + 1;
         try (MemoryStack stack = MemoryStack.stackPush()) {
             // the value of a binary semaphore is ignored, but the counts must match
@@ -717,7 +759,7 @@ public final class SteinVkDevice extends SteinDevice {
                     VkSubmitInfo.calloc(stack)
                             .sType$Default()
                             .pNext(t.address())
-                            .pCommandBuffers(stack.pointers(c))
+                            .pCommandBuffers(e != null ? stack.pointers(e, c) : stack.pointers(c))
                             .pSignalSemaphores(
                                     two ? stack.longs(timeline, signal) : stack.longs(timeline));
             if (wait != VK_NULL_HANDLE) {
@@ -728,6 +770,9 @@ public final class SteinVkDevice extends SteinDevice {
             check(vkQueueSubmit(queue, s, VK_NULL_HANDLE), "submit");
         }
         inflight.add(new Pending(value, c, null));
+        if (e != null) {
+            inflight.add(new Pending(value, e, null));
+        }
         submitted = value;
         cmd = null;
         descriptors.onSubmit(value);

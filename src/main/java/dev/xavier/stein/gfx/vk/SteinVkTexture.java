@@ -51,6 +51,7 @@ import org.lwjgl.vulkan.VkMemoryRequirements;
 
 import java.nio.ByteBuffer;
 import java.nio.LongBuffer;
+import java.util.Arrays;
 
 /**
  * Vulkan texture: a 2D image with one or more layers, in the card's memory. At rest it is always in
@@ -77,6 +78,23 @@ final class SteinVkTexture extends SteinTexture {
      * buffer).
      */
     private int layout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+    /**
+     * The submission (its timeline value) whose main command buffer last recorded anything on this
+     * image: a layout change, a copy, a draw sampling it. -1 = none yet.
+     */
+    private long usedIn = -1;
+
+    /**
+     * The submission whose early command buffer ({@link SteinVkDevice#early}) holds uploads to this
+     * image, in TRANSFER_DST there until the submission ({@link #endEarly}); -1 = none.
+     */
+    private long earlyIn = -1;
+
+    /** The rectangles uploaded early in {@link #earlyIn}: level, layer, x, y, w, h each. */
+    private int[] earlyRects = new int[6 * 16];
+
+    private int earlyRectCount;
 
     SteinVkTexture(SteinVkDevice device, Desc desc) {
         super(desc);
@@ -134,6 +152,8 @@ final class SteinVkTexture extends SteinTexture {
         SteinVkBarriers.layout(
                 c, image, aspect, 0, desc.mips, desc.layers, VK_IMAGE_LAYOUT_UNDEFINED, REST);
         layout = REST;
+        // the creation's transition is in the main buffer: no upload may go before it
+        usedIn = device.recordingValue();
     }
 
     private long createView(MemoryStack stack, int type, int mips, int layers) {
@@ -178,8 +198,14 @@ final class SteinVkTexture extends SteinTexture {
         return aspect;
     }
 
+    /** The main command buffer is recording something on this image now. */
+    void noteUse() {
+        usedIn = device.recordingValue();
+    }
+
     /** Takes the whole image from its current layout to {@code to}. */
     void toLayout(VkCommandBuffer c, int to) {
+        usedIn = device.recordingValue();
         if (layout != to) {
             SteinVkBarriers.layout(c, image, aspect, 0, desc.mips, desc.layers, layout, to);
             layout = to;
@@ -192,6 +218,7 @@ final class SteinVkTexture extends SteinTexture {
      * anything.
      */
     void toAttachment(VkCommandBuffer c, int to, boolean discard) {
+        usedIn = device.recordingValue();
         // only discards when the drawing view is the whole image: the other levels and layers
         // keep what they had
         if (discard && desc.mips == 1 && desc.layers == 1) {
@@ -241,8 +268,35 @@ final class SteinVkTexture extends SteinTexture {
         }
         SteinVkDevice.StagingSlice s = device.stage(bytes, Math.max(4, texel));
         MemoryUtil.memCopy(MemoryUtil.memAddress(pixels), s.address(), bytes);
-        VkCommandBuffer c = device.outside();
-        toLayout(c, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        long recording = device.recordingValue();
+        VkCommandBuffer c;
+        boolean early = SteinVkOptions.EARLY_UPLOADS && usedIn != recording && layout == REST;
+        if (early) {
+            // Nothing recorded so far in this submission touches the image: the copy can run
+            // before all of it, in the early command buffer, with no render interrupted (the
+            // animated textures, every client tick). Whatever reads it later sees the same pixels.
+            c = device.early();
+            beginEarly(c, recording, layer, level, x, y, w, h);
+        } else {
+            c = device.outside();
+            toLayout(c, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+        }
+        copyIn(c, s, layer, level, x, y, w, h);
+        if (!early) {
+            toRest(c);
+        }
+    }
+
+    /** The staging slice into the rectangle, the image already in TRANSFER_DST on {@code c}. */
+    private void copyIn(
+            VkCommandBuffer c,
+            SteinVkDevice.StagingSlice s,
+            int layer,
+            int level,
+            int x,
+            int y,
+            int w,
+            int h) {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             VkBufferImageCopy.Buffer region = VkBufferImageCopy.calloc(1, stack);
             region.get(0)
@@ -258,7 +312,79 @@ final class SteinVkTexture extends SteinTexture {
             vkCmdCopyBufferToImage(
                     c, s.buffer(), image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, region);
         }
-        toRest(c);
+    }
+
+    /**
+     * Before an early copy: the first one of the submission takes the image to TRANSFER_DST in the
+     * early buffer (one barrier for all of the tick's sprites and levels); a later one over a
+     * rectangle already written waits for that copy (two catch-up ticks in one frame).
+     */
+    private void beginEarly(
+            VkCommandBuffer c, long recording, int layer, int level, int x, int y, int w, int h) {
+        if (earlyIn != recording) {
+            SteinVkBarriers.layout(
+                    c,
+                    image,
+                    aspect,
+                    0,
+                    desc.mips,
+                    desc.layers,
+                    REST,
+                    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            earlyIn = recording;
+            earlyRectCount = 0;
+            device.earlyTexture(this);
+        } else if (earlyOverlaps(layer, level, x, y, w, h)) {
+            SteinVkBarriers.memoryBarrier(c);
+            earlyRectCount = 0;
+        }
+        if ((earlyRectCount + 1) * 6 > earlyRects.length) {
+            earlyRects = Arrays.copyOf(earlyRects, earlyRects.length * 2);
+        }
+        int[] r = earlyRects;
+        int k = earlyRectCount++ * 6;
+        r[k] = level;
+        r[k + 1] = layer;
+        r[k + 2] = x;
+        r[k + 3] = y;
+        r[k + 4] = w;
+        r[k + 5] = h;
+    }
+
+    private boolean earlyOverlaps(int layer, int level, int x, int y, int w, int h) {
+        int[] r = earlyRects;
+        for (int i = 0, k = 0; i < earlyRectCount; i++, k += 6) {
+            if (r[k] == level
+                    && r[k + 1] == layer
+                    && x < r[k + 2] + r[k + 4]
+                    && r[k + 2] < x + w
+                    && y < r[k + 3] + r[k + 5]
+                    && r[k + 3] < y + h) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * At the submission, at the end of the early buffer: the image goes back to rest, which is the
+     * layout the main buffer counted on.
+     */
+    void endEarly(VkCommandBuffer c) {
+        if (earlyIn != device.recordingValue() || image == VK_NULL_HANDLE) {
+            return;
+        }
+        SteinVkBarriers.layout(
+                c,
+                image,
+                aspect,
+                0,
+                desc.mips,
+                desc.layers,
+                VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                REST);
+        earlyIn = -1;
+        earlyRectCount = 0;
     }
 
     @Override
@@ -348,6 +474,9 @@ final class SteinVkTexture extends SteinTexture {
     public void destroy() {
         if (image == VK_NULL_HANDLE) {
             return;
+        }
+        if (earlyIn == device.recordingValue()) {
+            endEarly(device.early()); // the image handle is still valid now, not at the submission
         }
         long i = image;
         long v = view;

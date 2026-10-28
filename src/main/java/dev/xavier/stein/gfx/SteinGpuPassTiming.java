@@ -11,9 +11,8 @@ package dev.xavier.stein.gfx;
 import dev.xavier.stein.bridge.bench.Bench;
 import dev.xavier.stein.bridge.core.Log;
 
-import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -68,6 +67,25 @@ public final class SteinGpuPassTiming {
 
     public static final boolean ON = SteinGfxOptions.GPU_PASS_TIMING;
 
+    /**
+     * One frame in this many carries timestamps (see {@link
+     * SteinGfxOptions#GPU_PASS_TIMING_EVERY}).
+     */
+    private static final int EVERY = SteinGfxOptions.GPU_PASS_TIMING_EVERY;
+
+    /**
+     * Passes timed since {@link #takeTimed} last ran: the render thread writes, the bench reads.
+     */
+    private static int timedPasses;
+
+    /**
+     * Closed frames left waiting before they are read, so one {@link Timestamps#fetch} (one driver
+     * call with Vulkan) and one {@link Timestamps#released} cover them all: with Vulkan on AMD a
+     * read cost about as much per call as a quarter of a light scene's frame, and the benchmark
+     * turns this timer on. Read earlier when the ring is three quarters full.
+     */
+    private static final int READ_EVERY = 8;
+
     /** A pass longer than this (1 s) is an impossible result: it is left out of the average. */
     private static final long MAX_PLAUSIBLE_PASS_NANOS = 1_000_000_000L;
 
@@ -91,10 +109,35 @@ public final class SteinGpuPassTiming {
     private long frame;
     private long invalid;
 
-    /** Occurrences of each name in the current frame (to number the repeated ones). */
-    private final Map<String, int[]> occurrences = new HashMap<>();
+    /**
+     * Per pass name: whether it is aggregated, how many times it opened in the current frame and
+     * the ring id of each numbered label ("terrain", "terrain#2"...), so a pass costs one lookup
+     * instead of a set, two maps and the ring's map. Pass names are few and mostly constants.
+     */
+    private final Map<String, Label> labels = new HashMap<>();
 
-    private final Map<String, List<String>> numbered = new HashMap<>();
+    /** The last name looked up and its entry (consecutive passes often share the name). */
+    private String lastName;
+
+    private Label lastLabel;
+
+    /** A pass name's numbering state (see {@link #labels}). */
+    private static final class Label {
+        final String name;
+        final boolean aggregated;
+        int[] ids = {-1, -1};
+
+        /** The frame {@link #count} belongs to; an older one counts as zero. */
+        long frame = -1;
+
+        int count;
+
+        Label(String name) {
+            this.name = name;
+            this.aggregated = AGGREGATED.contains(name);
+        }
+    }
+
     private long windowFrames;
     private long spanSum;
     private long gapSum;
@@ -107,27 +150,61 @@ public final class SteinGpuPassTiming {
 
     /** On pass open: the slot for its two timestamps (-1: ring full, no measurement). */
     public int claim(String name) {
+        if (EVERY > 1 && frame % EVERY != 0) {
+            return -1; // a frame without timestamps (see EVERY)
+        }
         int slot = ring.claim(frame);
         if (slot >= 0) {
-            ring.setLabel(slot, ring.id(label(name)));
+            ring.setLabel(slot, labelId(name));
+            timedPasses++;
         }
         return slot;
     }
 
-    private String label(String name) {
-        if (AGGREGATED.contains(name)) {
-            return name;
+    /**
+     * Whether any pass was timed since the last call, which resets it: the benchmark asks once per
+     * frame, so it can leave the frames that carried timestamps out of its frame statistics. Always
+     * false when every frame is timed (nothing would be left to measure).
+     */
+    public static boolean takeTimed() {
+        boolean timed = EVERY > 1 && timedPasses > 0;
+        timedPasses = 0;
+        return timed;
+    }
+
+    /** The ring id of this opening of {@code name}: repeated non-aggregated names are numbered. */
+    private int labelId(String name) {
+        Label l;
+        if (name == lastName) {
+            l = lastLabel;
+        } else {
+            l = labels.get(name);
+            if (l == null) {
+                l = new Label(name);
+                labels.put(name, l);
+            }
+            lastName = name;
+            lastLabel = l;
         }
-        int[] n = occurrences.computeIfAbsent(name, k -> new int[1]);
-        int k = n[0]++;
-        if (k == 0) {
-            return name;
+        int k = 0;
+        if (!l.aggregated) {
+            if (l.frame != frame) {
+                l.frame = frame;
+                l.count = 0;
+            }
+            k = l.count++;
         }
-        List<String> l = numbered.computeIfAbsent(name, x -> new ArrayList<>());
-        while (l.size() < k) {
-            l.add(name + "#" + (l.size() + 2));
+        if (k >= l.ids.length) {
+            int old = l.ids.length;
+            l.ids = Arrays.copyOf(l.ids, Math.max(k + 1, old * 2));
+            Arrays.fill(l.ids, old, l.ids.length, -1);
         }
-        return l.get(k - 1);
+        int id = l.ids[k];
+        if (id < 0) {
+            id = ring.id(k == 0 ? l.name : l.name + "#" + (k + 1));
+            l.ids[k] = id;
+        }
+        return id;
     }
 
     /**
@@ -138,22 +215,26 @@ public final class SteinGpuPassTiming {
         collect(t);
         frame++;
         windowFrames++;
-        occurrences.clear();
         report(api);
     }
 
     /** The oldest complete frames whose last timestamp has already arrived. */
     private void collect(Timestamps t) {
         SteinTimestampRing r = ring;
+        if (r.oldestAge(frame) < READ_EVERY && r.free() > r.slots / 4) {
+            return; // not a batch yet (see READ_EVERY)
+        }
+        int closed = r.closedSlots(frame);
+        if (closed == 0) {
+            return;
+        }
+        int firstSlot = r.slotAt(0);
+        t.fetch(firstSlot, closed);
+        int read = 0;
         while (r.any()) {
             int n = r.oldestFrameSize(frame);
-            if (n == 0) {
-                return; // the current frame is still open
-            }
-            int firstSlot = r.slotAt(0);
-            t.fetch(firstSlot, n);
-            if (!t.arrived(r.slotAt(n - 1))) {
-                return;
+            if (n == 0 || !t.arrived(r.slotAt(n - 1))) {
+                break; // the current frame is still open, or the GPU is not past this one yet
             }
             long first = 0;
             long prevEnd = 0;
@@ -195,8 +276,12 @@ public final class SteinGpuPassTiming {
                     Bench.gpuFrame(prevEnd - first, busy, gaps);
                 }
             }
-            t.released(firstSlot, n);
             r.release(n);
+            read += n;
+        }
+        if (read > 0) {
+            // the frames read, one contiguous range from the oldest: reset before any new claim
+            t.released(firstSlot, read);
         }
     }
 

@@ -142,7 +142,7 @@ public final class SteinTerrain {
             return false;
         }
         SteinDevice dev = SteinDevice.get();
-        indirect = dev.caps().multiDrawIndirect;
+        indirect = dev.caps().multiDrawIndirect && !SteinGfxOptions.TERRAIN_DIRECT_DRAWS;
         origins =
                 dev.createBuffer(
                                 new SteinBuffer.Desc(
@@ -452,7 +452,11 @@ public final class SteinTerrain {
         SteinCommands cmd = dev.beginPass(SteinRenderPass.keep("terrain", dev.gameTarget()));
         long t2 = STATS ? System.nanoTime() : 0L;
         try {
-            recordDraws(cmd, d, count, pipeline, textures);
+            if (SteinTerrainPipelines.prepassEligible(key)) {
+                drawWithPrepass(cmd, d, count, key, pipeline, textures);
+            } else {
+                recordDraws(cmd, d, count, pipeline, textures);
+            }
         } finally {
             cmd.end();
         }
@@ -547,6 +551,32 @@ public final class SteinTerrain {
         return bound;
     }
 
+    /**
+     * The cutout layer in two passes ({@code terrainCutoutPrepass}, {@link
+     * SteinTerrainPipelines#prepassEligible}): depth with the alpha test only, then the colour with
+     * depth EQUAL. The pre-pass still runs the discard for every covered pixel, but with one
+     * texture read and no colour; the colour pass, without depth writes, keeps the GPU's early
+     * depth test even with its discard, so the leaves behind leaves are not shaded. Either variant
+     * missing (shader failed), the layer goes out as before.
+     */
+    private static void drawWithPrepass(
+            SteinCommands cmd,
+            SteinTerrainLayers.Layer d,
+            int count,
+            int key,
+            SteinPipeline pipeline,
+            int textures) {
+        SteinPipeline depth = SteinTerrainPipelines.prepass(key);
+        SteinPipeline color = SteinTerrainPipelines.afterPrepass(key);
+        if (!depth.valid() || !color.valid()) {
+            recordDraws(cmd, d, count, pipeline, textures);
+            return;
+        }
+        recordDraws(cmd, d, count, depth, textures);
+        cmd.bindPipeline(color);
+        issueRuns(cmd, d, count);
+    }
+
     /** Binds the layer's state and issues its draws, one per run of chunks of the same region. */
     private static void recordDraws(
             SteinCommands cmd,
@@ -568,6 +598,11 @@ public final class SteinTerrain {
         if ((textures & LIGHTMAP_BOUND) != 0) {
             cmd.bindTexture(1, lightmap, null);
         }
+        issueRuns(cmd, d, count);
+    }
+
+    /** The layer's draws with what is bound: one per run of chunks of the same region. */
+    private static void issueRuns(SteinCommands cmd, SteinTerrainLayers.Layer d, int count) {
         SteinBuffer bound = null;
         int start = 0;
         for (int r = 0; r < d.runs && start < count; r++) {

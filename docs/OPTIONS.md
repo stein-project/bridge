@@ -195,6 +195,12 @@ listed at the end.
 - `-Dsteinbridge.opt.vanillaChunkLoading=true`: the integrated server loads and generates every chunk of the view distance in the tick that asks for it, as the game does (default: spread over the ticks, nearest first; see `LazyChunks`).
 - `-Dsteinbridge.opt.vanillaPendingTicks=true`: saving a chunk walks every scheduled block update of the world, as the game does (default: one index per save; see `PendingTicks`).
 - `-Dsteinbridge.opt.checkPendingTicks=true`: answers every chunk of a save both ways and compares the lists (default: off).
+- `-Dsteinbridge.opt.vanillaFacings=true`: the game's hot loops get a fresh copy of EnumFacing.values() on every call, as in 1.8.9 (default: one shared array; see `Facings`).
+- `-Dsteinbridge.opt.vanillaIntCache=true`: the world generator's IntCache drops one spare array on every reset, as the game does (default: keeps them; see `IntCachePool`).
+- `-Dsteinbridge.opt.vanillaBiomeColors=true`: every grass, foliage and water tint of a chunk build reads the nine biomes around the block again (default: each position's colour computed once per build; see `BiomeColors`).
+- `-Dsteinbridge.opt.checkBiomeColors=true`: computes every tint both ways and compares (default: off).
+- `-Dsteinbridge.opt.vanillaClearUpdates=true`: setupTerrain's clearChunkUpdates takes the waiting build tasks out one lock at a time, as the game does (default: all at once; see `ChunkQueue`).
+- `-Dsteinbridge.opt.vanillaPlayerUnload=true`: a chunk unloaded on the integrated server also unloads a player still standing in it, as 1.8.9 does after a long teleport, leaving that player frozen until a dimension change (default: the player stays; see `PlayerUnload`).
 - `-Dsteinbridge.opt.noWatchdog=true`: turns the freeze watchdog off (default: on).
 - `-Dsteinbridge.watchdog.silenceSec=N`: seconds of silence before the watchdog reports a freeze (default: 20).
 - `-Dsteinbridge.watchdog.tickSec=N`: seconds between the watchdog's checks (default: 10).
@@ -213,6 +219,7 @@ listed at the end.
 
 - `-Dsteinbridge.gfx.passStateCheck=true` (diagnostics): on every tracked pass, the queries to the driver, compared with what was tracked at opening and with the game's state at closing; counts and prints the divergences.
 - `-Dsteinbridge.gfx.gpuPassTiming=true` (diagnostics): GPU time of each pass (OpenGL or Vulkan timestamps), read a few frames later and printed every 5 s.
+- `-Dsteinbridge.gfx.gpuPassTiming.every=N`: only one frame in N carries the per-pass timestamps (default: 1, every frame; the benchmark asks for 16). With Vulkan on AMD, writing the timestamps of every pass cost a heavy scene a fifth of its frames per second and halved its 1% low; one frame in 16 still gives each part hundreds of GPU frames.
 - `-Dsteinbridge.gfx.recordFrameCheck=true` (diagnostics): on one frame in 300, each command is described at recording and again at replay, compared one by one, and the resources it uses are checked in the driver at replay time (buffer, texture, sampler and framebuffer still exist).
 - `-Dsteinbridge.gfx.frameSubmitStats=true` (diagnostics): submissions to the driver per frame and the reason (and the caller) of each submission outside the end of the frame, every 5 s.
 - `-Dsteinbridge.gfx.passTiming=true`: (diagnostics) measures the CPU time to open and close each pass and prints it periodically (default: off).
@@ -238,11 +245,17 @@ listed at the end.
 - `-Dsteinbridge.gfx.ownPose=...`: Stein's own player pose computation (default: on).
 - `-Dsteinbridge.gfx.poseStats=...`: (diagnostics) prints the player pose numbers (default: off).
 - `-Dsteinbridge.gfx.gpuPose=...`: player pose in the compute shader (default: on).
+- `-Dsteinbridge.gfx.entityNearFirst=...`: with the pose on the GPU, the players' opaque draws go out nearest first, so the GPU's early depth test rejects the pixels of the players behind (default: off; no gain measured on AMD, kept for Intel A/B).
+- `-Dsteinbridge.gfx.entityArmorFirst=...`: with entityNearFirst, the players' armor groups draw before the body group they cover, so the body's hidden pixels are rejected early (default: on, only matters when entityNearFirst is on).
+- `-Dsteinbridge.gfx.entityBatch=...`: outside strict order, each opaque group of model parts goes out as one instanced command per distinct part (its instances gathered by a compute shader) instead of one command per part of each entity. Equal depths between two entities on the same pixel may resolve in another order, as on the GL 4.1 path (default: on).
+- `-Dsteinbridge.gfx.glintMerge=...`: the two passes of the players' armor glint drawn as one, the shader summing both (at most one colour level of difference) (default: on).
 - `-Dsteinbridge.gfx.gpuPoseCheck=...`: (diagnostics) reads back the GPU pose and compares it with the CPU's (default: off).
 - `-Dsteinbridge.gfx.poseThreads=...`: number of player pose threads (default: half the processors minus one, between 1 and 4).
 - `-Dsteinbridge.gfx.segmentCheck=...`: (diagnostics) checks the segment assembly (default: off).
 - `-Dsteinbridge.gfx.terrainStats=...`: (diagnostics) prints the terrain numbers periodically (default: off).
 - `-Dsteinbridge.gfx.terrainOneBuffer=...`: each terrain layer in one buffer instead of 128-block regions (default: on).
+- `-Dsteinbridge.gfx.terrainDirectDraws=true` (experiment): the terrain issues one indexed draw per chunk section, as without indirect drawing, instead of one multi-draw indirect per layer; for drivers whose indirect multi-draw costs more on the CPU than the draws it replaces (Intel Iris Xe, 2021). Same draws, same image (default: off).
+- `-Dsteinbridge.gfx.terrainCutoutPrepass=...`: the alpha-tested terrain layers (leaves, grass) first write only depth, with the cheap alpha test, and then draw their colour with depth EQUAL and no depth writes, so the GPU's early depth test shades each pixel once. The image is the same (default: off until measured on more GPUs).
 - `-Dsteinbridge.gfx.terrainCache=...`: each terrain layer's draw kept between frames (default: on).
 - `-Dsteinbridge.gfx.terrainCacheCheck=...`: (diagnostics) checks the terrain cache against a reassembly (default: off).
 - `-Dsteinbridge.gfx.terrainCacheCheckEvery=...`: uses of the terrain cache between checks (default 30).
@@ -272,6 +285,7 @@ listed at the end.
 - `-Dsteinbridge.gfx.test.noGame=true`: runs without the game, for the out-of-game test (default: off).
 - `-Dsteinbridge.gfx.gpuPassTiming.slots=N`: timer-query ring slots (default: 4096, minimum 8).
 - `-Dsteinbridge.gfx.gpuOpTiming=true`: measures GPU time per replayed command (default: off).
+- `-Dsteinbridge.gfx.glDeviceWritten=false`: the buffers the GPU writes too (entity instances and commands) stay a single persistent mapping, as before, instead of a mapped CPU side copied into a device buffer (default: on).
 
 ## SteinVkOptions
 
@@ -286,6 +300,9 @@ listed at the end.
 - `-Dsteinbridge.gfx.vkDebugDrawsAtSec=N` (diagnostics): logs every draw of one frame, N seconds after startup — pass, pipeline state, textures and the start of the uniforms (default: off).
 - `-Dsteinbridge.gfx.vkSyncEachPass=true` (diagnostics): submits and waits for the GPU at the end of every pass, so nothing the CPU writes afterwards can reach a pass already recorded (default: off).
 - `-Dsteinbridge.gfx.vkPipelineStats=true` (diagnostics): every 5 s, how many draw pipelines were compiled on the render thread and how long they took (total and worst): the hitches a new pipeline costs in the middle of a frame (default: off).
+- `-Dsteinbridge.gfx.vkEarlyUploads=false`: every texture upload is recorded where it happens, interrupting the open render, instead of going to the start of the submission when nothing recorded before it in the submission touches that texture (the animated textures on every client tick; default: on).
+- `-Dsteinbridge.gfx.vkSwapchainImages=N` (experiment): asks the window for N swapchain images, within what the surface allows; more images give the presentation engine slack, so a present waits less often (default: 0, the surface minimum plus one).
+- `-Dsteinbridge.gfx.vkMailbox=true` (experiment, visible): without VSync, MAILBOX before IMMEDIATE when the driver has it: no tearing, the newest finished frame replaces the one waiting for the refresh (default: off, IMMEDIATE first).
 
 ## Removed options
 

@@ -9,13 +9,18 @@
 entity.vert         vert     entity.vert
 entity.frag         frag     entity.frag
 entity_gametex.frag frag     entity.frag           GAME_TEX
+entity_glint.vert   vert     entity.vert           GLINT2
+entity_glint.frag   frag     entity.frag           GLINT2
 entity_dynamic.vert vert     entity_dynamic.vert
 entity_dynamic.frag frag     entity_dynamic.frag
 entity_text.vert    vert     entity_dynamic.vert   TEXT
 terrain.vert        vert     terrain.vert
 terrain.frag        frag     terrain.frag
 terrain_alpha.frag  frag     terrain.frag          ALPHA_TEST
+terrain_inv.vert    vert     terrain.vert          INVARIANT
+terrain_depth.frag  frag     terrain.frag          DEPTH_ONLY
 pose.comp           comp     pose.comp
+gather.comp         comp     gather.comp
 selftest.vert       vert     selftest.vert
 selftest.frag       frag     selftest.frag
 selftest.comp       comp     selftest.comp
