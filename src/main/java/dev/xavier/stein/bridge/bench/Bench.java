@@ -110,6 +110,33 @@ public final class Bench {
     private static int waitTicks;
     private static int measured;
 
+    /** The command mark of the preparation (-1 before it) and of the current part's set-up. */
+    private static long prepareMark = -1;
+
+    private static long partMark;
+
+    /** The integrated server's tick counter at each of the last 20 client ticks. */
+    private static final int[] SERVER_TICKS = new int[20];
+
+    private static int serverSamples;
+
+    /** Whether the server ran at least 18 ticks in the last 20 client ticks (or there is none). */
+    private static boolean serverRecovered;
+
+    private static void serverPace(Minecraft mc) {
+        net.minecraft.server.MinecraftServer s = mc.getIntegratedServer();
+        if (s == null) {
+            serverRecovered = true;
+            return;
+        }
+        int now = s.getTickCounter();
+        int slot = serverSamples % SERVER_TICKS.length;
+        int before = SERVER_TICKS[slot];
+        SERVER_TICKS[slot] = now;
+        serverSamples++;
+        serverRecovered = serverSamples > SERVER_TICKS.length && now - before >= 18;
+    }
+
     /** Ticks in a row with no chunk waiting to be built or uploaded: the land has settled. */
     private static int settledTicks;
 
@@ -428,7 +455,17 @@ public final class Bench {
         Minecraft mc = Minecraft.getMinecraft();
         if (phase == Phase.PREPARING) {
             // 10 s for the commands of the preparation and the relighting they cause
-            if (mc.thePlayer != null && ++prepareTicks >= 200) {
+            if (prepareMark < 0) {
+                prepareMark = BenchScene.mark();
+            }
+            serverPace(mc);
+            // the preparation's commands run and the server keeping its ticks again (a large fill
+            // relights for seconds), at least 10 s, at most 2 min
+            boolean ready = BenchScene.ran(prepareMark) && serverRecovered;
+            if (mc.thePlayer != null && ++prepareTicks >= 200 && (ready || prepareTicks >= 2400)) {
+                if (!ready) {
+                    event("the server was still busy after the longest preparation");
+                }
                 phase = Phase.RUNNING;
                 index = 0;
                 round = 0;
@@ -450,6 +487,7 @@ public final class Bench {
                 return;
             }
             BenchScene.setUp(mc, part);
+            partMark = BenchScene.mark();
             setUp = true;
         }
         if (!noWorld && !inDimension(mc, part)) {
@@ -475,7 +513,12 @@ public final class Bench {
         }
         tick++;
         if (!measuring) {
-            boolean warm = tick >= part.warmupTicks();
+            serverPace(mc);
+            // the part's scenery built on the server and its ticks back to normal
+            boolean warm =
+                    tick >= part.warmupTicks()
+                            && ((BenchScene.ran(partMark) && serverRecovered)
+                                    || tick >= part.warmupTicks() + part.maxWaitTicks());
             boolean waitedLong = tick >= part.warmupTicks() + part.maxWaitTicks();
             boolean settled = !part.waitChunks() || settledTicks >= 20 || waitedLong;
             if (warm && settled) {

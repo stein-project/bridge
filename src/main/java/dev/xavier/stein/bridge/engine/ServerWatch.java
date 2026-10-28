@@ -17,6 +17,7 @@ import net.minecraft.server.integrated.IntegratedServer;
 
 import java.lang.management.GarbageCollectorMXBean;
 import java.lang.management.ManagementFactory;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -36,6 +37,13 @@ import java.util.concurrent.atomic.AtomicLong;
  * read per frame. With the Stein performance log on, every second also gets a line with the
  * server's ticks, their mean and longest time and the chunks waiting for {@link LazyChunks}. {@code
  * -Dsteinbridge.opt.noServerWatch=true} turns it off.
+ *
+ * <p>The probes go through {@link TaskPost}, never straight from the render thread: the server runs
+ * its whole task queue holding the queue's lock, so a render thread posting into it waited for as
+ * long as any task ran (about 12 s at a time in the benchmark). The wait still counts from the
+ * moment the probe was due, so a server stuck behind a long task reports the same delay as before.
+ * At most one probe is in flight: while one waits, no new one is posted (before, the render thread
+ * itself was stuck and posted none).
  */
 public final class ServerWatch {
 
@@ -56,6 +64,9 @@ public final class ServerWatch {
     private static long lastGc;
     private static final AtomicLong SERVER_MAX = new AtomicLong();
     private static final AtomicLong CLIENT_MAX = new AtomicLong();
+
+    /** A probe was posted and has not run on the server yet. */
+    private static final AtomicBoolean IN_FLIGHT = new AtomicBoolean();
 
     private ServerWatch() {}
 
@@ -82,11 +93,13 @@ public final class ServerWatch {
             lastTicks = -1;
             SERVER_MAX.set(0);
             CLIENT_MAX.set(0);
+            // a probe left in the old server's queue never runs: do not wait for it
+            IN_FLIGHT.set(false);
         }
         if (server == null) {
             return;
         }
-        if (now >= nextProbe) {
+        if (now >= nextProbe && !IN_FLIGHT.get()) {
             nextProbe = now + PROBE_NS;
             postProbe(server, mc, now);
         }
@@ -161,17 +174,21 @@ public final class ServerWatch {
      * long each one waited.
      */
     private static void postProbe(IntegratedServer server, Minecraft mc, long posted) {
+        IN_FLIGHT.set(true);
         Runnable onServerQueue = () -> serverProbe(mc, posted);
-        server.addScheduledTask(onServerQueue);
+        TaskPost.toServer(server, onServerQueue);
     }
 
     /** Runs on the server queue: records the wait, then posts the reply task to the client. */
     private static void serverProbe(Minecraft mc, long posted) {
         long onServer = System.nanoTime();
         recordMax(SERVER_MAX, onServer - posted);
+        IN_FLIGHT.set(false);
         try {
+            // through TaskPost as well: the client drains its queue holding the lock, and the
+            // server thread must not wait behind the client's packets to post the reply
             Runnable onClientQueue = () -> recordMax(CLIENT_MAX, System.nanoTime() - onServer);
-            mc.addScheduledTask(onClientQueue);
+            TaskPost.toClient(mc, onClientQueue);
         } catch (Throwable t) {
             // without the return, the line carries on with
             // the server queue

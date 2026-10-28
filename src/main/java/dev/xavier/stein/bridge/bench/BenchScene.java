@@ -9,6 +9,7 @@
 package dev.xavier.stein.bridge.bench;
 
 import dev.xavier.stein.bridge.core.Log;
+import dev.xavier.stein.bridge.engine.TaskPost;
 
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
@@ -495,7 +496,8 @@ final class BenchScene {
         if (server == null) {
             return;
         }
-        server.addScheduledTask(
+        TaskPost.toServer(
+                server,
                 (Runnable)
                         () -> {
                             List<EntityPlayerMP> players =
@@ -866,13 +868,19 @@ final class BenchScene {
         return "fill " + x1 + " " + y1 + " " + z1 + " " + x2 + " " + y2 + " " + z2 + " " + block;
     }
 
-    /** Runs the commands on the integrated server's thread, as the server (operator level). */
+    /**
+     * Runs the commands on the integrated server's thread, as the server (operator level). Posted
+     * through {@link TaskPost}: this runs on the render thread every tick in some parts, and the
+     * server holds its queue's lock while a long task (a fill, the biome search) runs.
+     */
     static void run(Minecraft mc, String... commands) {
         MinecraftServer server = mc.getIntegratedServer();
         if (server == null) {
             return;
         }
-        server.addScheduledTask(
+        long id = POSTED.incrementAndGet();
+        TaskPost.toServer(
+                server,
                 (Runnable)
                         () -> {
                             for (String c : commands) {
@@ -882,6 +890,27 @@ final class BenchScene {
                                     Log.warn("bench", "command failed: " + c + ": " + e);
                                 }
                             }
+                            DONE.accumulateAndGet(id, Math::max);
                         });
+    }
+
+    /** Command batches posted to the server so far, and the last one it has run. */
+    private static final java.util.concurrent.atomic.AtomicLong POSTED =
+            new java.util.concurrent.atomic.AtomicLong();
+
+    private static final java.util.concurrent.atomic.AtomicLong DONE =
+            new java.util.concurrent.atomic.AtomicLong();
+
+    /**
+     * A mark of the commands posted until now: {@link #ran} says when the server has run them all.
+     * The render thread no longer waits on the server's queue, so a part must not start measuring
+     * while the server is still building its scenery (seconds of relighting after a large fill).
+     */
+    static long mark() {
+        return POSTED.get();
+    }
+
+    static boolean ran(long mark) {
+        return DONE.get() >= mark;
     }
 }

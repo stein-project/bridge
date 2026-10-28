@@ -136,7 +136,7 @@ optimizations, and those classes are shared. What exists only there is a path in
 
 These have no Pipeline line because they do not change how anything is drawn: chunk building and
 search (`Chunk*` except `ChunkArena`), network and threads (`Net`, `NetAddress`, `PacketLog`,
-`Watchdog`, `ServerWatch`, `AsyncSkins`, `SoundGuard`, `ClientSettings`), game-logic caches
+`Watchdog`, `ServerWatch`, `TaskPost`, `AsyncSkins`, `SoundGuard`, `ClientSettings`), game-logic caches
 (`ActiveChunks`, `BiomeLock`, `BlockMath`, `DataWatchers`, `EnchCache`, `EntityFlags`, `FontIndex`,
 `NameCache`, `SignText`, `ArmorTextures`, `CraftingInit`, `AngleTable`, `Particles`, `Rain`), state and
 option plumbing (`EngineOptions`, `CheckReport`, `FrameTime`, `KeyBindings`, `Mat4`, `Obf`, `Sprint`,
