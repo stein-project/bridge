@@ -123,6 +123,11 @@ listed at the end.
 - `-Dsteinbridge.opt.vanillaActiveChunkFill=true`: keeps one player per chunk but lets the game insert every chunk of their squares, overlaps included, instead of each chunk once (default: once).
 - `-Dsteinbridge.opt.checkActiveChunks=true`: runs both active-chunk paths every tick and compares the sets and the ambient countdown (default: off).
 - `-Dsteinbridge.opt.vanillaChunkAt=true`: does the chunk lookup every frame instead of caching it per column (default: cached).
+- `-Dsteinbridge.opt.vanillaClientChunks=true`: the client world's chunk lookup goes to the chunk map every time instead of the table of recent columns (default: table).
+- `-Dsteinbridge.opt.checkClientChunks=true`: uses the table of recent columns and compares every answer with the chunk map (default: off).
+- `-Dsteinbridge.opt.vanillaActiveReuse=true`: rebuilds the client's active-chunk set every tick even when the players stayed in the same chunks (default: kept).
+- `-Dsteinbridge.opt.checkActiveReuse=true`: rebuilds the kept active-chunk set anyway and compares it, in iteration order, with the kept one; also runs the skipped retainAll and checks it removed nothing (default: off).
+- `-Dsteinbridge.opt.vanillaPlayerRange=true`: the closest-player and player-in-range searches test the spectator mode before the distance, as in 1.8.9 (default: distance first).
 - `-Dsteinbridge.opt.vanillaCull=true`: uses the game's visibility search and chunk culling (default: Stein's).
 - `-Dsteinbridge.opt.checkCull=true`: computes the visibility graph both ways and compares them (default: off).
 - `-Dsteinbridge.opt.vanillaChunkHash=true`: restores the original chunk hash (default: Stein's).

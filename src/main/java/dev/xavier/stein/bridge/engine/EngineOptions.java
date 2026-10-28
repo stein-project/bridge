@@ -61,6 +61,37 @@ public final class EngineOptions {
     static final boolean VANILLA_CHUNK_AT = Opt.flag("steinbridge.opt.vanillaChunkAt");
 
     /**
+     * {@code -Dsteinbridge.opt.vanillaClientChunks=true}: the client world's chunk lookup goes to
+     * the chunk map every time instead of the table of recent columns (default: table).
+     */
+    static final boolean VANILLA_CLIENT_CHUNKS = Opt.flag("steinbridge.opt.vanillaClientChunks");
+
+    /**
+     * {@code -Dsteinbridge.opt.checkClientChunks=true}: uses the table of recent columns and
+     * compares every answer with the chunk map (default: off).
+     */
+    static final boolean CHECK_CLIENT_CHUNKS = Opt.flag("steinbridge.opt.checkClientChunks");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaActiveReuse=true}: rebuilds the client's active-chunk set
+     * every tick even when the players stayed in the same chunks (default: kept).
+     */
+    static final boolean VANILLA_ACTIVE_REUSE = Opt.flag("steinbridge.opt.vanillaActiveReuse");
+
+    /**
+     * {@code -Dsteinbridge.opt.checkActiveReuse=true}: rebuilds the kept active-chunk set anyway
+     * and compares it, in iteration order, with the kept one; also runs the skipped retainAll and
+     * checks it removed nothing (default: off).
+     */
+    static final boolean CHECK_ACTIVE_REUSE = Opt.flag("steinbridge.opt.checkActiveReuse");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaPlayerRange=true}: the closest-player and player-in-range
+     * searches test the spectator mode before the distance, as in 1.8.9 (default: distance first).
+     */
+    static final boolean VANILLA_PLAYER_RANGE = Opt.flag("steinbridge.opt.vanillaPlayerRange");
+
+    /**
      * {@code -Dsteinbridge.opt.vanillaCull=true}: uses the game's visibility search and chunk
      * culling (default: Stein's).
      */
