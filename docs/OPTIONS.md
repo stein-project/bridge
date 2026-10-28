@@ -204,6 +204,10 @@ listed at the end.
 - `-Dsteinbridge.opt.vanillaIntCache=true`: the world generator's IntCache drops one spare array on every reset, as the game does (default: keeps them; see `IntCachePool`).
 - `-Dsteinbridge.opt.vanillaBiomeColors=true`: every grass, foliage and water tint of a chunk build reads the nine biomes around the block again (default: each position's colour computed once per build; see `BiomeColors`).
 - `-Dsteinbridge.opt.checkBiomeColors=true`: computes every tint both ways and compares (default: off).
+- `-Dsteinbridge.opt.vanillaRawLight=true`: World.getRawLight allocates a BlockPos for each of the six neighbours, as the game does (default: one reused position per thread; see `NeighbourPos`).
+- `-Dsteinbridge.opt.vanillaBlockNeighbours=true`: the block renderer allocates a BlockPos for every side test and ambient-occlusion corner, as the game does (default: reused positions per thread; see `NeighbourPos`).
+- `-Dsteinbridge.opt.vanillaAoScratch=true`: every smooth-lit block allocates its quad bounds, bound flags and AmbientOcclusionFace, as the game does (default: one set per thread; see `AoScratch`).
+- `-Dsteinbridge.opt.vanillaRegionArrays=true`: every chunk build's RegionRenderCache allocates its light and block-state arrays, as the game does (default: each build thread reuses its pair; see `RegionArrays`).
 - `-Dsteinbridge.opt.vanillaClearUpdates=true`: setupTerrain's clearChunkUpdates takes the waiting build tasks out one lock at a time, as the game does (default: all at once; see `ChunkQueue`).
 - `-Dsteinbridge.opt.vanillaPlayerUnload=true`: a chunk unloaded on the integrated server also unloads a player still standing in it, as 1.8.9 does after a long teleport, leaving that player frozen until a dimension change (default: the player stays; see `PlayerUnload`).
 - `-Dsteinbridge.opt.noWatchdog=true`: turns the freeze watchdog off (default: on).
