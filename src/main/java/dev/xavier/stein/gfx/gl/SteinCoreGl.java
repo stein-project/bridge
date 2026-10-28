@@ -626,15 +626,22 @@ public final class SteinCoreGl {
         };
     }
 
+    /** The scissor test is noted ({@link SteinGlBindings}) so no pass has to ask the driver. */
     public static void glEnable(int cap) {
         if (!VULKAN && (!CORE || !fixedCap(cap))) {
             GL11.glEnable(cap);
+            if (cap == GL11.GL_SCISSOR_TEST) {
+                SteinGlBindings.noteScissorTest(true);
+            }
         }
     }
 
     public static void glDisable(int cap) {
         if (!VULKAN && (!CORE || !fixedCap(cap))) {
             GL11.glDisable(cap);
+            if (cap == GL11.GL_SCISSOR_TEST) {
+                SteinGlBindings.noteScissorTest(false);
+            }
         }
     }
 

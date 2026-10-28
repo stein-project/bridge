@@ -26,7 +26,6 @@ import dev.xavier.stein.gfx.SteinPipeline;
 import dev.xavier.stein.gfx.SteinRenderPass;
 
 import org.lwjgl.opengl.GL;
-import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL45;
 import org.lwjgl.system.MemoryUtil;
 
@@ -501,10 +500,12 @@ public final class SteinGlFrame {
         boolean dm = SteinGlGame.depthMask();
         float[] cc = SteinGlBindings.clearColor();
         double cd = SteinGlBindings.clearDepth();
-        boolean sc = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
-        int[] box = SCRATCH4;
-        if (sc) {
-            GL11.glGetIntegerv(GL11.GL_SCISSOR_BOX, box);
+        // tracked, not asked: no pass is open on the driver while recording, so the tracked
+        // scissor is the driver's
+        boolean sc = SteinGlBindings.scissorTest();
+        int[] box = sc ? SteinGlBindings.scissorBox() : null;
+        if (SteinGfxOptions.PASS_STATE_CHECK) {
+            SteinGlPassCheck.atGameClear(sc, box);
         }
         op(GAME_CLEAR);
         i(mask);
@@ -523,8 +524,6 @@ public final class SteinGlFrame {
             chkRec(GAME_CLEAR, mask, fbo, cm, dm ? 1 : 0, sc ? 1 : 0);
         }
     }
-
-    private static final int[] SCRATCH4 = new int[4];
 
     // ---- submission ----
 
