@@ -74,4 +74,26 @@ public final class SteinVkOptions {
      * hitches a new pipeline costs in the middle of a frame (default: off).
      */
     static final boolean PIPELINE_STATS = Opt.flag("steinbridge.gfx.vkPipelineStats");
+
+    /**
+     * {@code -Dsteinbridge.gfx.vkEarlyUploads=false}: every texture upload is recorded where it
+     * happens, interrupting the open render, instead of going to the start of the submission when
+     * nothing recorded before it in the submission touches that texture (the animated textures on
+     * every client tick; default: on).
+     */
+    static final boolean EARLY_UPLOADS = Opt.flag("steinbridge.gfx.vkEarlyUploads", true);
+
+    /**
+     * {@code -Dsteinbridge.gfx.vkSwapchainImages=N} (experiment): asks the window for N swapchain
+     * images, within what the surface allows; more images give the presentation engine slack, so a
+     * present waits less often (default: 0, the surface minimum plus one).
+     */
+    static final int SWAPCHAIN_IMAGES = Opt.integer("steinbridge.gfx.vkSwapchainImages", 0);
+
+    /**
+     * {@code -Dsteinbridge.gfx.vkMailbox=true} (experiment, visible): without VSync, MAILBOX before
+     * IMMEDIATE when the driver has it: no tearing, the newest finished frame replaces the one
+     * waiting for the refresh (default: off, IMMEDIATE first).
+     */
+    static final boolean MAILBOX = Opt.flag("steinbridge.gfx.vkMailbox");
 }

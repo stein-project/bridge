@@ -70,6 +70,8 @@ final class SteinVkBuffer extends SteinBuffer {
                         case UNIFORM -> VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
                         case STORAGE -> VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
                         case INDIRECT -> VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+                        // host-visible memory the GPU writes: storage covers it
+                        case GPU_WRITE -> VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
                     };
         }
         // indirect and storage go together: the on-GPU draw compute writes the commands that the

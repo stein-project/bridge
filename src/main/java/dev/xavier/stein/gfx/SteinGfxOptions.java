@@ -69,6 +69,15 @@ public final class SteinGfxOptions {
     public static final boolean GPU_PASS_TIMING = Opt.flag("steinbridge.gfx.gpuPassTiming");
 
     /**
+     * {@code -Dsteinbridge.gfx.gpuPassTiming.every=N}: only one frame in N carries the per-pass
+     * timestamps (default: 1, every frame; the benchmark asks for 16). With Vulkan on AMD, writing
+     * the timestamps of every pass cost a heavy scene a fifth of its frames per second and halved
+     * its 1% low; one frame in 16 still gives each part hundreds of GPU frames.
+     */
+    public static final int GPU_PASS_TIMING_EVERY =
+            Math.max(1, Opt.integer("steinbridge.gfx.gpuPassTiming.every", 1));
+
+    /**
      * The recorded frame is sent to the driver at once ({@code gl.SteinGlFrame}): the OpenGL passes
      * become command lists, replayed at the end of the frame (Display.update) or earlier, at a
      * synchronisation point (the game uploads a texture, reads the screen, deletes a texture or
@@ -221,6 +230,34 @@ public final class SteinGfxOptions {
     static final boolean GPU_POSE = feature("gpuPose", true);
 
     /**
+     * {@code -Dsteinbridge.gfx.entityNearFirst=...}: with the pose on the GPU, the players' opaque
+     * draws go out nearest first, so the GPU's early depth test rejects the pixels of the players
+     * behind (default: off; no gain measured on AMD, kept for Intel A/B).
+     */
+    static final boolean ENTITY_NEAR_FIRST = feature("entityNearFirst", false);
+
+    /**
+     * {@code -Dsteinbridge.gfx.entityArmorFirst=...}: with entityNearFirst, the players' armor
+     * groups draw before the body group they cover, so the body's hidden pixels are rejected early
+     * (default: on, only matters when entityNearFirst is on).
+     */
+    static final boolean ENTITY_ARMOR_FIRST = feature("entityArmorFirst", true);
+
+    /**
+     * {@code -Dsteinbridge.gfx.entityBatch=...}: outside strict order, each opaque group of model
+     * parts goes out as one instanced command per distinct part (its instances gathered by a
+     * compute shader) instead of one command per part of each entity. Equal depths between two
+     * entities on the same pixel may resolve in another order, as on the GL 4.1 path (default: on).
+     */
+    static final boolean ENTITY_BATCH = feature("entityBatch", true);
+
+    /**
+     * {@code -Dsteinbridge.gfx.glintMerge=...}: the two passes of the players' armor glint drawn as
+     * one, the shader summing both (at most one colour level of difference) (default: on).
+     */
+    static final boolean GLINT_MERGE = feature("glintMerge", true);
+
+    /**
      * {@code -Dsteinbridge.gfx.gpuPoseCheck=...}: (diagnostics) reads back the GPU pose and
      * compares it with the CPU's (default: off).
      */
@@ -252,6 +289,22 @@ public final class SteinGfxOptions {
      * 128-block regions (default: on).
      */
     static final boolean TERRAIN_ONE_BUFFER = feature("terrainOneBuffer", true);
+
+    /**
+     * {@code -Dsteinbridge.gfx.terrainDirectDraws=true} (experiment): the terrain issues one
+     * indexed draw per chunk section, as without indirect drawing, instead of one multi-draw
+     * indirect per layer; for drivers whose indirect multi-draw costs more on the CPU than the
+     * draws it replaces (Intel Iris Xe, 2021). Same draws, same image (default: off).
+     */
+    static final boolean TERRAIN_DIRECT_DRAWS = feature("terrainDirectDraws", false);
+
+    /**
+     * {@code -Dsteinbridge.gfx.terrainCutoutPrepass=...}: the alpha-tested terrain layers (leaves,
+     * grass) first write only depth, with the cheap alpha test, and then draw their colour with
+     * depth EQUAL and no depth writes, so the GPU's early depth test shades each pixel once. The
+     * image is the same (default: off until measured on more GPUs).
+     */
+    static final boolean TERRAIN_CUTOUT_PREPASS = feature("terrainCutoutPrepass", false);
 
     /**
      * {@code -Dsteinbridge.gfx.terrainCache=...}: each terrain layer's draw kept between frames

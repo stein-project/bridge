@@ -60,6 +60,10 @@ final class SteinDeferredFrame {
             clearPoseBlocks();
             poseGpu = false;
         }
+        SteinEntityBatch.plan(poseGpu);
+        // What the CPU wrote of the commands reaches the GPU's copy (GPU_WRITE: a device buffer on
+        // OpenGL; otherwise nothing to do).
+        commands.commitRing();
         long ft1 = TIMING ? System.nanoTime() : 0L;
         SteinRenderPass rp = SteinRenderPass.keep(passName, dev.gameTarget());
         if (viewportW > 0) {
@@ -112,6 +116,8 @@ final class SteinDeferredFrame {
             // before any draw (barrier in the dispatch)
             SteinPoseGpu.dispatch(c, instances, commands);
         }
+        // after the pose (it reads the instances the pose wrote), before any draw
+        SteinEntityBatch.dispatch(c);
         c.bindVertexBuffer(0, SteinModelInstancer.geometry(), 0);
         passVb0 = SteinModelInstancer.geometry();
         c.bindVertexBuffer(1, instances, 0);
@@ -162,11 +168,14 @@ final class SteinDeferredFrame {
             SteinPoseGpu.afterFlush(instances, commands);
         } finally {
             poseBlocks = 0;
+            SteinEntityBatch.afterFlush();
         }
         for (int i = 0; i < order.size(); i++) {
             Group g = order.get(i);
             g.n = 0;
             g.entries = 0;
+            g.listed = false;
+            g.batchN = 0;
         }
         order.clear();
         last = null;
@@ -254,6 +263,10 @@ final class SteinDeferredFrame {
 
     static void drawGroup(SteinCommands c, Group g, int from, int count) {
         if (indirect) {
+            if (SteinEntityBatch.batched(g, from, count)) {
+                SteinEntityBatch.draw(c, g);
+                return;
+            }
             c.drawIndirect(commands, g.cmdAt + (long) from * COMMAND_BYTES, count);
         } else {
             drawSorted(c, g, from, count);

@@ -515,6 +515,46 @@ public final class EngineOptions {
      */
     static final boolean CHECK_PENDING_TICKS = Opt.flag("steinbridge.opt.checkPendingTicks");
 
+    /**
+     * {@code -Dsteinbridge.opt.vanillaFacings=true}: the game's hot loops get a fresh copy of
+     * EnumFacing.values() on every call, as in 1.8.9 (default: one shared array; see {@link
+     * Facings}).
+     */
+    static final boolean VANILLA_FACINGS = Opt.flag("steinbridge.opt.vanillaFacings");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaIntCache=true}: the world generator's IntCache drops one
+     * spare array on every reset, as the game does (default: keeps them; see {@link IntCachePool}).
+     */
+    static final boolean VANILLA_INT_CACHE = Opt.flag("steinbridge.opt.vanillaIntCache");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaBiomeColors=true}: every grass, foliage and water tint of a
+     * chunk build reads the nine biomes around the block again (default: each position's colour
+     * computed once per build; see {@link BiomeColors}).
+     */
+    static final boolean VANILLA_BIOME_COLORS = Opt.flag("steinbridge.opt.vanillaBiomeColors");
+
+    /**
+     * {@code -Dsteinbridge.opt.checkBiomeColors=true}: computes every tint both ways and compares
+     * (default: off).
+     */
+    static final boolean CHECK_BIOME_COLORS = Opt.flag("steinbridge.opt.checkBiomeColors");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaClearUpdates=true}: setupTerrain's clearChunkUpdates takes
+     * the waiting build tasks out one lock at a time, as the game does (default: all at once; see
+     * {@link ChunkQueue}).
+     */
+    static final boolean VANILLA_CLEAR_UPDATES = Opt.flag("steinbridge.opt.vanillaClearUpdates");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaPlayerUnload=true}: a chunk unloaded on the integrated server
+     * also unloads a player still standing in it, as 1.8.9 does after a long teleport, leaving that
+     * player frozen until a dimension change (default: the player stays; see {@link PlayerUnload}).
+     */
+    static final boolean VANILLA_PLAYER_UNLOAD = Opt.flag("steinbridge.opt.vanillaPlayerUnload");
+
     /** {@code -Dsteinbridge.opt.noWatchdog=true}: turns the freeze watchdog off (default: on). */
     static final boolean NO_WATCHDOG = Opt.flag("steinbridge.opt.noWatchdog");
 

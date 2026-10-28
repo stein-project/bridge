@@ -286,6 +286,8 @@ public final class Display {
     }
 
     public static void destroy() {
+        // the game's own shutdown: a Vulkan start closed in its first seconds is not a crash
+        SteinBackend.closing();
         if (!Win.isCreated()) {
             return;
         }
@@ -337,7 +339,10 @@ public final class Display {
         // F3 frame time.
         FrameTime.tick();
         if (Win.vulkan) {
+            // in the submit zone like OpenGL's same work, so the two compare zone for zone
+            BenchZones.begin(BenchZones.SUBMIT);
             endOfVulkanFrame();
+            BenchZones.end(BenchZones.SUBMIT);
             return;
         }
         // Stein GFX recorded frame: the whole list goes to the driver here, before everything in
@@ -487,7 +492,8 @@ public final class Display {
      */
     public static void sync(int fps) {
         BenchZones.begin(BenchZones.LIMITER);
-        limit(fps);
+        // the benchmark's title-menus part measures them without the game's 30 fps menu cap
+        limit(Bench.uncappedMenus() ? 0 : fps);
         BenchZones.end(BenchZones.LIMITER);
     }
 

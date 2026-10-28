@@ -41,7 +41,16 @@ public abstract class SteinBuffer {
         INDEX,
         UNIFORM,
         STORAGE,
-        INDIRECT
+        INDIRECT,
+
+        /**
+         * {@link Memory#UPLOAD} that the GPU writes too (a compute shader fills part of it). The
+         * backend may then keep what the GPU reads in device memory: {@link #address} stays the
+         * CPU's side, and what the CPU wrote reaches the GPU only at {@link #commit} (or {@link
+         * #commitRing}), which every writer already calls before the draw that reads the range.
+         * Ranges written by the GPU must not be read back through {@link #address}.
+         */
+        GPU_WRITE
     }
 
     public enum Memory {

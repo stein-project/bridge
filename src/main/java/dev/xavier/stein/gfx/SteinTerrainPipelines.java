@@ -48,9 +48,13 @@ final class SteinTerrainPipelines {
     private static SteinShader vertex;
     private static SteinShader fragment;
     private static SteinShader fragmentAlpha;
+    private static SteinShader vertexInvariant;
+    private static SteinShader fragmentDepth;
     private static SteinVertexLayout layout;
     private static SteinPipelineCache pipelines;
     private static final Map<Integer, SteinPipeline> byKey = new HashMap<>();
+    private static final Map<Integer, SteinPipeline> prepassByKey = new HashMap<>();
+    private static final Map<Integer, SteinPipeline> afterPrepassByKey = new HashMap<>();
 
     /** Loads the terrain shaders and builds the vertex layout and the pipeline cache. */
     static void create(SteinDevice dev) {
@@ -59,6 +63,10 @@ final class SteinTerrainPipelines {
         vertex = SteinShader.load(SteinShader.Stage.VERTEX, "terrain.vert");
         fragment = SteinShader.load(SteinShader.Stage.FRAGMENT, "terrain.frag");
         fragmentAlpha = SteinShader.load(SteinShader.Stage.FRAGMENT, "terrain_alpha.frag");
+        if (SteinGfxOptions.TERRAIN_CUTOUT_PREPASS) {
+            vertexInvariant = SteinShader.load(SteinShader.Stage.VERTEX, "terrain_inv.vert");
+            fragmentDepth = SteinShader.load(SteinShader.Stage.FRAGMENT, "terrain_depth.frag");
+        }
         layout =
                 SteinVertexLayout.builder()
                         .binding(0, VERTEX, false)
@@ -149,6 +157,66 @@ final class SteinTerrainPipelines {
         p = pipelines.get(b.build());
         byKey.put(key, p);
         return p;
+    }
+
+    /**
+     * Whether a layer drawn with {@code key} may go out as a depth pre-pass plus a colour pass
+     * ({@code terrainCutoutPrepass}): alpha test, no blending, depth test LEQUAL with writes. With
+     * LEQUAL the pre-pass leaves the same depth the layer would; the colour pass with EQUAL and the
+     * same discard then keeps, per pixel, the same last fragment at the nearest depth (two coplanar
+     * quads, like the grass side and its overlay, still overwrite in draw order). LESS would keep
+     * the first one instead, so it is left out.
+     */
+    static boolean prepassEligible(int key) {
+        return fragmentDepth != null
+                && (key & ALPHA_BIT) != 0
+                && (key & BLEND_BIT) == 0
+                && (key & DEPTH_TEST_BIT) != 0
+                && (key & MASK_BIT) != 0
+                && (key >>> FUNC_SHIFT & 7) == 3;
+    }
+
+    /** The pre-pass of {@code key}: depth only, with the alpha test (and its invariant vertex). */
+    static SteinPipeline prepass(int key) {
+        SteinPipeline p = prepassByKey.get(key);
+        if (p == null) {
+            p = variant(key, "terrain depth ", fragmentDepth, false, SteinPipeline.Depth.LEQUAL);
+            prepassByKey.put(key, p);
+        }
+        return p;
+    }
+
+    /** The colour pass after {@link #prepass}: same discard, depth EQUAL without writes. */
+    static SteinPipeline afterPrepass(int key) {
+        SteinPipeline p = afterPrepassByKey.get(key);
+        if (p == null) {
+            p = variant(key, "terrain colour ", fragmentAlpha, true, SteinPipeline.Depth.EQUAL);
+            afterPrepassByKey.put(key, p);
+        }
+        return p;
+    }
+
+    private static SteinPipeline variant(
+            int key, String name, SteinShader frag, boolean color, SteinPipeline.Depth depth) {
+        SteinPipeline.Builder b =
+                SteinPipeline.builder(name + Integer.toHexString(key))
+                        .vertex(vertexInvariant)
+                        .fragment(frag)
+                        .layout(layout)
+                        .texture("tex", 0)
+                        .texture("lightmap", 1)
+                        .uniforms("Frame", 0)
+                        .depth(depth, !color)
+                        .cull(
+                                (key & CULL_BIT) == 0
+                                        ? SteinPipeline.Cull.NONE
+                                        : (key & BACK_BIT) != 0
+                                                ? SteinPipeline.Cull.BACK
+                                                : SteinPipeline.Cull.FRONT);
+        if (!color) {
+            b.colorWrite(false);
+        }
+        return pipelines.get(b.build());
     }
 
     /** OpenGL blend factor for the index in {@link SteinPipeline.Factor}. */

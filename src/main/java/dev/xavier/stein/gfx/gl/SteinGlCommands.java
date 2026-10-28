@@ -753,8 +753,23 @@ public final class SteinGlCommands extends SteinCommands {
         }
         SteinGlPassRules.notGraphicsBound(p);
         GL43.glDispatchCompute(x, y, z);
-        GL42.glMemoryBarrier(GL42.GL_ALL_BARRIER_BITS);
+        GL42.glMemoryBarrier(DISPATCH_BARRIERS);
     }
+
+    /**
+     * What a compute shader writes (storage buffers only: the API has no storage images) as visible
+     * to whatever reads buffers afterwards: vertex and index fetch, indirect commands, uniform and
+     * storage blocks, copies and readBuffer (the mappings are write-only: the CPU never reads one).
+     * Not GL_ALL_BARRIER_BITS: that also flushes the texture, image and framebuffer caches, which
+     * nothing a dispatch wrote is in.
+     */
+    private static final int DISPATCH_BARRIERS =
+            GL42.GL_VERTEX_ATTRIB_ARRAY_BARRIER_BIT
+                    | GL42.GL_ELEMENT_ARRAY_BARRIER_BIT
+                    | GL42.GL_UNIFORM_BARRIER_BIT
+                    | GL42.GL_COMMAND_BARRIER_BIT
+                    | GL42.GL_BUFFER_UPDATE_BARRIER_BIT
+                    | GL43.GL_SHADER_STORAGE_BARRIER_BIT;
 
     private void check() {
         SteinGlPassRules.notEnded(ended);

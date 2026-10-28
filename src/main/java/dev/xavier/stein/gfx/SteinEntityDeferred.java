@@ -597,6 +597,10 @@ public final class SteinEntityDeferred {
         return SteinDeferredPose.poseSlots(key, count);
     }
 
+    static void poseShadow(long slot, int q, int verts, int first, int instance) {
+        SteinDeferredPose.poseShadow(slot, q, verts, first, instance);
+    }
+
     static int poseBlockCount() {
         return SteinDeferredPose.poseBlockCount();
     }

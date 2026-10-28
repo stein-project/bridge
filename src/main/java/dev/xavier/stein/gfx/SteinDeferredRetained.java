@@ -164,8 +164,9 @@ final class SteinDeferredRetained {
             Group g = (Group) gs[i];
             // what group() does in the entity pass (without strict order): it enters in the
             // frame's order
-            if (g.n == 0) {
+            if (!g.listed) {
                 order.add(g);
+                g.listed = true;
             }
             if (strictOrder && g != last) {
                 // Just in case: retention belongs to the entity pass, outside strict order.

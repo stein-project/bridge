@@ -36,6 +36,10 @@ public final class Opt {
                 && System.getProperty("steinbridge.gfx.gpuPassTiming") == null
                 && !"false".equals(System.getProperty("steinbridge.bench.gpu"))) {
             System.setProperty("steinbridge.gfx.gpuPassTiming", "true");
+            if (System.getProperty("steinbridge.gfx.gpuPassTiming.every") == null) {
+                // the timestamps cost the frames that carry them: one in 16, left out of the stats
+                System.setProperty("steinbridge.gfx.gpuPassTiming.every", "16");
+            }
             System.setProperty("steinbridge.bench.setByBench", "steinbridge.gfx.gpuPassTiming");
         }
     }
