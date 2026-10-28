@@ -202,6 +202,12 @@ bfr	c	(Lcj;)Ljava/util/Set;	visibleFacings	dev/xavier/stein/bridge/engine/ChunkG
 bfr	a	(Lpk;DLbia;IZ)V	setupTerrain	dev/xavier/stein/bridge/engine/ChunkGraph	static	bfk.a(IFJ)V
 java/util/Queue	isEmpty	()Z	bfsLoop	dev/xavier/stein/bridge/engine/ChunkGraph	static	bfr.a(Lpk;DLbia;IZ)V
 bht	sbInfo	Ljava/lang/Object;	-	-	field
+# EnumFacing.values() in the game's own search loop (vanillaBfs, checkBfs): the cached array, not a
+# copy per visited chunk.
+cq	values	()[Lcq;	facingValues	dev/xavier/stein/bridge/engine/ChunkGraph	static	bfr.a(Lpk;DLbia;IZ)V
+# VisGraph.floodFill (ChunkFlood): the queue in an int array, without a LinkedList node and a
+# copy of EnumFacing.values() per block reached; on every chunk build and every camera-block change.
+bhw	a	(I)Ljava/util/Set;	floodFill	dev/xavier/stein/bridge/engine/ChunkGraph	body
 # Version of the compilations, for the search check (ChunkGraph.compiled): after each
 # RenderChunk.setCompiledChunk and stopCompileTask.
 bht	a	(Lbhq;)V	compiled	dev/xavier/stein/bridge/engine/ChunkGraph	after

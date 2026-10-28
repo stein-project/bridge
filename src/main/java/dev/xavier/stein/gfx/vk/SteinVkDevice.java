@@ -222,6 +222,12 @@ public final class SteinVkDevice extends SteinDevice {
     /** The pass with its render open, possibly already ended (see {@code SteinVkCommands#end}). */
     private SteinVkCommands renderOwner;
 
+    /**
+     * The two pass objects {@link #beginPass} alternates between (see {@code
+     * SteinVkCommands#open}): a new pass takes the one that is not the render owner.
+     */
+    private final SteinVkCommands[] passes = {new SteinVkCommands(this), new SteinVkCommands(this)};
+
     private final SteinVkDynamic dynamic = new SteinVkDynamic();
 
     private boolean destroyed;
@@ -907,7 +913,14 @@ public final class SteinVkDevice extends SteinDevice {
 
     @Override
     public SteinCommands beginPass(SteinRenderPass pass) {
-        return new SteinVkCommands(this, pass);
+        if (openPass != null) {
+            // checked before taking an object: the open pass may be the one that would be reused
+            throw new IllegalStateException(
+                    "pass '" + pass.name + "' opened inside '" + openPass.name() + "'");
+        }
+        SteinVkCommands c = passes[0] != renderOwner ? passes[0] : passes[1];
+        c.open(pass);
+        return c;
     }
 
     @Override

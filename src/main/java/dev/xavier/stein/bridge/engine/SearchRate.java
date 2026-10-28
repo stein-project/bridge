@@ -60,8 +60,12 @@ final class SearchRate {
 
     private SearchRate() {}
 
-    /** True if the previous list still holds; {@code start} is the search's starting queue. */
-    static boolean keep(RenderGlobal g, Entity e, List<Object> start, List<?> previous) {
+    /**
+     * True if the previous list still holds; {@code start} is the search's starting queue, {@code
+     * searchMany} the search's renderChunksMany (off for a spectator inside a block).
+     */
+    static boolean keep(
+            RenderGlobal g, Entity e, List<Object> start, List<?> previous, boolean searchMany) {
         if (OFF || g != rg || previous == null || previous.size() <= 1 || start.isEmpty()) {
             return false;
         }
@@ -72,9 +76,7 @@ final class SearchRate {
                 || e.rotationYaw != yaw) {
             return false;
         }
-        if (g.viewFrustum != frustum
-                || g.renderDistanceChunks != distance
-                || g.mc.renderChunksMany != many) {
+        if (g.viewFrustum != frustum || g.renderDistanceChunks != distance || searchMany != many) {
             return false;
         }
         RenderChunk first = (RenderChunk) ChunkGraph.INFO_CHUNK.get(start.get(0));
@@ -99,11 +101,12 @@ final class SearchRate {
      * A search is starting with these: {@code compiledBefore} was read before it, so a chunk that
      * finishes during it asks for the next one.
      */
-    static void searched(RenderGlobal g, Entity e, List<Object> start, int compiledBefore) {
+    static void searched(
+            RenderGlobal g, Entity e, List<Object> start, int compiledBefore, boolean searchMany) {
         rg = g;
         frustum = g.viewFrustum;
         distance = g.renderDistanceChunks;
-        many = g.mc.renderChunksMany;
+        many = searchMany;
         x = e.posX;
         y = e.posY;
         z = e.posZ;
@@ -115,7 +118,7 @@ final class SearchRate {
         at = System.nanoTime();
     }
 
-    /** A search made by the game's own loop (spectator, check mode): the next one runs. */
+    /** A search made by the game's own loop (vanillaBfs, check mode): the next one runs. */
     static void forget() {
         rg = null;
     }

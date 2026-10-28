@@ -189,7 +189,7 @@ public final class SteinGlTrack {
         if (VULKAN) {
             // in order: what was recorded before the clear goes out first
             SteinEntityDeferred.barrier();
-            SteinGameFramebuffers.clear(mask, scissor);
+            SteinGameFramebuffers.clear(mask, scissor());
             return;
         }
         if (SteinGlFrame.pending()) {
@@ -326,8 +326,10 @@ public final class SteinGlTrack {
 
     // ---- scissor (glScissor) of the Loader's and mods' screens ----
 
-    /** The scissor enabled now (x, y, width, height, in window pixels), or null. */
-    private static int[] scissor;
+    /** The scissor enabled now (x, y, width, height, in window pixels), valid with scissorOn. */
+    private static final int[] SCISSOR = new int[4];
+
+    private static boolean scissorOn;
 
     /**
      * Turns the screens' scissor on ({@code on}) or off (the Loader's Ui.clip). With the renderer
@@ -338,22 +340,31 @@ public final class SteinGlTrack {
     public static void scissor(boolean on, int x, int y, int w, int h) {
         SteinEntityDeferred.barrier();
         if (on) {
-            scissor = new int[] {x, y, Math.max(0, w), Math.max(0, h)};
+            // one array, rewritten: each reader copies it (the passes' setScissor), and the
+            // barrier above already sent what was recorded with the old rectangle
+            SCISSOR[0] = x;
+            SCISSOR[1] = y;
+            SCISSOR[2] = Math.max(0, w);
+            SCISSOR[3] = Math.max(0, h);
+            scissorOn = true;
             if (!VULKAN) {
                 GL11.glEnable(GL11.GL_SCISSOR_TEST);
                 GL11.glScissor(x, y, Math.max(0, w), Math.max(0, h));
             }
         } else {
-            scissor = null;
+            scissorOn = false;
             if (!VULKAN) {
                 GL11.glDisable(GL11.GL_SCISSOR_TEST);
             }
         }
     }
 
-    /** The scissor enabled now, or null. */
+    /**
+     * The scissor enabled now, or null. The array is reused by the next {@link #scissor(boolean,
+     * int, int, int, int)}: copy it to keep it.
+     */
     public static int[] scissor() {
-        return scissor;
+        return scissorOn ? SCISSOR : null;
     }
 
     // ---- planes of texture coordinate generation (glTexGen), which the GlStateManager does not

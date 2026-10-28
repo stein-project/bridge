@@ -62,6 +62,7 @@ import org.lwjgl.vulkan.VkRenderingInfo;
 import org.lwjgl.vulkan.VkViewport;
 import org.lwjgl.vulkan.VkWriteDescriptorSet;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -82,11 +83,17 @@ final class SteinVkCommands extends SteinCommands {
     private static final int MAX_BINDINGS = 16;
     private static final int MAX_SLOTS = 32;
 
+    /** Black, for a clearing pass without a clear colour (read only). */
+    private static final float[] NO_CLEAR_COLOR = new float[4];
+
     private final SteinVkDevice device;
-    private final SteinRenderPass pass;
-    private final SteinVkRenderTarget target;
-    private final SteinVkRenderTarget.Formats formats;
-    private boolean ended;
+
+    // The pass this object records now: the device reuses two of these objects (see open), so
+    // these are set on every open instead of being final.
+    private SteinRenderPass pass;
+    private SteinVkRenderTarget target;
+    private SteinVkRenderTarget.Formats formats;
+    private boolean ended = true;
 
     /**
      * The command buffer in which the state below was already emitted (another = emit everything
@@ -132,8 +139,10 @@ final class SteinVkCommands extends SteinCommands {
 
     private final int[] viewport = new int[4];
 
-    /** null = the whole target. */
-    private int[] scissor;
+    /** The scissor rectangle, valid only with {@link #scissorOn} (off = the whole target). */
+    private final int[] scissor = new int[4];
+
+    private boolean scissorOn;
 
     private boolean biasOn;
     private float biasFactor;
@@ -144,14 +153,28 @@ final class SteinVkCommands extends SteinCommands {
     /** This pass's slot in the GPU timer (gpuPassTiming), or -1. */
     private int gpuSlot = -1;
 
-    SteinVkCommands(SteinVkDevice device, SteinRenderPass pass) {
-        BenchCounters.pass();
+    /** An idle pass object of {@code device}: {@link #open} makes it record a pass. */
+    SteinVkCommands(SteinVkDevice device) {
         this.device = device;
-        this.pass = pass;
+    }
+
+    /**
+     * Starts recording {@code pass} in this object, forgetting the previous pass's state. The
+     * device keeps two of these objects and opens the one that is not the render owner: passes
+     * never nest, and an ended pass is only reachable through the device as the owner of the render
+     * it left open, so the other object is free. Reusing them takes the dozen slot arrays (about
+     * 2.5 KB) and the object itself off every pass — tens of passes per frame.
+     */
+    void open(SteinRenderPass pass) {
+        // validated before anything changes, as the constructor used to: a refused pass leaves
+        // this object as it was
         if (!(pass.target instanceof SteinVkRenderTarget t)) {
             throw new IllegalArgumentException(
                     "vulkan: target from another backend in pass '" + pass.name + "'");
         }
+        BenchCounters.pass();
+        reset();
+        this.pass = pass;
         this.target = t;
         this.formats = t.formats();
         if (pass.viewport != null) {
@@ -162,6 +185,8 @@ final class SteinVkCommands extends SteinCommands {
             // game's first glViewport, the whole target: OpenGL's default)
             System.arraycopy(SteinGlTrack.viewport(), 0, viewport, 0, 4);
         } else {
+            viewport[0] = 0;
+            viewport[1] = 0;
             viewport[2] = t.width();
             viewport[3] = t.height();
         }
@@ -185,6 +210,45 @@ final class SteinVkCommands extends SteinCommands {
             // clears now, like OpenGL: a copy or read before the first draw sees the cleared target
             ensureRendering(current());
         }
+    }
+
+    /**
+     * Every field back to what a newly created pass had: nothing bound, nothing emitted, the render
+     * closed. Only called on an object that is neither open nor the render owner.
+     */
+    private void reset() {
+        ended = false;
+        cb = null;
+        rendering = false;
+        begunOnce = false;
+        pipeline = null;
+        boundGraphics = VK_NULL_HANDLE;
+        boundCompute = VK_NULL_HANDLE;
+        descDirty = true;
+        Arrays.fill(vbBuffer, VK_NULL_HANDLE);
+        Arrays.fill(vbOffset, 0L);
+        vbDirty = 0;
+        indexBuffer = VK_NULL_HANDLE;
+        indexType = VK_INDEX_TYPE_UINT32;
+        indexDirty = false;
+        Arrays.fill(textures, null);
+        gameSlots = 0L;
+        Arrays.fill(gameSampler, null);
+        Arrays.fill(gameBacking, null);
+        Arrays.fill(samplers, null);
+        Arrays.fill(uniforms, null);
+        Arrays.fill(uniformOffset, 0L);
+        Arrays.fill(uniformSize, 0L);
+        Arrays.fill(storage, null);
+        Arrays.fill(storageOffset, 0L);
+        Arrays.fill(storageSize, 0L);
+        Arrays.fill(viewport, 0);
+        scissorOn = false;
+        biasOn = false;
+        biasFactor = 0f;
+        biasUnits = 0f;
+        dynDirty = true;
+        gpuSlot = -1;
     }
 
     String name() {
@@ -234,7 +298,7 @@ final class SteinVkCommands extends SteinCommands {
                     first && pass.depthLoad != SteinRenderPass.Load.KEEP);
         }
         try (MemoryStack stack = MemoryStack.stackPush()) {
-            float[] clear = pass.clearColor != null ? pass.clearColor : new float[4];
+            float[] clear = pass.clearColor != null ? pass.clearColor : NO_CLEAR_COLOR;
             VkRenderingAttachmentInfo.Buffer ca =
                     colors.length == 0
                             ? null
@@ -565,7 +629,11 @@ final class SteinVkCommands extends SteinCommands {
     @Override
     public void setScissor(int[] rect) {
         check();
-        scissor = rect == null ? null : rect.clone();
+        // copied, not kept: the caller may reuse its array (SteinGlTrack, SteinGlReplay)
+        scissorOn = rect != null;
+        if (rect != null) {
+            System.arraycopy(rect, 0, scissor, 0, 4);
+        }
         dynDirty = true;
     }
 
@@ -590,7 +658,7 @@ final class SteinVkCommands extends SteinCommands {
         int sy = 0;
         int sw = target.width();
         int sh = target.height();
-        if (scissor != null) {
+        if (scissorOn) {
             sx = Math.max(0, scissor[0]);
             sy = Math.max(0, scissor[1]);
             sw = Math.max(0, scissor[2] - (sx - scissor[0]));

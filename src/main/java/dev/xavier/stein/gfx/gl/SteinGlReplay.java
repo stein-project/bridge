@@ -58,6 +58,9 @@ final class SteinGlReplay {
 
     private static final int[] SCRATCH4 = new int[4];
 
+    /** The rectangle of the scissor op being replayed. */
+    private static final int[] SCISSOR_RECT = new int[4];
+
     // the cursors in the three arrays: int, long and object arguments of the next command
     private static int ip;
     private static int lp;
@@ -245,7 +248,12 @@ final class SteinGlReplay {
 
     private static void playScissor() {
         int has = ints[ip++];
-        int[] r = new int[] {ints[ip], ints[ip + 1], ints[ip + 2], ints[ip + 3]};
+        // the pass copies the rectangle (SteinGlCommands.setScissor): one array serves every op
+        int[] r = SCISSOR_RECT;
+        r[0] = ints[ip];
+        r[1] = ints[ip + 1];
+        r[2] = ints[ip + 2];
+        r[3] = ints[ip + 3];
         ip += 4;
         if (checking) {
             chkRep(SCISSOR, has, r[0], r[1], r[2], r[3]);
