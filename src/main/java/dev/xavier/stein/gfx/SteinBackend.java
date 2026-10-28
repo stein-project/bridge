@@ -96,18 +96,50 @@ public enum SteinBackend {
     private static int presented;
     private static long firstPresent;
 
+    /** This start's decision, once {@link #requested()} has made it. */
+    private static volatile SteinBackend decided;
+
     /**
      * The API asked for at this start: the option, else the saved choice, else Vulkan. A saved
      * Vulkan whose last start died before its first seconds goes back to OpenGL, saved too (the
      * video options say why), so a driver that crashes cannot keep the game from opening.
+     *
+     * <p>Decided once per process: Display asks before the window exists, and every later call
+     * returns that decision without reading or writing the file. The mark is this start's own once
+     * {@link #vulkanStarting()} has run, so asking again then must not take it for a crash (the
+     * benchmark reads the choice seconds after the start, while the mark is still there).
      */
-    public static SteinBackend requested() {
+    public static synchronized SteinBackend requested() {
+        SteinBackend d = decided;
+        if (d == null) {
+            d = decide();
+            decided = d;
+        }
+        return d;
+    }
+
+    /**
+     * The API asked for, without deciding anything: this start's decision once made, else what the
+     * option and the file say now. Never writes the file.
+     */
+    public static SteinBackend peekRequested() {
+        SteinBackend d = decided;
+        if (d != null) {
+            return d;
+        }
+        if (FORCED != null) {
+            return parse(FORCED, VULKAN);
+        }
+        return parse(load().getProperty(KEY), VULKAN);
+    }
+
+    private static SteinBackend decide() {
         if (FORCED != null) {
             return parse(FORCED, VULKAN);
         }
         Properties p = load();
         SteinBackend api = parse(p.getProperty(KEY), VULKAN);
-        if (api == VULKAN && Boolean.parseBoolean(p.getProperty(STARTING))) {
+        if (api == VULKAN && !marked && Boolean.parseBoolean(p.getProperty(STARTING))) {
             Log.warn("gfx", "the last start with Vulkan did not get through: back to OpenGL");
             crashedLastTime = true;
             p.setProperty(KEY, OPENGL.key);
@@ -149,6 +181,14 @@ public enum SteinBackend {
             p.remove(STARTING);
             store(p);
         }
+    }
+
+    /**
+     * The game is closing normally (Display.destroy, from the game's own shutdown): a start closed
+     * within its first seconds did not die on the way, so its mark goes.
+     */
+    public static void closing() {
+        vulkanFailed();
     }
 
     /** The Vulkan device could not be created: this start is not a crash. */

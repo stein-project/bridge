@@ -140,7 +140,19 @@ public final class Bench {
     /** Ticks in a row with no chunk waiting to be built or uploaded: the land has settled. */
     private static int settledTicks;
 
-    private static int totalTicks;
+    /**
+     * The part's scene time: the camera, the fight and the part's own events follow it, not the
+     * ticks, so every mode films the same thing. It runs through the warm-up, holds while the part
+     * waits for its land and its server, and runs on while measured.
+     */
+    private static int scene;
+
+    /** Ticks of the fight so far, counted only when a scene moves (the same in every mode). */
+    private static int fightTicks;
+
+    /** When the run began, the world opened and the preparation ended (for the report). */
+    private static long worldOpenAt;
+
     private static int prepareTicks;
     private static boolean measuring;
     private static boolean setUp;
@@ -317,6 +329,7 @@ public final class Bench {
                 && mc.thePlayer != null
                 && mc.getIntegratedServer() != null) {
             event("world open");
+            worldOpenAt = System.nanoTime();
             BenchScene.prepare(mc);
             settings = BenchSettings.apply(mc);
             prepareTicks = 0;
@@ -365,8 +378,11 @@ public final class Bench {
         long[] v = frames.values();
         v[at + BenchFrames.T] = now - start;
         v[at + BenchFrames.SEGMENT] = segmentNow();
-        v[at + BenchFrames.MEASURED] = measuring ? 1 : 0;
+        // 2: measured, but it carried the GPU timestamps, so it stays out of the frame statistics
+        boolean timed = dev.xavier.stein.gfx.SteinGpuPassTiming.takeTimed();
+        v[at + BenchFrames.MEASURED] = measuring ? (timed ? 2 : 1) : 0;
         v[at + BenchFrames.FRAME] = frame;
+        BenchZones.tickRest();
         for (int z = 0; z < BenchZones.COUNT; z++) {
             v[at + BenchFrames.ZONES + z] = BenchZones.SPENT[z];
         }
@@ -397,7 +413,7 @@ public final class Bench {
                         : 0;
         v[t + 19] = Display.getWidth();
         v[t + 20] = Display.getHeight();
-        if (measuring && current != null) {
+        if (measuring && current != null && !timed) {
             current.add(v, at);
         }
         frames.commit();
@@ -464,16 +480,17 @@ public final class Bench {
         if (phase == Phase.PREPARING) {
             // 10 s for the commands of the preparation and the relighting they cause
             if (prepareMark < 0) {
-                prepareMark = BenchScene.mark();
+                prepareMark = BenchCommands.mark();
             }
             serverPace(mc);
             // the preparation's commands run and the server keeping its ticks again (a large fill
             // relights for seconds), at least 10 s, at most 2 min
-            boolean ready = BenchScene.ran(prepareMark) && serverRecovered;
+            boolean ready = BenchCommands.ran(prepareMark) && serverRecovered;
             if (mc.thePlayer != null && ++prepareTicks >= 200 && (ready || prepareTicks >= 2400)) {
                 if (!ready) {
                     event("the server was still busy after the longest preparation");
                 }
+                setupDone();
                 phase = Phase.RUNNING;
                 index = 0;
                 round = 0;
@@ -495,7 +512,7 @@ public final class Bench {
                 return;
             }
             BenchScene.setUp(mc, part);
-            partMark = BenchScene.mark();
+            partMark = BenchCommands.mark();
             setUp = true;
         }
         if (!noWorld && !inDimension(mc, part)) {
@@ -508,28 +525,49 @@ public final class Bench {
             arrived = BenchScene.arrived(mc, part);
             if (!arrived) {
                 if (++waitTicks > DIMENSION_TIMEOUT_TICKS) {
-                    skip(mc, part, "no arrival point after the dimension change");
+                    skip(mc, part, "no arrival point after the dimension change or teleport");
                 }
                 return;
             }
+            BenchGuard.reset();
         }
-        BenchScene.everyTick(mc, part, tick);
-        BenchPlayers.tick(mc, totalTicks++);
+        String gone = noWorld ? null : BenchGuard.check(mc);
+        if (gone != null) {
+            abort(mc, part, gone);
+            return;
+        }
+        int nextScene =
+                measuring ? part.warmupTicks() + measured : Math.min(tick, part.warmupTicks());
+        // what follows the scene runs only when it moves
+        boolean moved = nextScene != scene || tick == 0;
+        scene = nextScene;
+        BenchScene.everyTick(mc, part, scene, moved);
+        if (moved) {
+            BenchPlayers.tick(mc, fightTicks++);
+        }
         settledTicks = pendingChunks(mc) == 0 ? settledTicks + 1 : 0;
         if (mc.thePlayer != null) {
             place(mc, part);
         }
         tick++;
+        if (measuring && measured % 10 == 0 && current.biome >= 0) {
+            current.biomeSamples++;
+            current.biomeHits += BenchGuard.biomeUnder(mc) == current.biome ? 1 : 0;
+        }
         if (!measuring) {
             serverPace(mc);
             // the part's scenery built on the server and its ticks back to normal
             boolean warm =
                     tick >= part.warmupTicks()
-                            && ((BenchScene.ran(partMark) && serverRecovered)
+                            && ((BenchCommands.ran(partMark) && serverRecovered)
                                     || tick >= part.warmupTicks() + part.maxWaitTicks());
             boolean waitedLong = tick >= part.warmupTicks() + part.maxWaitTicks();
-            boolean settled = !part.waitChunks() || settledTicks >= 20 || waitedLong;
-            if (warm && settled) {
+            // the land around the camera arrived, built and uploaded, for a second in a row
+            boolean landDone =
+                    !part.waitChunks() || (settledTicks >= 20 && BenchGuard.landArrived(mc));
+            if (warm && (landDone || waitedLong)) {
+                int biome = BenchScene.biomeOf(part);
+                int under = biome < 0 ? -1 : BenchGuard.biomeUnder(mc);
                 measuring = true;
                 measured = 0;
                 current =
@@ -539,9 +577,19 @@ public final class Bench {
                         mc.theWorld == null
                                 ? BenchScene.ANY_DIMENSION
                                 : mc.theWorld.provider.getDimensionId();
-                current.settled = !part.waitChunks() || settledTicks >= 20;
-                if (waitedLong && part.waitChunks() && settledTicks < 20) {
+                current.settled = landDone;
+                current.biome = biome;
+                if (!landDone) {
                     event(part.name() + ": chunks still loading after the longest warm-up");
+                }
+                if (biome >= 0 && under != biome) {
+                    abort(
+                            mc,
+                            part,
+                            "the camera is over "
+                                    + BenchGuard.biomeName(under)
+                                    + ", not "
+                                    + BenchGuard.biomeName(biome));
                 }
             }
             return;
@@ -549,6 +597,46 @@ public final class Bench {
         if (++measured >= part.measureTicks()) {
             endPart(mc, part);
         }
+    }
+
+    /**
+     * The part cannot film what it is meant to (the world is not there, the wrong biome): it ends
+     * now, as a failed part with the reason, instead of measuring something else.
+     */
+    private static void abort(Minecraft mc, BenchScene.Part part, String why) {
+        if (current == null) {
+            current =
+                    new BenchStats(
+                            SEGMENTS.get(segment), round + 1, segment, part, System.nanoTime());
+            current.dimension =
+                    mc.theWorld == null
+                            ? BenchScene.ANY_DIMENSION
+                            : mc.theWorld.provider.getDimensionId();
+        }
+        current.aborted = why;
+        event(part.name() + ": FAIL: " + why);
+        endPart(mc, part);
+    }
+
+    /** The title menus part runs without the game's 30 fps cap on menus (Display.sync). */
+    public static boolean uncappedMenus() {
+        return ON
+                && phase == Phase.RUNNING
+                && route != null
+                && index < route.size()
+                && route.get(index).kind() == BenchScene.Kind.MENUS_TITLE;
+    }
+
+    /** How long the world took to open and the preparation to finish, into the report. */
+    private static void setupDone() {
+        long now = System.nanoTime();
+        java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+        m.put("total_s", BenchStats.round1((now - start) / 1e9));
+        m.put("world_open_s", BenchStats.round1((worldOpenAt - start) / 1e9));
+        m.put("preparation_s", BenchStats.round1((now - worldOpenAt) / 1e9));
+        m.put("command_errors", BenchCommands.failures());
+        environment.put("setup", m);
+        event("setup done: " + m);
     }
 
     private static boolean inDimension(Minecraft mc, BenchScene.Part part) {
@@ -613,6 +701,7 @@ public final class Bench {
 
     private static void startPart(Minecraft mc) {
         tick = 0;
+        scene = 0;
         waitTicks = 0;
         settledTicks = 0;
         setUp = false;
@@ -633,7 +722,7 @@ public final class Bench {
      * the frames interpolate from, so the motion is smooth at any frame rate.
      */
     private static void place(Minecraft mc, BenchScene.Part part) {
-        BenchScene.camera(mc, part, tick, CAM);
+        BenchScene.camera(part, scene, CAM);
         if (!hasPrev) {
             System.arraycopy(CAM, 0, PREV, 0, 5);
             hasPrev = true;

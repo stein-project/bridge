@@ -130,7 +130,7 @@ final class BenchSessions {
         dir.delete();
     }
 
-    /** part -> mode -> {fps, 1% low, p99 ms, gpu ms}. */
+    /** part -> mode -> {fps, 1% low, p99 ms, gpu ms, status (0 pass, 1 warn, 2 fail), noisy}. */
     private static Map<String, Map<String, double[]>> table(Map<String, JsonObject> summaries) {
         Map<String, Map<String, double[]>> t = new LinkedHashMap<>();
         for (Map.Entry<String, JsonObject> s : summaries.entrySet()) {
@@ -139,11 +139,14 @@ final class BenchSessions {
                 JsonObject p = pe.getAsJsonObject();
                 JsonObject f = p.getAsJsonObject("frame");
                 JsonObject g = p.getAsJsonObject("gpu");
+                String status = p.has("status") ? p.get("status").getAsString() : "";
                 double[] v = {
                     num(f, "fps_avg"),
                     num(f, "fps_1pct_low"),
                     num(f, "ms_p99"),
-                    num(g, "span_ms_avg")
+                    num(g, "span_ms_avg"),
+                    status.equals(BenchChecks.FAIL) ? 2 : status.equals(BenchChecks.WARN) ? 1 : 0,
+                    p.has("noisy") && p.get("noisy").getAsBoolean() ? 1 : 0
                 };
                 t.computeIfAbsent(p.get("name").getAsString(), k -> new LinkedHashMap<>())
                         .put(s.getKey(), v);
@@ -158,7 +161,21 @@ final class BenchSessions {
 
     private static String compareText(Map<String, JsonObject> summaries, List<String> skipped) {
         StringBuilder b = new StringBuilder("Stein benchmark: the graphics modes side by side\n");
-        b.append("each cell: average fps / 1% low fps / p99 ms / GPU ms\n\n");
+        b.append("each cell: average fps / 1% low fps / p99 ms / GPU ms, then the part's marks:\n");
+        b.append(
+                "F failed, W warned (see that mode's summary.txt), N noisy (other processes used\n");
+        b.append("over ")
+                .append((int) BenchSampler.NOISY_OTHER_CPU_PCT)
+                .append("% of the processor: the numbers are less comparable)\n\n");
+        for (Map.Entry<String, JsonObject> m : summaries.entrySet()) {
+            JsonObject env = m.getValue().getAsJsonObject("environment");
+            JsonElement setup = env == null ? null : env.get("setup");
+            b.append(m.getKey())
+                    .append(" setup: ")
+                    .append(setup == null ? "-" : setup.toString())
+                    .append('\n');
+        }
+        b.append('\n');
         b.append(String.format(Locale.ROOT, "%-26s", "part"));
         for (String m : summaries.keySet()) {
             b.append(String.format(Locale.ROOT, " | %-30s", m));
@@ -179,13 +196,15 @@ final class BenchSessions {
                                 " | %-30s",
                                 String.format(
                                         Locale.ROOT,
-                                        "%.0f / %.0f / %.2f / %s",
+                                        "%.0f / %.0f / %.2f / %s%s",
                                         v[0],
                                         v[1],
                                         v[2],
-                                        v[3] < 0
-                                                ? "-"
-                                                : String.format(Locale.ROOT, "%.2f", v[3]))));
+                                        v[3] < 0 ? "-" : String.format(Locale.ROOT, "%.2f", v[3]),
+                                        marks(v))));
+                if (v[0] < 0 || v[4] == 2) {
+                    continue; // a failed part filmed something else: left out of the mean
+                }
                 double[] s = sums.computeIfAbsent(m, k -> new double[3]);
                 s[0] += v[0];
                 s[1] += v[1];
@@ -198,7 +217,7 @@ final class BenchSessions {
             b.append(
                     String.format(
                             Locale.ROOT,
-                            "%s: mean over the parts %.0f fps, 1%% low %.0f fps%n",
+                            "%s: mean over the parts that did not fail %.0f fps, 1%% low %.0f fps%n",
                             s.getKey(),
                             s.getValue()[0] / s.getValue()[2],
                             s.getValue()[1] / s.getValue()[2]));
@@ -207,6 +226,11 @@ final class BenchSessions {
             b.append("not run: ").append(s).append('\n');
         }
         return b.toString();
+    }
+
+    private static String marks(double[] v) {
+        String m = (v[4] == 2 ? "F" : v[4] == 1 ? "W" : "") + (v[5] == 1 ? "N" : "");
+        return m.isEmpty() ? "" : " " + m;
     }
 
     private static String compareJson(Map<String, JsonObject> summaries, List<String> skipped) {
@@ -221,11 +245,23 @@ final class BenchSessions {
                 v.put("fps_1pct_low", e.getValue()[1]);
                 v.put("ms_p99", e.getValue()[2]);
                 v.put("gpu_ms", e.getValue()[3] < 0 ? null : e.getValue()[3]);
+                double st = e.getValue()[4];
+                v.put(
+                        "status",
+                        st == 2 ? BenchChecks.FAIL : st == 1 ? BenchChecks.WARN : BenchChecks.PASS);
+                v.put("noisy", e.getValue()[5] == 1);
                 byMode.put(e.getKey(), v);
             }
             parts.put(row.getKey(), byMode);
         }
         m.put("parts", parts);
+        Map<String, Object> setup = new LinkedHashMap<>();
+        for (Map.Entry<String, JsonObject> e : summaries.entrySet()) {
+            JsonObject env = e.getValue().getAsJsonObject("environment");
+            JsonElement st = env == null ? null : env.get("setup");
+            setup.put(e.getKey(), st == null ? null : st.toString());
+        }
+        m.put("setup", setup);
         m.put("not_run", skipped);
         return BenchJson.write(m);
     }

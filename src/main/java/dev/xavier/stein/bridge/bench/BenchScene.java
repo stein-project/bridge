@@ -37,6 +37,7 @@ import net.minecraft.entity.player.EntityPlayerMP;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.ResourceLocation;
+import net.minecraft.world.WorldServer;
 import net.minecraft.world.WorldSettings;
 import net.minecraft.world.WorldType;
 
@@ -194,8 +195,8 @@ final class BenchScene {
 
     /**
      * The biome parts the {@code biomes} part turns into once the search is done: one per biome
-     * found, in the order of the shortest trip, each waiting at most 10 s past its warm-up for the
-     * new land.
+     * found, in the order of the shortest trip, each waiting at most 30 s past its warm-up for the
+     * new land (a whole new area is generated where the camera lands).
      */
     static List<Part> biomeParts() {
         List<Part> parts = new ArrayList<>();
@@ -204,7 +205,7 @@ final class BenchScene {
             if (BenchOptions.MAX_BIOMES > 0 && parts.size() == BenchOptions.MAX_BIOMES) {
                 break;
             }
-            parts.add(new Part(name, 60, measure, true, 200, Kind.BIOME, 0, true, 0, 0, 0));
+            parts.add(new Part(name, 60, measure, true, 600, Kind.BIOME, 0, true, 0, 0, 0));
         }
         return parts;
     }
@@ -247,9 +248,6 @@ final class BenchScene {
     private static volatile double ay;
     private static volatile double az;
 
-    /** The camera height of the land-following passes, smoothed from tick to tick. */
-    private static double followY = Double.NaN;
-
     /** The commands that make the world still: same time, same weather, no spawning. */
     static void prepare(Minecraft mc) {
         BlockPos s = mc.theWorld.getSpawnPoint();
@@ -277,13 +275,33 @@ final class BenchScene {
                 "replaceitem entity @p slot.armor.feet diamond_boots 1 0 {ench:[{id:0s,lvl:4s}]}");
         EntityPlayerSP p = mc.thePlayer;
         p.inventory.currentItem = 0;
-        // the arena's floor and the block gallery, built now: placing that many blocks makes the
-        // server relight for seconds, which must not fall inside a measured part
+        // the arena's floor and the block gallery, built now. The floors are glass: it lets the
+        // sky light through, so the 160 x 160 floor costs the server no relighting (a stone one
+        // kept it busy for about a minute). The chunks are loaded first: fill and setblock refuse
+        // blocks in chunks that are not, and the gallery lies past a small render distance.
         int y = ARENA_Y;
-        run(mc, fill(sx - 80, y - 1, sz - 80, sx + 79, y - 1, sz + 79, "stone"));
-        run(mc, fill(sx - 42, y - 1, galleryZ(), sx + 41, y - 1, galleryZ() + 75, "stone"));
-        run(mc, gallery());
+        int gz = galleryZ();
+        BenchCommands.onServer(mc, () -> loadChunks(mc, sx - 82, sz - 82, sx + 81, sz + 81));
+        BenchCommands.onServer(mc, () -> loadChunks(mc, sx - 44, gz - 2, sx + 43, gz + 77));
+        run(mc, fill(sx - 80, y - 1, sz - 80, sx + 79, y - 1, sz + 79, "glass"));
+        run(mc, fill(sx - 42, y - 1, gz, sx + 41, y - 1, gz + 75, "glass"));
+        // a hundred-odd blocks per server tick, so the server is never stuck in one long task
+        BenchCommands.runSpread(mc, 128, gallery());
         BenchTerrain.search(mc, sx, sz);
+    }
+
+    /** On the server's thread: loads (or generates) the overworld's chunks over the block area. */
+    private static void loadChunks(Minecraft mc, int x1, int z1, int x2, int z2) {
+        MinecraftServer server = mc.getIntegratedServer();
+        WorldServer w = server == null ? null : server.worldServerForDimension(0);
+        if (w == null) {
+            return;
+        }
+        for (int cx = x1 >> 4; cx <= x2 >> 4; cx++) {
+            for (int cz = z1 >> 4; cz <= z2 >> 4; cz++) {
+                w.theChunkProviderServer.loadChunk(cx, cz);
+            }
+        }
     }
 
     private static int tilesX() {
@@ -292,10 +310,11 @@ final class BenchScene {
 
     /** The north edge of the block gallery (it lies north of the arena, on its own floor). */
     private static int galleryZ() {
-        // inside the spawn's chunks, which the server always keeps (fill and setblock refuse
-        // blocks in chunks that are not loaded)
         return sz - 186;
     }
+
+    /** Rows of the gallery (40 blocks each), counted when it is built. */
+    private static int galleryRows = 35;
 
     /** The part's own scenery and mode, once, when it starts. */
     static void setUp(Minecraft mc, Part part) {
@@ -303,7 +322,6 @@ final class BenchScene {
         if (part.kind() != Kind.MENUS_TITLE) {
             run(mc, part.spectator() ? "gamemode 3 @p" : "gamemode 1 @p");
         }
-        followY = Double.NaN;
         screenIndex = -1;
         switch (part.kind()) {
             case MOBS -> run(mc, mobs());
@@ -320,11 +338,49 @@ final class BenchScene {
             case NETHER -> toDimension(mc, -1);
             case END -> toDimension(mc, 1);
             case MENUS_TITLE -> leaveWorld(mc);
+            case BIOME -> planBiome(mc, part);
             default -> {}
         }
         if (fight(part)) {
             BenchPlayers.spawn(mc, sx + 0.5, y, sz + 0.5);
         }
+        teleported = false;
+        if (part.dimension() == 0
+                && part.kind() != Kind.BIOME
+                && mc.thePlayer != null
+                && mc.theWorld != null
+                && mc.theWorld.provider.getDimensionId() == 0) {
+            // a far start (back from the flight or the biomes): through the server, see
+            // BenchTeleport
+            double[] c = new double[5];
+            camera(part, 0, c);
+            double dx = mc.thePlayer.posX - c[0];
+            double dz = mc.thePlayer.posZ - c[2];
+            if (dx * dx + dz * dz > 48 * 48) {
+                BenchTeleport.to(mc, c[0], c[1], c[2], (float) c[3], (float) c[4]);
+                teleported = true;
+            }
+        }
+    }
+
+    /** Whether this part's start was a teleport through the server (it waits for it). */
+    private static boolean teleported;
+
+    /** The biome part's path, planned on the server from the place the search found. */
+    private static void planBiome(Minecraft mc, Part part) {
+        BlockPos at = BenchTerrain.BIOMES.get(part.name());
+        Integer id = BenchTerrain.IDS.get(part.name());
+        if (at == null || id == null) {
+            return;
+        }
+        int ticks = part.warmupTicks() + part.measureTicks();
+        BenchBiomePath.plan(mc, part, at, id, ticks, part.warmupTicks());
+    }
+
+    /** The biome a biome part must film (-1: not a biome part). */
+    static int biomeOf(Part part) {
+        Integer id = part.kind() == Kind.BIOME ? BenchTerrain.IDS.get(part.name()) : null;
+        return id == null ? -1 : id;
     }
 
     private static boolean fight(Part part) {
@@ -360,6 +416,24 @@ final class BenchScene {
      * client before the server thread is done with the change).
      */
     static boolean arrived(Minecraft mc, Part part) {
+        if (part.kind() == Kind.BIOME) {
+            // the path planned on the server, then the camera taken there through the server
+            BenchBiomePath.Path path = BenchBiomePath.of(part);
+            if (path == null) {
+                return false;
+            }
+            if (!teleported) {
+                double[] c = new double[5];
+                path.camera(0, c);
+                BenchTeleport.to(mc, c[0], c[1], c[2], (float) c[3], (float) c[4]);
+                teleported = true;
+                return false;
+            }
+            return BenchTeleport.arrived(mc);
+        }
+        if (teleported && !BenchTeleport.arrived(mc)) {
+            return false;
+        }
         boolean changes = part.kind() == Kind.NETHER || part.kind() == Kind.END;
         if (changes) {
             if (!serverAnchor) {
@@ -384,22 +458,30 @@ final class BenchScene {
 
     /**
      * What the part does every tick on its own: the particles and the lightning keep coming, the
-     * player swings, the menus and the creative tabs change.
+     * player swings, the menus and the creative tabs change. {@code tick} is the scene's time; what
+     * happens at given times of it happens only when it {@code moved} (it holds while the part
+     * waits for its land).
      */
-    static void everyTick(Minecraft mc, Part part, int tick) {
+    static void everyTick(Minecraft mc, Part part, int tick, boolean moved) {
         switch (part.kind()) {
             case PARTICLES, EVERYTHING -> particles(mc);
             case FIGHT_FIRST_PERSON -> {
-                if (tick % 7 == 0) {
+                if (moved && tick % 7 == 0) {
                     mc.thePlayer.swingItem();
                 }
             }
-            case INVENTORY -> creativeTabs(mc, tick);
+            case INVENTORY -> {
+                if (moved) {
+                    creativeTabs(mc, tick);
+                }
+            }
             case MENUS_INGAME -> screens(mc, tick, false);
             case MENUS_TITLE -> screens(mc, tick, true);
             default -> {}
         }
-        if ((part.kind() == Kind.STORM || part.kind() == Kind.EVERYTHING) && tick % 12 == 0) {
+        if ((part.kind() == Kind.STORM || part.kind() == Kind.EVERYTHING)
+                && moved
+                && tick % 12 == 0) {
             // lightning on the fight, at places fixed by the tick
             int k = tick / 12;
             int x = sx + (k * 37 % 90) - 45;
@@ -546,7 +628,7 @@ final class BenchScene {
      * The camera at {@code tick} of the part (ticks since the part started, warm-up included): x,
      * y, z, yaw, pitch.
      */
-    static void camera(Minecraft mc, Part part, int tick, double[] out) {
+    static void camera(Part part, int tick, double[] out) {
         double t = tick;
         double y0 = ARENA_Y;
         double cx = sx + 0.5;
@@ -609,10 +691,11 @@ final class BenchScene {
                 lookAt(out, x, y0 + 7 + 2 * Math.sin(t / 50.0), z, cx, y0 + 2, cz);
             }
             case BLOCKS -> {
-                // low over the gallery, row after row
-                double[] now = galleryPath(t, cx, y0);
-                double[] ahead = galleryPath(t + 15, cx, y0);
-                lookAt(out, now[0], now[1], now[2], ahead[0], y0, ahead[2]);
+                // over the gallery and down its rows, looking at the rows ahead
+                double total = part.warmupTicks() + part.measureTicks();
+                double z = galleryZ() - 6 + (galleryRows * 2 + 4) * Math.min(1, t / total);
+                double x = cx + 26 * Math.sin(t / 90.0);
+                lookAt(out, x, y0 + 9, z, cx + 0.5 * (x - cx), y0, z + 12);
             }
             case CAVES -> {
                 // underground, through the stone: the caves the chunks' visibility lets through
@@ -633,8 +716,12 @@ final class BenchScene {
                             -90 + 15 * Math.sin(t / 60.0),
                             12);
             case BIOME, BIOMES -> {
-                BlockPos at = BenchTerrain.BIOMES.get(part.name());
-                follow(mc, out, at == null ? new BlockPos(sx, 0, sz) : at, t, 12, 0.4);
+                BenchBiomePath.Path path = BenchBiomePath.of(part);
+                if (path != null) {
+                    path.camera(t, out);
+                } else {
+                    set(out, cx, SKY_Y, cz, 0, 18);
+                }
             }
             case NETHER -> {
                 // from the open space where the player arrived, turning to look around the
@@ -667,31 +754,6 @@ final class BenchScene {
             y0 + 2.4 + 0.6 * Math.sin(t / 40.0),
             cz + 12 * Math.sin(t / 90.0)
         };
-    }
-
-    /** Over the gallery: across and back while moving down the rows. */
-    private static double[] galleryPath(double t, double cx, double y0) {
-        return new double[] {cx + 34 * Math.sin(t / 45.0), y0 + 6, galleryZ() + 2 + 0.12 * t};
-    }
-
-    /**
-     * Low over the land from {@code place}, heading east at {@code speed} blocks per tick, at
-     * {@code above} blocks over the highest ground of the next stretch (the chunks the client has),
-     * smoothed so the camera glides instead of jumping.
-     */
-    private static void follow(
-            Minecraft mc, double[] out, BlockPos place, double t, double above, double speed) {
-        double x = place.getX() - 40 + speed * t;
-        double z = place.getZ() + 20 * Math.sin(t / 120.0);
-        int ground = 0;
-        if (mc.theWorld != null) {
-            for (int k = 0; k <= 24; k += 4) {
-                ground = Math.max(ground, mc.theWorld.getHeight(new BlockPos(x + k, 0, z)).getY());
-            }
-        }
-        double target = ground > 0 ? ground + above : (Double.isNaN(followY) ? 120 : followY);
-        followY = Double.isNaN(followY) ? target : followY + (target - followY) * 0.08;
-        set(out, x, followY, z, -90 + 25 * Math.sin(t / 100.0), 18 + 6 * Math.sin(t / 60.0));
     }
 
     /** On a circle of radius {@code r}, {@code h} above the centre, looking at it. */
@@ -860,6 +922,7 @@ final class BenchScene {
                 i++;
             }
         }
+        galleryRows = (i + 39) / 40;
         Bench.event("blocks: " + i + " block states in the gallery");
         return c.toArray(new String[0]);
     }
@@ -868,49 +931,8 @@ final class BenchScene {
         return "fill " + x1 + " " + y1 + " " + z1 + " " + x2 + " " + y2 + " " + z2 + " " + block;
     }
 
-    /**
-     * Runs the commands on the integrated server's thread, as the server (operator level). Posted
-     * through {@link TaskPost}: this runs on the render thread every tick in some parts, and the
-     * server holds its queue's lock while a long task (a fill, the biome search) runs.
-     */
+    /** The game's own commands on the integrated server's thread, silently. */
     static void run(Minecraft mc, String... commands) {
-        MinecraftServer server = mc.getIntegratedServer();
-        if (server == null) {
-            return;
-        }
-        long id = POSTED.incrementAndGet();
-        TaskPost.toServer(
-                server,
-                (Runnable)
-                        () -> {
-                            for (String c : commands) {
-                                try {
-                                    server.getCommandManager().executeCommand(server, c);
-                                } catch (RuntimeException e) {
-                                    Log.warn("bench", "command failed: " + c + ": " + e);
-                                }
-                            }
-                            DONE.accumulateAndGet(id, Math::max);
-                        });
-    }
-
-    /** Command batches posted to the server so far, and the last one it has run. */
-    private static final java.util.concurrent.atomic.AtomicLong POSTED =
-            new java.util.concurrent.atomic.AtomicLong();
-
-    private static final java.util.concurrent.atomic.AtomicLong DONE =
-            new java.util.concurrent.atomic.AtomicLong();
-
-    /**
-     * A mark of the commands posted until now: {@link #ran} says when the server has run them all.
-     * The render thread no longer waits on the server's queue, so a part must not start measuring
-     * while the server is still building its scenery (seconds of relighting after a large fill).
-     */
-    static long mark() {
-        return POSTED.get();
-    }
-
-    static boolean ran(long mark) {
-        return DONE.get() >= mark;
+        BenchCommands.run(mc, commands);
     }
 }

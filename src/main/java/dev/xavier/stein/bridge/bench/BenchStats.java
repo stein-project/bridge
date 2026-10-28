@@ -8,6 +8,8 @@
 
 package dev.xavier.stein.bridge.bench;
 
+import dev.xavier.stein.bridge.core.CoreOptions;
+
 import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -37,6 +39,15 @@ final class BenchStats {
 
     /** Whether the chunks had settled when the measurement started. */
     boolean settled;
+
+    /** Why the part was stopped early and failed (the world it films was not there), or null. */
+    String aborted;
+
+    /** A biome part's biome (-1: not one), and how often the camera was over it when sampled. */
+    int biome = -1;
+
+    int biomeSamples;
+    int biomeHits;
 
     /** OpenGL errors the driver had queued at the end of the part (-1: not read, on Vulkan). */
     int glErrors = -1;
@@ -133,9 +144,17 @@ final class BenchStats {
         return (endNanos - startNanos) / 1e9;
     }
 
-    /** Whether the window stayed focused, visible and the same size the whole time. */
+    /**
+     * Whether the window stayed as the run asked, the same size the whole time: focused and
+     * visible, or, in a run asked to be in the background ({@code -Dsteinbridge.diag.background}),
+     * minimized throughout. There a restored window is the odd one out: with it Vulkan starts
+     * presenting again, and the numbers change.
+     */
     boolean clean() {
-        return unfocused == 0 && minimized == 0 && resized == 0;
+        if (resized != 0) {
+            return false;
+        }
+        return CoreOptions.DIAG_BACKGROUND ? minimized >= count : unfocused == 0 && minimized == 0;
     }
 
     /** The summary of the frame times, in ms (and fps for the lows). */

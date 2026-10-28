@@ -50,7 +50,27 @@ public final class BenchZones {
     public static final int IDLE = 26;
     public static final int BENCH = 27;
 
-    public static final int COUNT = 28;
+    /** TextureManager.tick in runTick: the animated textures (TextureMap.updateAnimations). */
+    public static final int TICK_TEXTURES = 28;
+
+    /**
+     * WorldClient.updateEntities in runTick: every entity and tile entity of the client's world.
+     */
+    public static final int TICK_ENTITIES = 29;
+
+    /** WorldClient.tick in runTick: the client world's own tick (chunks, sky, weather). */
+    public static final int TICK_WORLD = 30;
+
+    /** EffectRenderer.updateEffects in runTick: the particles. */
+    public static final int TICK_PARTICLES = 31;
+
+    /**
+     * The rest of the tick: {@link #TICK} minus the zones under it, worked out when the frame's row
+     * is taken (it has no hooks of its own).
+     */
+    public static final int TICK_OTHER = 32;
+
+    public static final int COUNT = 33;
 
     /** The column names in the report, by zone. */
     static final String[] NAMES = {
@@ -81,13 +101,19 @@ public final class BenchZones {
         "await_gpu",
         "fps_limiter",
         "idle_limiter",
-        "bench"
+        "bench",
+        "tick_textures",
+        "tick_entities",
+        "tick_world",
+        "tick_particles",
+        "tick_other"
     };
 
     /** The zone each one is inside of (-1: directly in the frame). */
     static final int[] PARENT = {
         -1, TICK, -1, -1, RENDER, WORLD, WORLD, WORLD, WORLD, WORLD, WORLD, WORLD, WORLD, WORLD,
-        WORLD, WORLD, RENDER, HUD, RENDER, SCREEN, -1, -1, -1, -1, -1, -1, -1, -1
+        WORLD, WORLD, RENDER, HUD, RENDER, SCREEN, -1, -1, -1, -1, -1, -1, -1, -1, TICK, TICK, TICK,
+        TICK, TICK
     };
 
     private static final boolean ON = BenchOptions.ON;
@@ -117,6 +143,18 @@ public final class BenchZones {
         }
     }
 
+    /** The tick's time outside its timed sub-zones, before the frame's row is taken. */
+    static void tickRest() {
+        long rest =
+                SPENT[TICK]
+                        - SPENT[MODS_TICK]
+                        - SPENT[TICK_TEXTURES]
+                        - SPENT[TICK_ENTITIES]
+                        - SPENT[TICK_WORLD]
+                        - SPENT[TICK_PARTICLES];
+        SPENT[TICK_OTHER] = Math.max(0L, rest);
+    }
+
     /** At the end of the frame, after the frame's row has been taken. */
     static void clear() {
         for (int i = 0; i < COUNT; i++) {
@@ -134,6 +172,38 @@ public final class BenchZones {
 
     public static void tickEnd() {
         end(TICK);
+    }
+
+    public static void tickTexturesBegin() {
+        begin(TICK_TEXTURES);
+    }
+
+    public static void tickTexturesEnd() {
+        end(TICK_TEXTURES);
+    }
+
+    public static void tickEntitiesBegin() {
+        begin(TICK_ENTITIES);
+    }
+
+    public static void tickEntitiesEnd() {
+        end(TICK_ENTITIES);
+    }
+
+    public static void tickWorldBegin() {
+        begin(TICK_WORLD);
+    }
+
+    public static void tickWorldEnd() {
+        end(TICK_WORLD);
+    }
+
+    public static void tickParticlesBegin() {
+        begin(TICK_PARTICLES);
+    }
+
+    public static void tickParticlesEnd() {
+        end(TICK_PARTICLES);
     }
 
     /**

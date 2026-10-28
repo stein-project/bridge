@@ -76,8 +76,17 @@ final class BenchSampler {
         "gpu_throttle",
         "cpu_perf_pct",
         "cpu_freq_mhz",
-        "gpu_3d_util_pct_game"
+        "gpu_3d_util_pct_game",
+        "other_processes_cpu_pct",
+        "server_player_ticks",
+        "server_player_in_world"
     };
+
+    /**
+     * A part is noisy when the other processes of the machine used more than this share of its
+     * processor on average while it was measured (the game competed for the processor).
+     */
+    static final double NOISY_OTHER_CPU_PCT = 15;
 
     private static final int RENDER = 0;
     private static final int SERVER = 1;
@@ -97,6 +106,11 @@ final class BenchSampler {
 
     /** Per part: the sum of the samples' tps, how many, and the lowest. */
     private final Map<String, double[]> tps = new HashMap<>();
+
+    /** Per part: the sum of the other processes' processor share, how many, and the highest. */
+    private final Map<String, double[]> otherCpu = new HashMap<>();
+
+    private int lastPlayerTicks = -1;
 
     private final List<String> segmentNames;
     private final Thread thread;
@@ -226,7 +240,8 @@ final class BenchSampler {
         r.append(String.format(java.util.Locale.ROOT, "%.1f", (now - t0) / 1e9)).append(',');
         r.append(seg >= 0 && seg < segmentNames.size() ? segmentNames.get(seg) : "-").append(',');
         r.append(fmt(processDelta / wall)).append(',');
-        r.append(os != null ? fmt(os.getCpuLoad() * 100) : "").append(',');
+        double machine = os != null ? os.getCpuLoad() * 100 : Double.NaN;
+        r.append(Double.isNaN(machine) || machine < 0 ? "" : fmt(machine)).append(',');
         for (int g = 0; g < group.length; g++) {
             r.append(fmt(group[g] / wall * 100)).append(',');
         }
@@ -241,15 +256,27 @@ final class BenchSampler {
         r.append(server).append(',');
         r.append(csvText(mods)).append(',');
         r.append(world()).append(',');
-        r.append(external.sampleColumns());
+        r.append(external.sampleColumns()).append(',');
+        // the machine's processor minus the game's own: what the other processes took
+        double other =
+                Double.isNaN(machine) || machine < 0
+                        ? Double.NaN
+                        : Math.max(0, machine - processDelta / wall * 100 / CORES);
+        r.append(Double.isNaN(other) ? "" : fmt(other)).append(',');
+        r.append(player()).append(',');
+        int inWorld = BenchGuard.inWorld;
+        r.append(inWorld < 0 ? "" : Integer.toString(inWorld));
+        BenchGuard.probe(Minecraft.getMinecraft().getIntegratedServer());
         // only while a part is measured: its set-up (commands, a dimension change) is not its own
         int measured = Bench.measuringSegment();
-        if (measured >= 0 && measured == seg && !Double.isNaN(lastTps)) {
+        if (measured >= 0 && measured == seg) {
             synchronized (this) {
-                double[] a = tps.computeIfAbsent(segmentNames.get(seg), k -> new double[3]);
-                a[0] += lastTps;
-                a[1]++;
-                a[2] = a[1] == 1 ? lastTps : Math.min(a[2], lastTps);
+                if (!Double.isNaN(lastTps)) {
+                    add(tps, segmentNames.get(seg), lastTps, true);
+                }
+                if (!Double.isNaN(other)) {
+                    add(otherCpu, segmentNames.get(seg), other, false);
+                }
             }
         }
         lastGcCount = gcCount;
@@ -258,6 +285,27 @@ final class BenchSampler {
         synchronized (this) {
             rows.add(r.toString());
         }
+    }
+
+    private static final int CORES = Math.max(1, Runtime.getRuntime().availableProcessors());
+
+    /** One sample into a part's {sum, count, lowest or highest}. */
+    private static void add(Map<String, double[]> m, String part, double x, boolean lowest) {
+        double[] a = m.computeIfAbsent(part, k -> new double[3]);
+        a[0] += x;
+        a[1]++;
+        a[2] = a[1] == 1 ? x : lowest ? Math.min(a[2], x) : Math.max(a[2], x);
+    }
+
+    /**
+     * How far the server's player ticked since the last sample: about 20 a second while the server
+     * keeps it in its world, 0 once it fell out of the world's entity list.
+     */
+    private String player() {
+        int now = BenchGuard.playerTicks(Minecraft.getMinecraft().getIntegratedServer());
+        int before = lastPlayerTicks;
+        lastPlayerTicks = now;
+        return now < 0 || before < 0 || now < before ? "" : Integer.toString(now - before);
     }
 
     private int groupOf(long id, String name) {
@@ -284,8 +332,17 @@ final class BenchSampler {
 
     /** Per part: average and lowest tps of the integrated server ({avg, min}). */
     synchronized Map<String, double[]> tpsByPart() {
+        return averages(tps);
+    }
+
+    /** Per part: average and highest share of the processor the other processes used. */
+    synchronized Map<String, double[]> otherCpuByPart() {
+        return averages(otherCpu);
+    }
+
+    private static Map<String, double[]> averages(Map<String, double[]> sums) {
         Map<String, double[]> m = new HashMap<>();
-        for (Map.Entry<String, double[]> e : tps.entrySet()) {
+        for (Map.Entry<String, double[]> e : sums.entrySet()) {
             double[] a = e.getValue();
             m.put(e.getKey(), new double[] {a[0] / a[1], a[2]});
         }

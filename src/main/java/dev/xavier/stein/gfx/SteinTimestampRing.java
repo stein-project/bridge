@@ -77,6 +77,29 @@ public final class SteinTimestampRing {
         return count > 0;
     }
 
+    /** How many frames the oldest waiting slot is behind {@code currentFrame} (0 when empty). */
+    public long oldestAge(long currentFrame) {
+        return count == 0 ? 0 : currentFrame - slotFrame[tail];
+    }
+
+    /** Slots still free to claim. */
+    public int free() {
+        return slots - count;
+    }
+
+    /**
+     * How many of the waiting slots, from the oldest, belong to frames older than {@code
+     * currentFrame}: the closed frames, all of them contiguous from {@link #slotAt}(0).
+     */
+    public int closedSlots(long currentFrame) {
+        int n = count;
+        // the open frame's slots are the newest: count them back from the head
+        while (n > 0 && slotFrame[(tail + n - 1) % slots] >= currentFrame) {
+            n--;
+        }
+        return n;
+    }
+
     /**
      * How many slots the oldest frame has, if it is older than {@code currentFrame} (otherwise 0:
      * the current one is still open).
