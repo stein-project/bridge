@@ -229,7 +229,15 @@ public final class Bench {
             // reopened for a mode that did not come up (Vulkan fell back to OpenGL, for one):
             // note it and go on to the next mode without measuring this one twice
             BenchSessions.note(
-                    mc.mcDataDir, session, asked, "the game came up in " + mode + " instead");
+                    mc.mcDataDir,
+                    session,
+                    asked,
+                    "the game came up in "
+                            + mode
+                            + " instead"
+                            + (dev.xavier.stein.gfx.SteinBackend.fallback() == null
+                                    ? ""
+                                    : " (" + dev.xavier.stein.gfx.SteinBackend.fallback() + ")"));
             phase = Phase.DONE;
             nextMode(mc);
             return;

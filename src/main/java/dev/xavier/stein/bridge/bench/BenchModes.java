@@ -14,6 +14,7 @@ import static org.lwjgl.vulkan.VK10.vkDestroyInstance;
 import static org.lwjgl.vulkan.VK10.vkEnumerateDeviceExtensionProperties;
 import static org.lwjgl.vulkan.VK10.vkEnumeratePhysicalDevices;
 import static org.lwjgl.vulkan.VK10.vkGetPhysicalDeviceProperties;
+import static org.lwjgl.vulkan.VK10.vkGetPhysicalDeviceQueueFamilyProperties;
 
 import dev.xavier.stein.bridge.core.CoreOptions;
 import dev.xavier.stein.bridge.core.Win;
@@ -24,13 +25,18 @@ import org.lwjgl.PointerBuffer;
 import org.lwjgl.glfw.GLFW;
 import org.lwjgl.glfw.GLFWVulkan;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.vulkan.EXTDepthClipControl;
 import org.lwjgl.vulkan.VK10;
+import org.lwjgl.vulkan.VK11;
 import org.lwjgl.vulkan.VkApplicationInfo;
 import org.lwjgl.vulkan.VkExtensionProperties;
 import org.lwjgl.vulkan.VkInstance;
 import org.lwjgl.vulkan.VkInstanceCreateInfo;
 import org.lwjgl.vulkan.VkPhysicalDevice;
+import org.lwjgl.vulkan.VkPhysicalDeviceDepthClipControlFeaturesEXT;
+import org.lwjgl.vulkan.VkPhysicalDeviceFeatures2;
 import org.lwjgl.vulkan.VkPhysicalDeviceProperties;
+import org.lwjgl.vulkan.VkQueueFamilyProperties;
 
 import java.io.File;
 import java.lang.management.ManagementFactory;
@@ -127,7 +133,15 @@ final class BenchModes {
         }
     }
 
-    /** The first Vulkan 1.2 device with dynamic rendering (core in 1.3, or the extension). */
+    /**
+     * The first device Stein's Vulkan would accept, with the same requirements the Bridge checks
+     * when it opens Vulkan (SteinVkProbe and SteinVkDevice): Vulkan 1.2, a queue family with
+     * graphics and compute, dynamic rendering (core in 1.3, or the extension) and
+     * VK_EXT_depth_clip_control with its feature on (without it the Bridge treats the driver as too
+     * old and opens OpenGL). A layered device such as Microsoft's Vulkan on Direct3D 12 reports
+     * Vulkan 1.2 but lacks the last one: on an Intel laptop it was taken for a Vulkan the game then
+     * refused. When no device qualifies, the reason names the closest one.
+     */
     private static String vulkanDevice() {
         try (MemoryStack st = MemoryStack.stackPush()) {
             VkApplicationInfo app =
@@ -147,6 +161,7 @@ final class BenchModes {
                 vkEnumeratePhysicalDevices(inst, n, null);
                 PointerBuffer devs = st.mallocPointer(n.get(0));
                 vkEnumeratePhysicalDevices(inst, n, devs);
+                String closest = null;
                 for (int i = 0; i < n.get(0); i++) {
                     VkPhysicalDevice pd = new VkPhysicalDevice(devs.get(i), inst);
                     VkPhysicalDeviceProperties p = VkPhysicalDeviceProperties.calloc(st);
@@ -154,38 +169,80 @@ final class BenchModes {
                     int v = p.apiVersion();
                     int major = VK10.VK_VERSION_MAJOR(v);
                     int minor = VK10.VK_VERSION_MINOR(v);
-                    boolean ok =
-                            major > 1
-                                    || (major == 1 && minor >= 3)
-                                    || (major == 1 && minor == 2 && dynamicRendering(st, pd));
-                    if (ok) {
+                    String name = p.deviceNameString();
+                    String why = missing(st, pd, major, minor);
+                    if (why == null) {
                         return "available: Vulkan "
                                 + major
                                 + "."
                                 + minor
                                 + ", "
-                                + p.deviceNameString()
+                                + name
                                 + " (asked of the driver)";
                     }
+                    if (closest == null) {
+                        closest = name + ": " + why;
+                    }
                 }
-                return "not available: no Vulkan 1.2 device with dynamic rendering";
+                return closest == null
+                        ? "not available: no Vulkan device"
+                        : "not available: " + closest;
             } finally {
                 vkDestroyInstance(inst, null);
             }
         }
     }
 
-    private static boolean dynamicRendering(MemoryStack st, VkPhysicalDevice pd) {
+    /** What the device lacks for Stein's Vulkan, or null when it has everything. */
+    private static String missing(MemoryStack st, VkPhysicalDevice pd, int major, int minor) {
+        if (major < 1 || (major == 1 && minor < 2)) {
+            return "Vulkan " + major + "." + minor + ", Stein needs 1.2";
+        }
+        if (!graphicsAndCompute(st, pd)) {
+            return "no queue with graphics and compute";
+        }
+        java.util.Set<String> ext = extensions(st, pd);
+        if (major == 1 && minor == 2 && !ext.contains("VK_KHR_dynamic_rendering")) {
+            return "no dynamic rendering";
+        }
+        if (!ext.contains(EXTDepthClipControl.VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME)) {
+            return "no VK_EXT_depth_clip_control (a driver too old for Stein's Vulkan)";
+        }
+        VkPhysicalDeviceDepthClipControlFeaturesEXT clip =
+                VkPhysicalDeviceDepthClipControlFeaturesEXT.calloc(st).sType$Default();
+        VkPhysicalDeviceFeatures2 features =
+                VkPhysicalDeviceFeatures2.calloc(st).sType$Default().pNext(clip.address());
+        VK11.vkGetPhysicalDeviceFeatures2(pd, features);
+        if (!clip.depthClipControl()) {
+            return "VK_EXT_depth_clip_control without its feature";
+        }
+        return null;
+    }
+
+    private static boolean graphicsAndCompute(MemoryStack st, VkPhysicalDevice pd) {
         IntBuffer n = st.mallocInt(1);
-        vkEnumerateDeviceExtensionProperties(pd, (String) null, n, null);
-        VkExtensionProperties.Buffer ext = VkExtensionProperties.malloc(n.get(0), st);
-        vkEnumerateDeviceExtensionProperties(pd, (String) null, n, ext);
-        for (int i = 0; i < ext.capacity(); i++) {
-            if ("VK_KHR_dynamic_rendering".equals(ext.get(i).extensionNameString())) {
+        vkGetPhysicalDeviceQueueFamilyProperties(pd, n, null);
+        VkQueueFamilyProperties.Buffer q = VkQueueFamilyProperties.malloc(n.get(0), st);
+        vkGetPhysicalDeviceQueueFamilyProperties(pd, n, q);
+        int both = VK10.VK_QUEUE_GRAPHICS_BIT | VK10.VK_QUEUE_COMPUTE_BIT;
+        for (int i = 0; i < q.capacity(); i++) {
+            if ((q.get(i).queueFlags() & both) == both) {
                 return true;
             }
         }
         return false;
+    }
+
+    private static java.util.Set<String> extensions(MemoryStack st, VkPhysicalDevice pd) {
+        IntBuffer n = st.mallocInt(1);
+        vkEnumerateDeviceExtensionProperties(pd, (String) null, n, null);
+        VkExtensionProperties.Buffer ext = VkExtensionProperties.malloc(n.get(0), st);
+        vkEnumerateDeviceExtensionProperties(pd, (String) null, n, ext);
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (int i = 0; i < ext.capacity(); i++) {
+            names.add(ext.get(i).extensionNameString());
+        }
+        return names;
     }
 
     /**
