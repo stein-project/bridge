@@ -238,6 +238,25 @@ aea	c	(Ladq;Lcj;)I	water	dev/xavier/stein/bridge/engine/BiomeColors	body
 # IntCache.resetIntCache (engine/IntCachePool): the world generator's spare arrays are kept instead of one of each size
 # being dropped on every reset and allocated again by the next biome question.
 asc	a	()V	reset	dev/xavier/stein/bridge/engine/IntCachePool	body
+# BlockPos.offset(facing) as a reused position per thread (engine/NeighbourPos), only where the neighbour is read and
+# dropped (checked in the bytecode of each callee): World.getRawLight's six neighbours (light updates, mostly the
+# integrated server), the side test of BlockModelRenderer's ambient-occlusion and flat paths, and the corners of
+# AmbientOcclusionFace.updateVertexBrightness.
+cj	a	(Lcq;)Lcj;	light	dev/xavier/stein/bridge/engine/NeighbourPos	static	adm.a(Lcj;Lads;)I
+cj	a	(Lcq;)Lcj;	side	dev/xavier/stein/bridge/engine/NeighbourPos	static	bgf.a(Ladq;Lboq;Lafh;Lcj;Lbfd;Z)Z
+cj	a	(Lcq;)Lcj;	side	dev/xavier/stein/bridge/engine/NeighbourPos	static	bgf.b(Ladq;Lboq;Lafh;Lcj;Lbfd;Z)Z
+cj	a	(Lcq;)Lcj;	corner	dev/xavier/stein/bridge/engine/NeighbourPos	static	bgf$b.a(Ladq;Lafh;Lcj;Lcq;[FLjava/util/BitSet;)V
+# renderModelAmbientOcclusion's scratch objects (engine/AoScratch, mode "new"): the quad bounds, the bound flags and the
+# AmbientOcclusionFace, one set per thread instead of one per smooth-lit block.
+[F	<init>	(I)V	quadBounds	dev/xavier/stein/bridge/engine/AoScratch	new	bgf.a(Ladq;Lboq;Lafh;Lcj;Lbfd;Z)Z
+java/util/BitSet	<init>	(I)V	boundsFlags	dev/xavier/stein/bridge/engine/AoScratch	new	bgf.a(Ladq;Lboq;Lafh;Lcj;Lbfd;Z)Z
+bgf$b	<init>	(Lbgf;)V	face	dev/xavier/stein/bridge/engine/AoScratch	new	bgf.a(Ladq;Lboq;Lafh;Lcj;Lbfd;Z)Z
+# RegionRenderCache's light and block-state arrays (engine/RegionArrays, mode "new"): each build thread reuses its pair,
+# given to the first region made during each RenderChunk.rebuildChunk (marked in ChunkRenderWorker.processTask).
+[I	<init>	(I)V	lights	dev/xavier/stein/bridge/engine/RegionArrays	new	bff.<init>
+[Lalz;	<init>	(I)V	states	dev/xavier/stein/bridge/engine/RegionArrays	new	bff.<init>
+bht	b	(FFFLbhn;)V	buildBegin	dev/xavier/stein/bridge/engine/RegionArrays	before	bhp.a(Lbhn;)V
+bht	b	(FFFLbhn;)V	buildEnd	dev/xavier/stein/bridge/engine/RegionArrays	after	bhp.a(Lbhn;)V
 # VisGraph.floodFill (ChunkFlood): the queue in an int array, without a LinkedList node and a
 # copy of EnumFacing.values() per block reached; on every chunk build and every camera-block change.
 bhw	a	(I)Ljava/util/Set;	floodFill	dev/xavier/stein/bridge/engine/ChunkGraph	body

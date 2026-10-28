@@ -573,6 +573,35 @@ public final class EngineOptions {
     static final boolean CHECK_BIOME_COLORS = Opt.flag("steinbridge.opt.checkBiomeColors");
 
     /**
+     * {@code -Dsteinbridge.opt.vanillaRawLight=true}: World.getRawLight allocates a BlockPos for
+     * each of the six neighbours, as the game does (default: one reused position per thread; see
+     * {@link NeighbourPos}).
+     */
+    static final boolean VANILLA_RAW_LIGHT = Opt.flag("steinbridge.opt.vanillaRawLight");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaBlockNeighbours=true}: the block renderer allocates a
+     * BlockPos for every side test and ambient-occlusion corner, as the game does (default: reused
+     * positions per thread; see {@link NeighbourPos}).
+     */
+    static final boolean VANILLA_BLOCK_NEIGHBOURS =
+            Opt.flag("steinbridge.opt.vanillaBlockNeighbours");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaAoScratch=true}: every smooth-lit block allocates its quad
+     * bounds, bound flags and AmbientOcclusionFace, as the game does (default: one set per thread;
+     * see {@link AoScratch}).
+     */
+    static final boolean VANILLA_AO_SCRATCH = Opt.flag("steinbridge.opt.vanillaAoScratch");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaRegionArrays=true}: every chunk build's RegionRenderCache
+     * allocates its light and block-state arrays, as the game does (default: each build thread
+     * reuses its pair; see {@link RegionArrays}).
+     */
+    static final boolean VANILLA_REGION_ARRAYS = Opt.flag("steinbridge.opt.vanillaRegionArrays");
+
+    /**
      * {@code -Dsteinbridge.opt.vanillaClearUpdates=true}: setupTerrain's clearChunkUpdates takes
      * the waiting build tasks out one lock at a time, as the game does (default: all at once; see
      * {@link ChunkQueue}).
