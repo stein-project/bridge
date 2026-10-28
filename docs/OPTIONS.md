@@ -120,7 +120,8 @@ listed at the end.
 - `-Dsteinbridge.opt.noIdleLimit=true`: no frame limit while the game is idle (out of focus and title screen 30, Esc menu 60; default: limited).
 - `-Dsteinbridge.diag.idleLimit=true`: keeps the idle frame limit on the test bench too, where `-Dsteinbridge.diag.background` turns it off so measurements run at full speed (default: off).
 - `-Dsteinbridge.opt.vanillaActiveChunks=true`: turns the active-chunks bookkeeping optimisation off (default: on).
-- `-Dsteinbridge.opt.checkActiveChunks=true`: runs both active-chunk paths every tick and compares the sets (default: off).
+- `-Dsteinbridge.opt.vanillaActiveChunkFill=true`: keeps one player per chunk but lets the game insert every chunk of their squares, overlaps included, instead of each chunk once (default: once).
+- `-Dsteinbridge.opt.checkActiveChunks=true`: runs both active-chunk paths every tick and compares the sets and the ambient countdown (default: off).
 - `-Dsteinbridge.opt.vanillaChunkAt=true`: does the chunk lookup every frame instead of caching it per column (default: cached).
 - `-Dsteinbridge.opt.vanillaCull=true`: uses the game's visibility search and chunk culling (default: Stein's).
 - `-Dsteinbridge.opt.checkCull=true`: computes the visibility graph both ways and compares them (default: off).

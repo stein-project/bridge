@@ -9,6 +9,7 @@
 package dev.xavier.stein.bridge.bench;
 
 import dev.xavier.stein.bridge.core.Log;
+import dev.xavier.stein.bridge.engine.TaskPost;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.server.MinecraftServer;
@@ -52,7 +53,8 @@ final class BenchTerrain {
             searched = true;
             return;
         }
-        server.addScheduledTask(
+        TaskPost.toServer(
+                server,
                 (Runnable)
                         () -> {
                             try {

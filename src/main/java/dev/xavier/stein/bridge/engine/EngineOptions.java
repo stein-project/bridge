@@ -41,8 +41,16 @@ public final class EngineOptions {
     static final boolean VANILLA_ACTIVE_CHUNKS = Opt.flag("steinbridge.opt.vanillaActiveChunks");
 
     /**
+     * {@code -Dsteinbridge.opt.vanillaActiveChunkFill=true}: keeps one player per chunk but lets
+     * the game insert every chunk of their squares, overlaps included, instead of each chunk once
+     * (default: once).
+     */
+    static final boolean VANILLA_ACTIVE_CHUNK_FILL =
+            Opt.flag("steinbridge.opt.vanillaActiveChunkFill");
+
+    /**
      * {@code -Dsteinbridge.opt.checkActiveChunks=true}: runs both active-chunk paths every tick and
-     * compares the sets (default: off).
+     * compares the sets and the ambient countdown (default: off).
      */
     static final boolean CHECK_ACTIVE_CHUNKS = Opt.flag("steinbridge.opt.checkActiveChunks");
 

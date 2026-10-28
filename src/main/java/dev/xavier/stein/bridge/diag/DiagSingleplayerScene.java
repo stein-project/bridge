@@ -9,6 +9,7 @@
 package dev.xavier.stein.bridge.diag;
 
 import dev.xavier.stein.bridge.core.Log;
+import dev.xavier.stein.bridge.engine.TaskPost;
 
 import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.EntityPlayerMP;
@@ -110,7 +111,8 @@ final class DiagSingleplayerScene {
                 && elapsed >= DiagOptions.SP_STALL_AT * 1_000_000_000L) {
             // Singleplayer watchdog check (engine/ServerWatch): the server thread stops on purpose.
             spStalled = true;
-            server.addScheduledTask(
+            TaskPost.toServer(
+                    server,
                     (Runnable)
                             () -> {
                                 try {
@@ -128,12 +130,14 @@ final class DiagSingleplayerScene {
         if (now >= spNextProbe) {
             spNextProbe = now + 100_000_000L;
             long posted = now;
-            server.addScheduledTask(
+            TaskPost.toServer(
+                    server,
                     (Runnable)
                             () -> {
                                 long onServer = System.nanoTime();
                                 SP_SERVER_MAX.accumulateAndGet(onServer - posted, Math::max);
-                                mc.addScheduledTask(
+                                TaskPost.toClient(
+                                        mc,
                                         (Runnable)
                                                 () ->
                                                         SP_CLIENT_MAX.accumulateAndGet(
