@@ -270,6 +270,25 @@ amz	a	(IIILalz;)V	bump	dev/xavier/stein/bridge/engine/ChunkGraph	before
 amy	a	([BIZ)V	bump	dev/xavier/stein/bridge/engine/ChunkGraph	before
 bcz	c	(II)Lamy;	chunkMap	dev/xavier/stein/bridge/engine/ChunkGraph	before
 bcz	b	(II)V	chunkMap	dev/xavier/stein/bridge/engine/ChunkGraph	before
+# The client world's chunk lookup (ClientChunks): World.getChunkFromChunkCoords — behind every
+# World.getBlockState — answered on the client thread from a table of recent columns instead of the
+# chunk map; World.isChunkLoaded (every isAreaLoaded) asks it the same way. The table's version
+# changes before and after every ChunkProviderClient.loadChunk and unloadChunk, and
+# Minecraft.loadWorld lets go of it.
+adm	a	(II)Lamy;	chunkAt	dev/xavier/stein/bridge/engine/ClientChunks	body
+adm	a	(IIZ)Z	loaded	dev/xavier/stein/bridge/engine/ClientChunks	body
+bcz	c	(II)Lamy;	changed	dev/xavier/stein/bridge/engine/ClientChunks	before
+bcz	c	(II)Lamy;	changed	dev/xavier/stein/bridge/engine/ClientChunks	after
+bcz	b	(II)V	changed	dev/xavier/stein/bridge/engine/ClientChunks	before
+bcz	b	(II)V	changed	dev/xavier/stein/bridge/engine/ClientChunks	after
+ave	a	(Lbdb;Ljava/lang/String;)V	forget	dev/xavier/stein/bridge/engine/ClientChunks	before
+# WorldClient.updateBlocks: previousActiveChunkSet.retainAll(activeChunkSet) skipped when the active
+# set was kept from the previous tick and so cannot lose anything (ActiveReuse).
+java/util/Set	retainAll	(Ljava/util/Collection;)Z	retainAll	dev/xavier/stein/bridge/engine/ActiveReuse	static	bdb.h()V
+# World.getClosestPlayer and isAnyPlayerWithinRangeAt (mob spawners, enchanting tables): the distance
+# before the spectator test, which on the client is a tab-list lookup per player (PlayerRange).
+adm	a	(DDDD)Lwn;	closest	dev/xavier/stein/bridge/engine/PlayerRange	body
+adm	b	(DDDD)Z	anyWithin	dev/xavier/stein/bridge/engine/PlayerRange	body
 # renderEntities (bfr.a(Lpk;Lbia;F)V): the chunk of each section kept by BlockPos, world and
 # chunk map version (ChunkGraph.chunkAt), instead of a map lookup every frame.
 bdb	f	(Lcj;)Lamy;	chunkAt	dev/xavier/stein/bridge/engine/ChunkGraph	static	bfr.a(Lpk;Lbia;F)V

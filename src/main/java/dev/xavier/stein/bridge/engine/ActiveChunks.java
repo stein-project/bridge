@@ -90,7 +90,13 @@ public final class ActiveChunks {
     @SuppressWarnings("unchecked")
     private static void build(World world) {
         List<Object> players = (List<Object>) (List<?>) world.playerEntities;
-        if (VANILLA || players.size() < 2) {
+        // the client's set may be kept between ticks (ActiveReuse), so a lone player takes the
+        // fill too: with one square it inserts exactly what the original does
+        boolean reuse = ActiveReuse.ENABLED && world.isRemote;
+        if (reuse) {
+            ActiveReuse.begin();
+        }
+        if (VANILLA || players.isEmpty() || (players.size() < 2 && !reuse)) {
             world.setActivePlayerChunksAndCheckLight();
             return;
         }
@@ -99,12 +105,13 @@ public final class ActiveChunks {
             check(world, players, representatives);
             return;
         }
-        optimized(world, players, representatives);
+        optimized(world, players, representatives, reuse);
     }
 
     /** The optimized path: the fill when the area fits, otherwise the original on the list. */
-    private static void optimized(World world, List<Object> players, List<Object> representatives) {
-        if (!VANILLA_FILL && fill(world, representatives)) {
+    private static void optimized(
+            World world, List<Object> players, List<Object> representatives, boolean reuse) {
+        if (!VANILLA_FILL && fill(world, representatives, reuse)) {
             return;
         }
         if (representatives.size() == players.size()) {
@@ -119,14 +126,26 @@ public final class ActiveChunks {
      * different threads.
      */
     private static List<Object> representatives(List<Object> players) {
+        int n = players.size();
         List<Object> out = new ArrayList<>();
-        Set<Long> seen = new HashSet<>();
-        for (int i = 0; i < players.size(); i++) {
+        // an open-addressing set of the chunk keys: no box and no node per player
+        int slots = Integer.highestOneBit(Math.max(1, n) * 2 - 1) << 1;
+        long[] keys = new long[slots];
+        boolean[] used = new boolean[slots];
+        int mask = slots - 1;
+        for (int i = 0; i < n; i++) {
             Entity p = (Entity) players.get(i);
             // Same calculation as the original: MathHelper.floor_double(pos / 16.0).
             long cx = (long) Math.floor(p.posX / 16.0);
             long cz = (long) Math.floor(p.posZ / 16.0);
-            if (seen.add(cx << 32 ^ (cz & 0xFFFFFFFFL))) {
+            long key = cx << 32 ^ (cz & 0xFFFFFFFFL);
+            int s = (int) ((key * 0x9E3779B97F4A7C15L) >>> 40) & mask;
+            while (used[s] && keys[s] != key) {
+                s = (s + 1) & mask;
+            }
+            if (!used[s]) {
+                used[s] = true;
+                keys[s] = key;
                 out.add(p);
             }
         }
@@ -151,7 +170,7 @@ public final class ActiveChunks {
      * Returns false, having changed nothing, when the area does not fit the bitmap.
      */
     @SuppressWarnings("unchecked")
-    private static boolean fill(World world, List<Object> list) {
+    private static boolean fill(World world, List<Object> list, boolean reuse) {
         int n = list.size();
         // the original asks once per player; it is a plain getter (the client's option, the
         // server's view distance), changed only on this same thread, so once is the same value
@@ -185,9 +204,14 @@ public final class ActiveChunks {
         int x0 = minX - r;
         int z0 = minZ - r;
         int d = (int) depth;
-        long[] seen = new long[(int) ((width * depth + 63) >>> 6)];
         Set<ChunkCoordIntPair> set = (Set<ChunkCoordIntPair>) (Set<?>) world.activeChunkSet;
         Profiler profiler = world.theProfiler;
+        if (reuse) {
+            ActiveReuse.fill(set, profiler, cx, cz, n, r, x0, z0, d, (int) (width * depth));
+            finish(world, profiler, list, n);
+            return true;
+        }
+        long[] seen = new long[(int) ((width * depth + 63) >>> 6)];
 
         set.clear();
         profiler.startSection("buildList");
@@ -210,8 +234,12 @@ public final class ActiveChunks {
             }
         }
         profiler.endSection();
+        finish(world, profiler, list, n);
+        return true;
+    }
 
-        // the rest of the original, as it is
+    /** The rest of the original after the set, as it is: the ambient countdown and light check. */
+    private static void finish(World world, Profiler profiler, List<Object> list, int n) {
         if (world.ambientTickCountdown > 0) {
             world.ambientTickCountdown--;
         }
@@ -223,7 +251,6 @@ public final class ActiveChunks {
         int z = MathHelper.floor_double(p.posZ) + rand.nextInt(11) - 5;
         world.checkLight(new BlockPos(x, y, z));
         profiler.endSection();
-        return true;
     }
 
     /**
@@ -238,7 +265,7 @@ public final class ActiveChunks {
         List<Object> expected = new ArrayList<>((Set<Object>) (Set<?>) world.activeChunkSet);
         int expectedCountdown = world.ambientTickCountdown;
         world.ambientTickCountdown = countdown;
-        optimized(world, players, representatives);
+        optimized(world, players, representatives, false);
         List<Object> actual = new ArrayList<>((Set<Object>) (Set<?>) world.activeChunkSet);
         checks++;
         boolean sameSet = new HashSet<>(expected).equals(new HashSet<>(actual));
