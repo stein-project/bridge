@@ -118,23 +118,45 @@ registry and `powercfg` queries and from Windows' power status; no script is run
 
 The game's phases are timed around their call sites (patcher rules at the top of `redirects-opt.tsv`
 and the bottom of `redirects-mods.tsv`), so each zone includes the Stein hooks around the call:
-`tick` (`mods_tick`), `render` > `world` > `lightmap`, `terrain_setup`, `chunk_upload`, `terrain`,
-`sky`, `clouds`, `entities`, `particles`, `weather`, `mods_world`, `hand`; `render` > `hud`
-(`mods_hud`), `screen` (`mods_screen`). Then the handoff: `submit` (the recorded OpenGL frame going to
-the driver), `swap` (with Vulkan, the submission and the presentation), `events`, `await_gpu`,
-`fps_limiter`, `idle_limiter`, and `bench` (the benchmark's own work). The `mods_*` zones are every hook
-listener: the Loader's mods and the Lens.
+`tick` (`mods_tick`), `frame_start` (the game loop clearing and binding the main framebuffer),
+`render` > `world` > `lightmap`, `terrain_setup`, `chunk_upload`, `terrain`, `sky`, `clouds`,
+`entities`, `particles`, `weather`, `mods_world`, `hand`; `render` > `hud` (`mods_hud`), `screen`
+(`mods_screen`); `blit` (the main framebuffer drawn to the window). Then the handoff: `submit` (the
+recorded OpenGL frame going to the driver), `swap` (with Vulkan, the submission and the
+presentation), `events`, `await_gpu`, `fps_limiter`, `idle_limiter`, and `bench` (the benchmark's own
+work). The `mods_*` zones are every hook listener: the Loader's mods and the Lens. The summary's
+handoff table lists `frame_start` and `blit` too, since they sit outside `render`.
 
 ### What it costs and what it cannot see
 
 - Per frame: about 30 `System.nanoTime`, a few counters and one row copied into a preallocated block. A
   low-priority thread writes the CSV. The GPU time per pass (two timestamps per pass) is on during the
-  run; `-Dsteinbridge.bench.gpu=false` leaves it off, to measure what it costs.
+  run; `-Dsteinbridge.bench.gpu=false` leaves it off, to measure what it costs. Its results are read
+  once per frame: on Vulkan one `vkGetQueryPoolResults` over the frame's whole range of queries and
+  one reset of that range (two of each when the ring wraps); on OpenGL one availability query per
+  frame, then one result call per timestamp (`GL_QUERY_RESULT_NO_WAIT` with GL 4.4, so it never
+  waits).
 - The pause of a collection is reported with millisecond resolution (ZGC's pauses are below that and
   count as 0; the number of collections is still there).
 - The processor's temperature and the GPU clock of AMD and Intel cards are not readable without a
   driver of our own: use HWiNFO alongside if they matter.
 - GPU time per pass exists only with Stein GFX; the fixed-function pipeline reports `-`.
+
+### Comparing two runs
+
+    ./gradlew benchCompare -Pa=<zipA> -Pb=<zipB>
+
+prints, for every graphics mode and part present in both zips (a single-mode zip or a session zip):
+average fps, 1% and 0.1% low, p99, GPU time and each CPU zone in ms per frame as `A -> B (change %)`,
+then the allocation rate and the number of collections. It reads `summary.json`; it is a developer
+tool (`tools/BenchCompare.java`), not part of the jar.
+
+### Reading the flight recording
+
+`jfr summary recording.jfr` lists the event types and how many of each there are. `jfr print`
+truncates every stack to its top few frames unless it is given `--stack-depth 200` (for example
+`jfr print --events jdk.ExecutionSample --stack-depth 200 recording.jfr`): without it, samples from
+different callers look the same and the hot path seems to end inside a helper.
 
 ## Options
 

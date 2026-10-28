@@ -500,6 +500,23 @@ val optionsCheck = tasks.register<JavaExec>("optionsCheck") {
     args(projectDir.path, "--check")
 }
 
+// Two benchmark zips side by side, part by part (tools/BenchCompare.java): a developer tool, not in the jar.
+tasks.register<JavaExec>("benchCompare") {
+    group = "verification"
+    description = "Compares two benchmark zips: ./gradlew benchCompare -Pa=<zipA> -Pb=<zipB>."
+    classpath = toolsSet.runtimeClasspath
+    mainClass = "BenchCompare"
+    val zipA = providers.gradleProperty("a")
+    val zipB = providers.gradleProperty("b")
+    val root = projectDir
+    doFirst {
+        if (!zipA.isPresent || !zipB.isPresent) {
+            throw GradleException("benchCompare needs -Pa=<zipA> -Pb=<zipB>")
+        }
+        args(root.resolve(zipA.get()).path, root.resolve(zipB.get()).path)
+    }
+}
+
 
 // ---- GPU tests and benches (need a graphics card and a window: not part of ./gradlew build) ----
 
