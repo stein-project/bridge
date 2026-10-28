@@ -40,6 +40,9 @@ final class SteinDeferredFrame {
     static long[] sortKeys = new long[1024];
 
     static void flush() {
+        // the retained tile blocks queued for the threads (vkParallelRecord) land before anything
+        // below commits or draws the ring
+        SteinParallelWrites.drain();
         if (pending == 0) {
             return;
         }
@@ -51,9 +54,18 @@ final class SteinDeferredFrame {
         long frameAt = prepareFrame(dev);
         // The commands of all groups before the pass: the on-GPU pose needs to know where each of
         // its blocks landed.
-        for (int i = 0; i < order.size(); i++) {
-            Group g = order.get(i);
-            g.cmdAt = indirect && g.n > 0 ? writeCommands(g) : 0;
+        if (indirect && SteinParallelWrites.parallelCommands(pending, order.size())) {
+            // reserved here in the same order (same offsets), filled across the threads
+            for (int i = 0; i < order.size(); i++) {
+                Group g = order.get(i);
+                g.cmdAt = g.n > 0 ? reserveCommands(g) : 0;
+            }
+            SteinParallelWrites.fillCommands(order);
+        } else {
+            for (int i = 0; i < order.size(); i++) {
+                Group g = order.get(i);
+                g.cmdAt = indirect && g.n > 0 ? writeCommands(g) : 0;
+            }
         }
         boolean poseGpu = SteinPoseGpu.pending();
         if (poseGpu && !SteinPoseGpu.prepare()) {
@@ -328,15 +340,30 @@ final class SteinDeferredFrame {
     }
 
     static long writeCommands(Group g) {
+        long at = reserveCommands(g);
+        if (at >= 0) {
+            fillCommands(g, at);
+        }
+        return at;
+    }
+
+    /** Reserves the ring slice of the group's {@code n} commands; -1 = did not fit. */
+    static long reserveCommands(Group g) {
         long bytes = (long) g.n * COMMAND_BYTES;
         long at = commands.reserve(bytes);
         if (at == -2) {
             commands.nextRegion();
             at = commands.reserve(bytes);
         }
-        if (at < 0) {
-            return -1;
-        }
+        return at < 0 ? -1 : at;
+    }
+
+    /**
+     * Writes the group's commands into its slice at {@code at} and notes where its on-GPU pose
+     * blocks landed. Touches only that slice and the group's own blocks: safe on a pose thread
+     * ({@link SteinParallelWrites}).
+     */
+    static void fillCommands(Group g, long at) {
         long p = commands.address(at);
         int[] cm = g.cmds;
         int index = (int) (at / COMMAND_BYTES);
@@ -355,6 +382,5 @@ final class SteinDeferredFrame {
             p += COMMAND_BYTES;
             index++;
         }
-        return at;
     }
 }

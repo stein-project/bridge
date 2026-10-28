@@ -57,7 +57,7 @@ call in the fallback.
 | `SteinTerrain`, `SteinTerrainLayers`, `SteinTerrainPipelines`, `SteinTerrainRegion`, `SteinTerrainSlice`, `SteinChunkFade` | The world: chunk geometry in region buffers, one indirect draw per region and layer, fade-in |
 | `SteinSky` | Sky, recorded in strict order with fixed VBOs |
 | `SteinParticles` | Base drawing of a particle |
-| `SteinEntityDeferred`, `SteinDeferredFrame`, `SteinDeferredGroups`, `SteinDeferredKeys`, `SteinDeferredLights`, `SteinDeferredResources`, `SteinDeferredSessions`, `SteinDeferredStats`, `SteinInstanceWriter` | Deferred entities: the entity pass, HUD and screens recorded as data and drawn per state group |
+| `SteinEntityDeferred`, `SteinDeferredFrame`, `SteinDeferredGroups`, `SteinDeferredKeys`, `SteinDeferredLights`, `SteinDeferredResources`, `SteinDeferredSessions`, `SteinDeferredStats`, `SteinInstanceWriter`, `SteinParallelWrites` | Deferred entities: the entity pass, HUD and screens recorded as data and drawn per state group |
 | `SteinDeferredModel`, `SteinDeferredDynamic`, `SteinDeferredNames`, `SteinDeferredPose`, `SteinDeferredRetained`, `SteinDeferredText` | Recording of model parts, dynamic geometry, name tags, poses, retained tiles and resident text |
 | `SteinEntityBatch`, `SteinGlintMerge` | Opaque groups drawn as one instanced command per part (instances gathered in compute); the armor glint's two passes in one |
 | `SteinStaticGeometry`, `SteinCaptureFormat`, `SteinVertexConverter`, `SteinTexGen`, `SteinTextureArrays`, `SteinTextureFilters` | Tessellator capture support: fixed geometry on the GPU, vertex conversion, texgen on the CPU, texture arrays, filter bookkeeping |

@@ -96,4 +96,13 @@ public final class SteinVkOptions {
      * waiting for the refresh (default: off, IMMEDIATE first).
      */
     static final boolean MAILBOX = Opt.flag("steinbridge.gfx.vkMailbox");
+
+    /**
+     * {@code -Dsteinbridge.gfx.vkParallelRecord=true} (experiment): the entity pass's bulk writes
+     * (the camera-corrected instances of retained tile entities and the indirect commands of the
+     * entity groups) run on the pose threads ({@code poseThreads}) at the flush instead of on the
+     * render thread, into the same reserved ring bytes; the draws are recorded as before, so the
+     * image is the same (default: off; without pose threads it writes on the render thread).
+     */
+    public static final boolean PARALLEL_RECORD = Opt.flag("steinbridge.gfx.vkParallelRecord");
 }
