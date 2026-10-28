@@ -23,37 +23,40 @@ public final class BenchZones {
 
     public static final int TICK = 0;
     public static final int MODS_TICK = 1;
-    public static final int RENDER = 2;
-    public static final int WORLD = 3;
-    public static final int LIGHTMAP = 4;
-    public static final int TERRAIN_SETUP = 5;
-    public static final int CHUNK_UPLOAD = 6;
-    public static final int TERRAIN = 7;
-    public static final int SKY = 8;
-    public static final int CLOUDS = 9;
-    public static final int ENTITIES = 10;
-    public static final int PARTICLES = 11;
-    public static final int WEATHER = 12;
-    public static final int MODS_WORLD = 13;
-    public static final int HAND = 14;
-    public static final int HUD = 15;
-    public static final int MODS_HUD = 16;
-    public static final int SCREEN = 17;
-    public static final int MODS_SCREEN = 18;
-    public static final int SUBMIT = 19;
-    public static final int SWAP = 20;
-    public static final int EVENTS = 21;
-    public static final int AWAIT = 22;
-    public static final int LIMITER = 23;
-    public static final int IDLE = 24;
-    public static final int BENCH = 25;
+    public static final int FRAME_START = 2;
+    public static final int RENDER = 3;
+    public static final int WORLD = 4;
+    public static final int LIGHTMAP = 5;
+    public static final int TERRAIN_SETUP = 6;
+    public static final int CHUNK_UPLOAD = 7;
+    public static final int TERRAIN = 8;
+    public static final int SKY = 9;
+    public static final int CLOUDS = 10;
+    public static final int ENTITIES = 11;
+    public static final int PARTICLES = 12;
+    public static final int WEATHER = 13;
+    public static final int MODS_WORLD = 14;
+    public static final int HAND = 15;
+    public static final int HUD = 16;
+    public static final int MODS_HUD = 17;
+    public static final int SCREEN = 18;
+    public static final int MODS_SCREEN = 19;
+    public static final int BLIT = 20;
+    public static final int SUBMIT = 21;
+    public static final int SWAP = 22;
+    public static final int EVENTS = 23;
+    public static final int AWAIT = 24;
+    public static final int LIMITER = 25;
+    public static final int IDLE = 26;
+    public static final int BENCH = 27;
 
-    public static final int COUNT = 26;
+    public static final int COUNT = 28;
 
     /** The column names in the report, by zone. */
     static final String[] NAMES = {
         "tick",
         "mods_tick",
+        "frame_start",
         "render",
         "world",
         "lightmap",
@@ -71,6 +74,7 @@ public final class BenchZones {
         "mods_hud",
         "screen",
         "mods_screen",
+        "blit",
         "submit",
         "swap",
         "events",
@@ -82,8 +86,8 @@ public final class BenchZones {
 
     /** The zone each one is inside of (-1: directly in the frame). */
     static final int[] PARENT = {
-        -1, TICK, -1, RENDER, WORLD, WORLD, WORLD, WORLD, WORLD, WORLD, WORLD, WORLD, WORLD, WORLD,
-        WORLD, RENDER, HUD, RENDER, SCREEN, -1, -1, -1, -1, -1, -1, -1
+        -1, TICK, -1, -1, RENDER, WORLD, WORLD, WORLD, WORLD, WORLD, WORLD, WORLD, WORLD, WORLD,
+        WORLD, WORLD, RENDER, HUD, RENDER, SCREEN, -1, -1, -1, -1, -1, -1, -1, -1
     };
 
     private static final boolean ON = BenchOptions.ON;
@@ -130,6 +134,31 @@ public final class BenchZones {
 
     public static void tickEnd() {
         end(TICK);
+    }
+
+    /**
+     * The game loop's frame start: the main framebuffer cleared and bound (GlStateManager.clear and
+     * Framebuffer.bindFramebuffer in runGameLoop), before updateCameraAndRender, which no other
+     * zone covers.
+     */
+    public static void frameStartBegin() {
+        begin(FRAME_START);
+    }
+
+    public static void frameStartEnd() {
+        end(FRAME_START);
+    }
+
+    /**
+     * The main framebuffer drawn to the window (framebufferRender in runGameLoop), after the render
+     * zone and before the handoff.
+     */
+    public static void blitBegin() {
+        begin(BLIT);
+    }
+
+    public static void blitEnd() {
+        end(BLIT);
     }
 
     public static void renderBegin() {

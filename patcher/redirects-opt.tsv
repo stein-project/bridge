@@ -7,8 +7,12 @@
 # hooks around it (the recording sessions and their flushes, the mods' events).
 # Minecraft.runTick in runGameLoop.
 ave	s	()V	tickBegin	dev/xavier/stein/bridge/bench/BenchZones	before	ave.av
+# GlStateManager.clear of the main framebuffer in runGameLoop: the frame start (clear + bindFramebuffer).
+bfl	m	(I)V	frameStartBegin	dev/xavier/stein/bridge/bench/BenchZones	before	ave.av
 # EntityRenderer.updateCameraAndRender in runGameLoop.
 bfk	a	(FJ)V	renderBegin	dev/xavier/stein/bridge/bench/BenchZones	before	ave.av
+# Framebuffer.framebufferRender (the main framebuffer to the window) in runGameLoop.
+bfw	c	(II)V	blitBegin	dev/xavier/stein/bridge/bench/BenchZones	before	ave.av
 # renderWorld in updateCameraAndRender.
 bfk	b	(FJ)V	worldBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(FJ)V
 # updateLightmap in renderWorld.

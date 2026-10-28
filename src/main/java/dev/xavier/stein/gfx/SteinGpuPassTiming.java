@@ -49,6 +49,21 @@ public final class SteinGpuPassTiming {
 
         /** The slot's end, in nanoseconds on the GPU clock. */
         long end(int slot);
+
+        /**
+         * Before a frame's slots are asked about: the {@code n} slots from {@code first} (wrapping
+         * at the end of the ring). A backend whose API reads a range of queries in one call
+         * (Vulkan) reads them all here, so {@link #arrived}, {@link #begin} and {@link #end} come
+         * from memory instead of one driver call per query.
+         */
+        default void fetch(int first, int n) {}
+
+        /**
+         * The frame's {@code n} slots from {@code first} (wrapping) were read and go back to the
+         * ring: a backend that must reset its queries before reuse (Vulkan) resets them here, as
+         * one range instead of one slot at a time.
+         */
+        default void released(int first, int n) {}
     }
 
     public static final boolean ON = SteinGfxOptions.GPU_PASS_TIMING;
@@ -135,6 +150,8 @@ public final class SteinGpuPassTiming {
             if (n == 0) {
                 return; // the current frame is still open
             }
+            int firstSlot = r.slotAt(0);
+            t.fetch(firstSlot, n);
             if (!t.arrived(r.slotAt(n - 1))) {
                 return;
             }
@@ -178,6 +195,7 @@ public final class SteinGpuPassTiming {
                     Bench.gpuFrame(prevEnd - first, busy, gaps);
                 }
             }
+            t.released(firstSlot, n);
             r.release(n);
         }
     }

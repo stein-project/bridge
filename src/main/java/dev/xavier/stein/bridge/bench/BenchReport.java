@@ -322,6 +322,8 @@ final class BenchReport {
         }
         b.append("\nFrame handoff (ms per frame)\n");
         int[] handoff = {
+            BenchZones.FRAME_START,
+            BenchZones.BLIT,
             BenchZones.SUBMIT,
             BenchZones.SWAP,
             BenchZones.EVENTS,

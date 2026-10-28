@@ -14,6 +14,7 @@ import dev.xavier.stein.gfx.SteinGpuPassTiming;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.opengl.GL15;
 import org.lwjgl.opengl.GL33;
+import org.lwjgl.opengl.GL44;
 
 import java.util.HashSet;
 import java.util.Set;
@@ -24,6 +25,14 @@ import java.util.Set;
  * labels, the ring and the report are {@link SteinGpuPassTiming}'s. A timestamp and not
  * GL_TIME_ELAPSED: an external frame profiler may already hold a time query open around the whole
  * frame, and those do not nest.
+ *
+ * <p>Reading: one availability query per frame, on the frame's last end timestamp (the GPU finishes
+ * in order, so the earlier ones are there too), then one result call per timestamp. OpenGL has no
+ * call that reads several query objects at once (only into a buffer on the GPU, which would add a
+ * copy and a map per frame). With GL 4.4 the results are asked with {@code
+ * GL_QUERY_RESULT_NO_WAIT}, which leaves the value untouched instead of waiting when a query is not
+ * there yet: such a timestamp reads as 0 (an impossible result, counted) and the CPU can never
+ * stall on it, even if a driver completes queries out of order.
  *
  * <p>Pipeline: Stein GFX only.
  */
@@ -42,6 +51,12 @@ public final class SteinGlGpuTiming {
     private static SteinGpuPassTiming timing;
     private static boolean broken;
 
+    /** GL_QUERY_RESULT_NO_WAIT (GL 4.4) where there is one, else GL_QUERY_RESULT. */
+    private static int resultMode = GL15.GL_QUERY_RESULT;
+
+    /** One result, reused for every read (no allocation per call). */
+    private static final long[] VALUE = new long[1];
+
     /** The query results, by slot (read only for frames whose last timestamp arrived). */
     private static final SteinGpuPassTiming.Timestamps READ =
             new SteinGpuPassTiming.Timestamps() {
@@ -52,16 +67,23 @@ public final class SteinGlGpuTiming {
 
                 @Override
                 public long begin(int slot) {
-                    return GL33.glGetQueryObjecti64(qBegin[slot], GL15.GL_QUERY_RESULT);
+                    return result(qBegin[slot]);
                 }
 
                 @Override
                 public long end(int slot) {
-                    return GL33.glGetQueryObjecti64(qEnd[slot], GL15.GL_QUERY_RESULT);
+                    return result(qEnd[slot]);
                 }
             };
 
     private SteinGlGpuTiming() {}
+
+    /** The query's timestamp; 0 when NO_WAIT found it not there yet (the value is left alone). */
+    private static long result(int query) {
+        VALUE[0] = 0L;
+        GL33.glGetQueryObjecti64v(query, resultMode, VALUE);
+        return VALUE[0];
+    }
 
     private static boolean ready() {
         if (broken) {
@@ -75,6 +97,9 @@ public final class SteinGlGpuTiming {
             }
             qBegin = queries(SLOTS);
             qEnd = queries(SLOTS);
+            if (GL.getCapabilities().OpenGL44) {
+                resultMode = GL44.GL_QUERY_RESULT_NO_WAIT;
+            }
             timing = new SteinGpuPassTiming(SLOTS);
         }
         return true;
