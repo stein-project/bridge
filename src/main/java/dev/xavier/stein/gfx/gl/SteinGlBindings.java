@@ -29,6 +29,9 @@ import org.lwjgl.opengl.GL43;
  *       ModPatch) changes them through the OpenGlHelper and glViewport call sites, redirected to
  *       {@link dev.xavier.stein.gfx.SteinGlTrack} (rules in redirects-opt.tsv), which calls the
  *       same OpenGL and records it here (or through {@link #bindDrawFramebuffer}).
+ *   <li><b>Scissor test and box</b>: the game never scissors; the Loader's screens do, through
+ *       {@link dev.xavier.stein.gfx.SteinGlTrack#scissor}, and {@link SteinCoreGl#glEnable} notes
+ *       the test when it goes through there. Stein's passes change both and give the game's back.
  *   <li><b>VAO, indirect buffer, generic uniform and storage, array texture and sampler per unit,
  *       copy target</b>: the game does not use them; only Stein code does, and it always restores
  *       what was there (or leaves 0, the default: the model batch of {@code SteinModelInstancer}
@@ -255,6 +258,53 @@ public final class SteinGlBindings {
             clearDepthKnown = true;
         }
         return clearDepth;
+    }
+
+    // ---- scissor test and box (the Loader's screens, SteinGlTrack.scissor; Stein's passes give
+    // the game's back) ----
+
+    private static boolean scissorTestKnown;
+    private static boolean scissorTest;
+    private static boolean scissorBoxKnown;
+    private static final int[] SCISSOR_BOX = new int[4];
+
+    /** GL_SCISSOR_TEST has just been enabled or disabled on the driver. */
+    public static void noteScissorTest(boolean on) {
+        scissorTest = on;
+        scissorTestKnown = true;
+    }
+
+    /** glScissor has just gone to the driver. */
+    public static void noteScissorBox(int x, int y, int w, int h) {
+        SCISSOR_BOX[0] = x;
+        SCISSOR_BOX[1] = y;
+        SCISSOR_BOX[2] = w;
+        SCISSOR_BOX[3] = h;
+        scissorBoxKnown = true;
+    }
+
+    /**
+     * The scissor test is enabled (read from the driver the first time). Asking on every pass and
+     * every recorded clear was a query after a batch of draws, the costly kind (see above).
+     */
+    static boolean scissorTest() {
+        if (!scissorTestKnown) {
+            scissorTest = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
+            scissorTestKnown = true;
+        }
+        return scissorTest;
+    }
+
+    /**
+     * The scissor box (read from the driver the first time). The array is this class's own: do not
+     * modify it.
+     */
+    static int[] scissorBox() {
+        if (!scissorBoxKnown) {
+            GL11.glGetIntegerv(GL11.GL_SCISSOR_BOX, SCISSOR_BOX);
+            scissorBoxKnown = true;
+        }
+        return SCISSOR_BOX;
     }
 
     private static boolean lineWidthKnown;

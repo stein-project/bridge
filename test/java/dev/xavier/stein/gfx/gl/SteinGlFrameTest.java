@@ -264,6 +264,27 @@ public final class SteinGlFrameTest {
             } finally {
                 MemoryUtil.memFree(px2);
             }
+            // two passes replayed back to back on one state: the second must not inherit the
+            // first's scissor (its clear covers the whole target), and the end gives the game's
+            // scissor back
+            p = dev.beginPass(SteinRenderPass.clear("test: scissored", target, 1f, 0f, 0f, 1f));
+            p.setScissor(new int[] {0, 0, 1, 1});
+            p.end();
+            p = dev.beginPass(SteinRenderPass.clear("test: after", target, 0f, 1f, 0f, 1f));
+            p.end();
+            ByteBuffer px3 = MemoryUtil.memAlloc(4 * 4 * 4);
+            try {
+                dev.readPixels(color, 0, 0, 4, 4, px3);
+                int last = 4 * 4 * 4 - 4;
+                if ((px3.get(last) & 0xFF) != 0 || (px3.get(last + 1) & 0xFF) != 255) {
+                    fails.add("back to back: the second pass kept the first one's scissor");
+                }
+            } finally {
+                MemoryUtil.memFree(px3);
+            }
+            if (GL11.glIsEnabled(GL11.GL_SCISSOR_TEST) != SteinGlBindings.scissorTest()) {
+                fails.add("back to back: the scissor test did not return to the game's");
+            }
             int err = GL11.glGetError();
             if (err != GL11.GL_NO_ERROR) {
                 fails.add("order: OpenGL error 0x" + Integer.toHexString(err));

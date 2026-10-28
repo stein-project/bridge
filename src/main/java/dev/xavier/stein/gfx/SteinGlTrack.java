@@ -350,11 +350,14 @@ public final class SteinGlTrack {
             if (!VULKAN) {
                 GL11.glEnable(GL11.GL_SCISSOR_TEST);
                 GL11.glScissor(x, y, Math.max(0, w), Math.max(0, h));
+                SteinGlBindings.noteScissorTest(true);
+                SteinGlBindings.noteScissorBox(x, y, Math.max(0, w), Math.max(0, h));
             }
         } else {
             scissorOn = false;
             if (!VULKAN) {
                 GL11.glDisable(GL11.GL_SCISSOR_TEST);
+                SteinGlBindings.noteScissorTest(false);
             }
         }
     }

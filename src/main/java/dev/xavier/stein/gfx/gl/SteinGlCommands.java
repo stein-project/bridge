@@ -46,9 +46,15 @@ import java.util.Arrays;
  * active unit from the GlStateManager cache, and the fixed state too comes from the cache ({@code
  * SteinGameState}, with the deferred state already synchronized by the flush above). What the pass
  * emits is compared with what was there: the first pipeline only emits what differs from the game,
- * and {@link #end()} only gives back what changed; the core context has no glPushAttrib. The only
- * query left is the enabled scissor (the Loader's interface scissors outside the game), one per
- * pass.
+ * and {@link #end()} only gives back what changed; the core context has no glPushAttrib. The
+ * scissor too is tracked ({@link SteinGlBindings}), so a pass asks the driver nothing.
+ *
+ * <p>The replay of the recorded frame ({@link SteinGlReplay}) keeps one of these across all the
+ * passes it replays back to back: no game code runs between them, so the game's state is read once
+ * ({@link #beginPass} of the first pass), each next pass only changes what it needs from the state
+ * the previous one left (target, viewport, clears, and what its pipelines set), and {@link
+ * #finish()} gives the game's state back once, at the end of the replay or of the sync that hands
+ * control back to the game.
  *
  * <p>{@code -Dsteinbridge.gfx.passStateCheck=true} checks the tracked state against the driver
  * ({@link SteinGlPassCheck}).
@@ -81,9 +87,6 @@ public final class SteinGlCommands extends SteinCommands {
      */
     private static final int FEW_UNITS = 8;
 
-    /** Color attachments a render target can have. */
-    private static final int MAX_COLOR_ATTACHMENTS = 8;
-
     /** Bytes of one indirect command: DrawArraysIndirectCommand (4 ints). */
     private static final int DRAW_ARRAYS_INDIRECT_STRIDE = 16;
 
@@ -102,8 +105,18 @@ public final class SteinGlCommands extends SteinCommands {
     private static SteinGlCommands open;
 
     private final SteinCaps caps;
-    final String name;
+    String name;
     private boolean ended;
+
+    /** The game's state has been read and the driver may differ from it until {@link #finish()}. */
+    private boolean tracking;
+
+    /**
+     * The pass has not bound a draw pipeline yet: the first one attaches the pass's buffers to its
+     * VAO even when that VAO is already bound (the previous replayed pass left it bound).
+     */
+    private boolean freshPass;
+
     private int gpuSlot = -1;
 
     // ---- game state ----
@@ -172,6 +185,10 @@ public final class SteinGlCommands extends SteinCommands {
     boolean scissorOn;
     boolean scissorBoxSaved;
     final int[] prevScissorBox = new int[4];
+
+    /** The scissor box on the driver (valid once {@link #scissorBoxSaved}). */
+    final int[] scissorBox = new int[4];
+
     boolean offsetFill;
     boolean offsetTouched;
 
@@ -198,108 +215,102 @@ public final class SteinGlCommands extends SteinCommands {
 
     boolean logicOpTouched;
 
+    /** An immediate pass: opened now, its {@link #end()} gives the game's state back. */
     public SteinGlCommands(SteinGlDevice device, SteinRenderPass pass) {
-        this(device, pass, false);
+        SteinGlGame.flushEngine();
+        this.caps = device.caps();
+        beginPass(pass);
     }
 
     /**
-     * {@code replay}: the recorded pass being replayed ({@link SteinGlFrame}); the engine's batch
-     * already went out at recording time (and during replay nothing from outside may run in the
-     * middle).
+     * The state of the recorded frame's replay ({@link SteinGlReplay}), kept for the whole run:
+     * each replayed pass opens with {@link #beginPass} and closes with {@link #endPass()}, and
+     * {@link #finish()} gives the game's state back. The engine's batch already went out at
+     * recording time (and during replay nothing from outside may run in the middle).
      */
-    SteinGlCommands(SteinGlDevice device, SteinRenderPass pass, boolean replay) {
-        if (!replay) {
-            SteinGlGame.flushEngine();
-        }
-        BenchCounters.pass();
+    SteinGlCommands(SteinGlDevice device) {
         this.caps = device.caps();
-        this.name = pass.name;
+        this.name = "";
+        this.ended = true;
+    }
+
+    /**
+     * Opens a pass: the first one reads the game's state; a later one (the replay's next pass)
+     * starts from what the previous pass left on the driver.
+     */
+    void beginPass(SteinRenderPass pass) {
+        BenchCounters.pass();
+        name = pass.name;
+        ended = false;
         if (GPU_TIMING) {
             gpuSlot = SteinGlGpuTiming.begin(pass.name);
         }
         openTracked(pass);
-        open = this;
     }
 
     /**
      * Tracked: the bindings from {@link SteinGlBindings} and the game cache, and the game's fixed
      * state read from the cache and set as the "already emitted" (the first pipeline only changes
-     * what differs). Scissor, stencil, polygon mode, front face and blend equation: the game never
-     * touches the last three nor the stencil (they stay at the OpenGL default, checked in
-     * passStateCheck) and no Stein pipeline uses them; the scissor is the only one queried.
+     * what differs). Stencil, polygon mode, front face and blend equation: the game never touches
+     * the last three nor the stencil (they stay at the OpenGL default, checked in passStateCheck)
+     * and no Stein pipeline uses them.
      */
     private void openTracked(SteinRenderPass pass) {
         long t0 = TIMING ? System.nanoTime() : 0L;
-        SteinGlPassBindings.capture(this);
-        SteinGlPassFixed.capture(this);
-        if (CHECK) {
-            SteinGlPassCheck.atOpen(this);
+        if (!tracking) {
+            track();
+        } else {
+            resetPass();
+            if (CHECK) {
+                SteinGlPassCheck.atContinue(this);
+            }
         }
         long t1 = TIMING ? System.nanoTime() : 0L;
         SteinGlPassFixed.disableForPass(this);
         long t2 = TIMING ? System.nanoTime() : 0L;
         SteinRenderTarget target = pass.target;
-        drawFbo = (int) target.handle();
-        if (drawFbo != prevDrawFbo) {
-            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, drawFbo);
+        int fbo = (int) target.handle();
+        if (drawFbo != fbo) {
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, fbo);
+            drawFbo = fbo;
         }
-        setPassViewport(pass, target);
-        clear(pass, target);
+        SteinGlPassFixed.passViewport(this, pass, target);
+        SteinGlPassFixed.clear(this, pass, target);
         if (TIMING) {
             SteinGlPassTiming.opened(t0, t1, t2, System.nanoTime());
         }
     }
 
     /**
-     * The pass's viewport (its own or the whole target), sent only when it differs from the last
-     * one.
+     * Reads the game's state, once per immediate pass or per replay (the replay's game clear may
+     * come before its first pass).
      */
-    private void setPassViewport(SteinRenderPass pass, SteinRenderTarget target) {
-        if (pass.viewport != null) {
-            viewport(pass.viewport[0], pass.viewport[1], pass.viewport[2], pass.viewport[3]);
-        } else {
-            viewport(0, 0, target.width(), target.height());
+    void track() {
+        if (tracking) {
+            return;
+        }
+        SteinGlPassBindings.capture(this);
+        SteinGlPassFixed.capture(this);
+        drawFbo = prevDrawFbo;
+        savedUnits = 0L;
+        touchedIndirect = false;
+        resetPass();
+        tracking = true;
+        open = this;
+        if (CHECK) {
+            SteinGlPassCheck.atOpen(this);
         }
     }
 
-    private void viewport(int x, int y, int w, int h) {
-        if (viewport[0] != x || viewport[1] != y || viewport[2] != w || viewport[3] != h) {
-            GL11.glViewport(x, y, w, h);
-            viewport[0] = x;
-            viewport[1] = y;
-            viewport[2] = w;
-            viewport[3] = h;
-        }
-    }
-
-    private static final float[] CLEAR_ZERO = new float[4];
-    private final float[] clearDepth = new float[1];
-
-    /** The pass's clears (with the masks open and no scissor, which also apply to the clear). */
-    private void clear(SteinRenderPass pass, SteinRenderTarget target) {
-        if (pass.colorLoad == SteinRenderPass.Load.CLEAR) {
-            GL11.glColorMask(true, true, true, true);
-            mask[0] = mask[1] = mask[2] = mask[3] = true;
-            float[] color = pass.clearColor != null ? pass.clearColor : CLEAR_ZERO;
-            int n = Math.max(1, colorCount(target));
-            for (int i = 0; i < n; i++) {
-                GL30.glClearBufferfv(GL11.GL_COLOR, i, color);
-            }
-        }
-        if (pass.depthLoad == SteinRenderPass.Load.CLEAR) {
-            GL11.glDepthMask(true);
-            depthWrite = true;
-            clearDepth[0] = pass.clearDepth;
-            GL30.glClearBufferfv(GL11.GL_DEPTH, 0, clearDepth);
-        }
-    }
-
-    private static int colorCount(SteinRenderTarget target) {
-        int n = 0;
-        while (n < MAX_COLOR_ATTACHMENTS && target.color(n) != null) {
-            n++;
-        }
-        return n;
+    /** What belongs to one pass only: its pipeline and the buffers it bound. */
+    private void resetPass() {
+        pipeline = null;
+        Arrays.fill(vbHandle, 0);
+        Arrays.fill(vbOffset, 0L);
+        indexHandle = 0;
+        indexType = GL11.GL_UNSIGNED_INT;
+        indexSize = 4;
+        freshPass = true;
     }
 
     // ---- pipeline ----
@@ -328,9 +339,11 @@ public final class SteinGlCommands extends SteinCommands {
             GL30.glBindVertexArray(gp.vao());
             vao = gp.vao();
         }
-        if (newVao || !gp.vertexBinding) {
+        if (newVao || !gp.vertexBinding || freshPass) {
             // the pass's buffers on this pipeline's VAO (on 4.1 the pointer depends on the layout,
-            // so always)
+            // so always; and on the pass's first pipeline, because a VAO the previous pass left
+            // bound still has that pass's buffers)
+            freshPass = false;
             if (indexHandle != 0) {
                 applyIndex(gp);
             }
@@ -565,29 +578,18 @@ public final class SteinGlCommands extends SteinCommands {
     @Override
     public void setViewport(int x, int y, int w, int h) {
         check();
-        viewport(x, y, w, h);
+        SteinGlPassFixed.viewport(this, x, y, w, h);
     }
 
     @Override
     public void setScissor(int[] rect) {
         check();
         if (rect == null) {
-            if (scissorOn) {
-                GL11.glDisable(GL11.GL_SCISSOR_TEST);
-                scissorOn = false;
-            }
+            SteinGlPassFixed.scissorTest(this, false);
             return;
         }
-        if (!scissorBoxSaved) {
-            // the game's rectangle (rare: only a scissoring pass pays for the query)
-            GL11.glGetIntegerv(GL11.GL_SCISSOR_BOX, prevScissorBox);
-            scissorBoxSaved = true;
-        }
-        if (!scissorOn) {
-            GL11.glEnable(GL11.GL_SCISSOR_TEST);
-            scissorOn = true;
-        }
-        GL11.glScissor(rect[0], rect[1], rect[2], rect[3]);
+        SteinGlPassFixed.scissorTest(this, true);
+        SteinGlPassFixed.scissorBox(this, rect[0], rect[1], rect[2], rect[3]);
     }
 
     @Override
@@ -759,25 +761,42 @@ public final class SteinGlCommands extends SteinCommands {
     }
 
     /**
-     * Restores the game state. Order matters: the per-unit textures (touches the active unit); the
-     * game's framebuffers before glPopAttrib (it restores glDrawBuffer, which applies to the bound
-     * framebuffer and on ours would error); the generic buffers; program and VAO; the active unit
-     * last.
+     * Closes the pass and restores the game state. Order matters: the per-unit textures (touches
+     * the active unit); the game's framebuffers before glPopAttrib (it restores glDrawBuffer, which
+     * applies to the bound framebuffer and on ours would error); the generic buffers; program and
+     * VAO; the active unit last.
      */
     @Override
     public void end() {
         if (ended) {
             return;
         }
-        ended = true;
-        if (open == this) {
-            open = null;
+        endPass();
+        finish();
+    }
+
+    /** Closes the pass only: the driver keeps its state for the next replayed pass. */
+    void endPass() {
+        if (ended) {
+            return;
         }
-        endTracked();
+        ended = true;
         pipeline = null;
         if (GPU_TIMING) {
             SteinGlGpuTiming.end(gpuSlot);
         }
+    }
+
+    /** Gives the game's state back (once per immediate pass, or at the end of the replay). */
+    void finish() {
+        if (!tracking) {
+            return;
+        }
+        tracking = false;
+        if (open == this) {
+            open = null;
+        }
+        endTracked();
     }
 
     /**

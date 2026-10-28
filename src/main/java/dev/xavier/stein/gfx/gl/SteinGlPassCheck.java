@@ -37,8 +37,13 @@ import java.util.Map;
  *       against the driver. Plus what the tracked pass does not even touch because it is the OpenGL
  *       default that nobody changes: stencil off, FILL polygon mode, CCW front face, FUNC_ADD blend
  *       equation.
- *   <li><b>Closing</b>: after the pass returns the state, the driver against what the game believes
- *       (the same values as the opening).
+ *   <li><b>Next pass of the replay</b> ({@link SteinGlReplay} keeps the state from one pass to the
+ *       next): before it touches anything, what the replay believes is on the driver (bindings,
+ *       units already used, viewport, fixed state, scissor) against the driver.
+ *   <li><b>Closing</b>: after the pass (or the replay) returns the state, the driver against what
+ *       the game believes (the same values as the opening).
+ *   <li><b>Game clear recorded</b>: the tracked scissor ({@link SteinGlBindings}) it records
+ *       against the driver.
  * </ul>
  *
  * Counts divergences per field, prints the first 30 with the value on each side and, every 5 s, the
@@ -67,6 +72,11 @@ final class SteinGlPassCheck {
 
     private static void diverge(
             SteinGlCommands c, String when, String field, String tracked, String driver) {
+        diverge(c.name, when, field, tracked, driver);
+    }
+
+    private static void diverge(
+            String pass, String when, String field, String tracked, String driver) {
         total++;
         ever++;
         BY_FIELD.computeIfAbsent(field, k -> new long[1])[0]++;
@@ -75,7 +85,7 @@ final class SteinGlPassCheck {
             Log.info(
                     "gfx",
                     "check: pass '"
-                            + c.name
+                            + pass
                             + "' "
                             + when
                             + " "
@@ -162,6 +172,8 @@ final class SteinGlPassCheck {
         compareBufferBindings(c, w);
         compareViewport(c, w);
         fixed(c, w);
+        eq(c, w, "scissor", c.scissorWas, GL11.glIsEnabled(GL11.GL_SCISSOR_TEST));
+        compareScissorBox(c.name, w, SteinGlBindings.scissorBox());
         eq(c, w, "stencil", false, GL11.glIsEnabled(GL11.GL_STENCIL_TEST));
         int[] mode = new int[2];
         GL11.glGetIntegerv(GL11.GL_POLYGON_MODE, mode);
@@ -197,6 +209,110 @@ final class SteinGlPassCheck {
         eq(c, w, "logic op", c.gLogicOp, GL11.glIsEnabled(GL11.GL_COLOR_LOGIC_OP));
     }
 
+    private static void compareScissorBox(String pass, String w, int[] tracked) {
+        int[] box = new int[4];
+        GL11.glGetIntegerv(GL11.GL_SCISSOR_BOX, box);
+        for (int i = 0; i < 4; i++) {
+            if (tracked[i] != box[i]) {
+                diverge(pass, w, "scissor box[" + i + "]", hex(tracked[i]), hex(box[i]));
+            }
+        }
+    }
+
+    /**
+     * A replayed pass that continues from the previous one, before it touches anything: what the
+     * replay believes is on the driver (not the game's state: that one is only given back at the
+     * end of the replay).
+     */
+    static void atContinue(SteinGlCommands c) {
+        passes++;
+        String w = "continue";
+        eq(c, w, "program", c.program, get(GL20.GL_CURRENT_PROGRAM));
+        eq(c, w, "VAO", c.vao, get(GL30.GL_VERTEX_ARRAY_BINDING));
+        eq(c, w, "draw framebuffer", c.drawFbo, get(GL30.GL_DRAW_FRAMEBUFFER_BINDING));
+        eq(
+                c,
+                w,
+                "read framebuffer",
+                SteinGlBindings.readFbo(),
+                get(GL30.GL_READ_FRAMEBUFFER_BINDING));
+        if (c.arrayBuffer != Integer.MIN_VALUE) {
+            eq(c, w, "ARRAY_BUFFER", c.arrayBuffer, get(GL15.GL_ARRAY_BUFFER_BINDING));
+        }
+        eq(c, w, "indirect buffer", c.indirectBuffer, get(GL40.GL_DRAW_INDIRECT_BUFFER_BINDING));
+        eq(c, w, "generic uniform", c.uniformGeneric, get(GL31.GL_UNIFORM_BUFFER_BINDING));
+        if (c.compute()) {
+            eq(
+                    c,
+                    w,
+                    "generic storage",
+                    c.storageGeneric,
+                    get(GL43.GL_SHADER_STORAGE_BUFFER_BINDING));
+        }
+        int active = get(GL13.GL_ACTIVE_TEXTURE);
+        if (c.active != Integer.MIN_VALUE) {
+            eq(c, w, "active unit", c.active, active);
+        }
+        long units = c.savedUnits;
+        while (units != 0) {
+            int slot = Long.numberOfTrailingZeros(units);
+            units &= units - 1;
+            GL13.glActiveTexture(GL13.GL_TEXTURE0 + slot);
+            String wu = "continue (unit " + slot + ")";
+            if (c.cur2D[slot] != Integer.MIN_VALUE) {
+                eq(c, wu, "texture 2D", c.cur2D[slot], get(GL11.GL_TEXTURE_BINDING_2D));
+            }
+            eq(c, wu, "texture array", c.curArray[slot], get(GL30.GL_TEXTURE_BINDING_2D_ARRAY));
+            eq(c, wu, "sampler", c.curSampler[slot], get(GL33.GL_SAMPLER_BINDING));
+        }
+        GL13.glActiveTexture(active);
+        int[] v = new int[4];
+        GL11.glGetIntegerv(GL11.GL_VIEWPORT, v);
+        for (int i = 0; i < 4; i++) {
+            eq(c, w, "viewport[" + i + "]", c.viewport[i], v[i]);
+        }
+        emitted(c, w);
+        eq(c, w, "scissor", c.scissorOn, GL11.glIsEnabled(GL11.GL_SCISSOR_TEST));
+        compareScissorBox(
+                c.name, w, c.scissorBoxSaved ? c.scissorBox : SteinGlBindings.scissorBox());
+        report();
+    }
+
+    /** The fixed state the replay emitted last (blend, depth, face, mask, offset, logic op). */
+    private static void emitted(SteinGlCommands c, String w) {
+        eq(c, w, "blend", c.blend, GL11.glIsEnabled(GL11.GL_BLEND));
+        eq(c, w, "blend source", c.blendSrc, get(GL14.GL_BLEND_SRC_RGB));
+        eq(c, w, "blend destination", c.blendDst, get(GL14.GL_BLEND_DST_RGB));
+        eq(c, w, "blend source alpha", c.blendSrcAlpha, get(GL14.GL_BLEND_SRC_ALPHA));
+        eq(c, w, "blend destination alpha", c.blendDstAlpha, get(GL14.GL_BLEND_DST_ALPHA));
+        eq(c, w, "depth test", c.depthTest, GL11.glIsEnabled(GL11.GL_DEPTH_TEST));
+        eq(c, w, "depth function", c.depthFunc, get(GL11.GL_DEPTH_FUNC));
+        eq(c, w, "depth write", c.depthWrite, GL11.glGetBoolean(GL11.GL_DEPTH_WRITEMASK));
+        eq(c, w, "face culling", c.cull, GL11.glIsEnabled(GL11.GL_CULL_FACE));
+        eq(c, w, "culled face", c.cullFace, get(GL11.GL_CULL_FACE_MODE));
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            ByteBuffer m = stack.malloc(16);
+            GL11.glGetBooleanv(GL11.GL_COLOR_WRITEMASK, m);
+            for (int i = 0; i < 4; i++) {
+                eq(c, w, "color mask[" + i + "]", c.mask[i], m.get(i) != 0);
+            }
+        }
+        eq(c, w, "polygon offset", c.offsetFill, GL11.glIsEnabled(GL11.GL_POLYGON_OFFSET_FILL));
+        eq(c, w, "logic op", c.logicOp != 0, GL11.glIsEnabled(GL11.GL_COLOR_LOGIC_OP));
+    }
+
+    /** The game's glClear being recorded: the tracked scissor it records against the driver. */
+    static void atGameClear(boolean scissor, int[] box) {
+        String w = "record";
+        boolean on = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
+        if (scissor != on) {
+            diverge("game clear", w, "scissor", String.valueOf(scissor), String.valueOf(on));
+        }
+        if (scissor) {
+            compareScissorBox("game clear", w, box);
+        }
+    }
+
     /** The first time the pass uses the unit: what it kept against the driver. */
     static void unit(SteinGlCommands c, int slot) {
         c.activeUnit(slot);
@@ -228,6 +344,7 @@ final class SteinGlPassCheck {
         compareViewport(c, w);
         fixed(c, w);
         eq(c, w, "scissor", c.scissorWas, GL11.glIsEnabled(GL11.GL_SCISSOR_TEST));
+        compareScissorBox(c.name, w, SteinGlBindings.scissorBox());
     }
 
     private static void report() {

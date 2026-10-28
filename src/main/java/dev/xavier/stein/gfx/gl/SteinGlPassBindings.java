@@ -48,13 +48,49 @@ final class SteinGlPassBindings {
         // right as long as nobody touches OpenGL outside of it. Once it is off (seen after
         // switching packs through the screen), skipping the call "because it is already there"
         // left the terrain reading another texture in place of the lightmap, black forever. The
-        // first switch of each one in the pass always goes to the driver, and the return leaves
-        // the driver equal to the cache: the mismatch disappears within the pass.
+        // first switch of each one in the pass (in the replay of the recorded frame, in the whole
+        // replay: only it touches the driver in the meantime) always goes to the driver, and the
+        // return leaves the driver equal to the cache: the mismatch disappears within the pass.
         cmd.active = UNKNOWN;
         cmd.arrayBuffer = UNKNOWN;
         cmd.indirectBuffer = cmd.prevIndirectBuffer;
         cmd.uniformGeneric = cmd.prevUniformBuffer;
         cmd.storageGeneric = cmd.prevStorageBuffer;
+    }
+
+    /**
+     * A buffer was deleted during the replay ({@link SteinGlBuffer#deleteNow}): OpenGL returns the
+     * context's bindings to it to 0, and {@link SteinGlBindings} already followed for the game's
+     * side; the replay's state follows on both sides, so the end gives back no deleted name.
+     */
+    static void bufferDeleted(SteinGlCommands cmd, int h) {
+        if (h == 0) {
+            return;
+        }
+        if (cmd.prevArrayBuffer == h) {
+            cmd.prevArrayBuffer = 0;
+        }
+        if (cmd.arrayBuffer == h) {
+            cmd.arrayBuffer = 0;
+        }
+        if (cmd.prevIndirectBuffer == h) {
+            cmd.prevIndirectBuffer = 0;
+        }
+        if (cmd.indirectBuffer == h) {
+            cmd.indirectBuffer = 0;
+        }
+        if (cmd.prevUniformBuffer == h) {
+            cmd.prevUniformBuffer = 0;
+        }
+        if (cmd.uniformGeneric == h) {
+            cmd.uniformGeneric = 0;
+        }
+        if (cmd.prevStorageBuffer == h) {
+            cmd.prevStorageBuffer = 0;
+        }
+        if (cmd.storageGeneric == h) {
+            cmd.storageGeneric = 0;
+        }
     }
 
     /** The texture and sampler of every unit the pass used go back to the game's. */
