@@ -30,7 +30,11 @@ import java.nio.ByteBuffer;
  * names whenever the atlas is stitched again (a resource pack): the terrain shader reads it at the
  * texel's own coordinate, so the chunk's vertex format does not change. The code in the mask: 1 the
  * bright part of the texture glows (a torch's flame, not its stick), 2 the whole texture, 3 lava
- * (pulsing), 4 fire (flickering).
+ * (pulsing), 4 fire (flickering). Code 5 marks leaves and vines, which do not glow: the sun's light
+ * comes through them from behind (terrain.frag, with the sun's shadows), so the mask is made also
+ * when only the shadows are on. Codes 6 to 11 are the reflections' materials ({@link
+ * SteinMaterials}): 6 gems, 7 gold, 8 iron, 9 ice, 10 glass, 11 polished stone. 12 is water (the
+ * Stein mode draws it, common/water.glsl). The mask holds code * 16.
  *
  * <p>The option also raises the block light right next to a source ("intense"): the level the light
  * ends at is the game's, so it does not reach farther.
@@ -52,10 +56,55 @@ public final class SteinGlow {
         "lava_flow",
         "fire_layer_0",
         "fire_layer_1",
-        "end_portal_frame_eye"
+        "end_portal_frame_eye",
+        "leaves_oak",
+        "leaves_spruce",
+        "leaves_birch",
+        "leaves_jungle",
+        "leaves_acacia",
+        "leaves_big_oak",
+        "vine",
+        "diamond_block",
+        "emerald_block",
+        "lapis_block",
+        "gold_block",
+        "iron_block",
+        "ice",
+        "ice_packed",
+        "glass",
+        "glass_white",
+        "glass_orange",
+        "glass_magenta",
+        "glass_light_blue",
+        "glass_yellow",
+        "glass_lime",
+        "glass_pink",
+        "glass_gray",
+        "glass_silver",
+        "glass_cyan",
+        "glass_purple",
+        "glass_blue",
+        "glass_brown",
+        "glass_green",
+        "glass_red",
+        "glass_black",
+        "quartz_block_side",
+        "quartz_block_top",
+        "quartz_block_bottom",
+        "quartz_block_chiseled",
+        "quartz_block_chiseled_top",
+        "quartz_block_lines",
+        "quartz_block_lines_top",
+        "obsidian",
+        "water_still",
+        "water_flow"
     };
 
-    private static final int[] CODES = {1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 4, 4, 1};
+    private static final int[] CODES = {
+        1, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 4, 4, 1, 5, 5, 5, 5, 5, 5, 5, 6, 6, 6, 7, 8, 9, 9, 10, 10,
+        10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 11, 11, 11, 11, 11, 11, 11, 11,
+        12, 12
+    };
 
     private static volatile int level;
     private static SteinTexture mask;
@@ -140,7 +189,7 @@ public final class SteinGlow {
             }
             nearest = dev.createSampler(SteinSampler.Desc.nearestClamp());
         }
-        if (level() == 0) {
+        if (level() == 0 && SteinShadows.level() == 0 && !SteinMaterials.on()) {
             return none;
         }
         TextureMap atlas = Minecraft.getMinecraft().getTextureMapBlocks();
@@ -170,7 +219,11 @@ public final class SteinGlow {
         TextureAtlasSprite[] found = new TextureAtlasSprite[NAMES.length];
         for (int i = 0; i < NAMES.length; i++) {
             TextureAtlasSprite s = atlas.getAtlasSprite("minecraft:blocks/" + NAMES[i]);
-            if (s == null || s == missing) {
+            // the light through the leaves (code 5): the Stein mode only
+            if (s == null
+                    || s == missing
+                    || CODES[i] == 5
+                            && (SteinGfxOptions.NO_LEAF_LIGHT || !SteinRayLight.active())) {
                 continue;
             }
             found[i] = s;
@@ -196,7 +249,7 @@ public final class SteinGlow {
                 if (s == null) {
                     continue;
                 }
-                byte code = (byte) (CODES[i] * 32);
+                byte code = (byte) (CODES[i] * 16);
                 int x0 = s.getOriginX();
                 int y0 = s.getOriginY();
                 for (int y = y0; y < Math.min(h, y0 + s.getIconHeight()); y++) {

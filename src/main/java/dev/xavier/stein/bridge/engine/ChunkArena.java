@@ -11,6 +11,7 @@ package dev.xavier.stein.bridge.engine;
 import dev.xavier.stein.bridge.bench.BenchCounters;
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.gfx.SteinGfxOptions;
+import dev.xavier.stein.gfx.SteinRayLight;
 import dev.xavier.stein.gfx.SteinTerrain;
 import dev.xavier.stein.gfx.gl.SteinGlFrame;
 
@@ -580,6 +581,10 @@ public final class ChunkArena {
                 }
             }
             SteinTerrain.draw(vx, vy, vz);
+            if (ordinal == 2) {
+                // the last opaque layer (cutout): the Stein mode's light pass, before entities
+                SteinRayLight.afterOpaque();
+            }
             GlStateManager.resetColor();
             chunks.clear();
             return;

@@ -5,13 +5,13 @@
 // Copyright (c) 2026 Breno Xavier
 
 // Glowing blocks (SteinGlow): the mask says which texels of the atlas give light (1 the bright part, 2 the whole
-// texture, 3 lava, 4 fire); those shine at lightFlags.w times their colour — above white, no darkness of the lightmap
+// texture, 3 lava, 4 fire; 5, leaves, does not glow: see leafLight in terrain.frag); those shine at lightFlags.w times their colour — above white, no darkness of the lightmap
 // on them — lava pulsing slowly, fire flickering. Needs anim (the time) and lightFlags from the frame block.
 layout(set = 0, binding = 5) uniform sampler2D glowMask;
 
 vec3 glowing(vec3 lit, vec3 albedo, vec2 uv) {
-    int code = int(textureLod(glowMask, uv, 0.0).r * (255.0 / 32.0) + 0.5);
-    if (code == 0) {
+    int code = int(textureLod(glowMask, uv, 0.0).r * (255.0 / 16.0) + 0.5);
+    if (code == 0 || code >= 5) {
         return lit;
     }
     float lum = dot(albedo, vec3(0.2126, 0.7152, 0.0722));

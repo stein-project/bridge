@@ -115,7 +115,8 @@ public final class SteinWorldLight {
             MemoryUtil.memPutFloat(p + i * 4L, world ? DIRECT[i] : 0f);
             MemoryUtil.memPutFloat(p + 16 + i * 4L, world ? AMBIENT[i] : 1f);
         }
-        MemoryUtil.memPutFloat(p + 12, 0f);
+        // how far the block light turns to a flame's colour (world_light.glsl): not on the HUD
+        MemoryUtil.memPutFloat(p + 12, world ? SteinGfxOptions.FIRE_WARMTH : 0f);
         MemoryUtil.memPutFloat(p + 28, world ? moonGlow : 0f);
         MemoryUtil.memPutFloat(p + 32, world && darkness ? 1f : 0f);
         MemoryUtil.memPutFloat(p + 36, world ? night : 0f);

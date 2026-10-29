@@ -44,12 +44,19 @@ import java.io.File;
  * creates it again at the window size. {@code -Dsteinbridge.visuals.directRender=true} turns it on
  * from the start (the framebuffer is not even created).
  *
+ * <p>On OpenGL, while the Lens's light needs its scene in 16 bits ({@link #suspend}), the game's
+ * framebuffer comes back and the drawing is not direct; the option itself stays on and returns when
+ * the Lens's light is turned off. The window can only hold 8 bits.
+ *
  * <p>Pipeline: both — the direct window draw is shared; Stein GFX also turns off the game's
  * post-processing shaders and entity outlines.
  */
 public final class DirectRender {
 
     private static boolean direct = EngineOptions.DIRECT_RENDER;
+
+    /** The game's framebuffer is needed anyway (the Lens's 16-bit scene on OpenGL). */
+    private static boolean suspended;
 
     /** Deferred F2: folder and framebuffer of the request, and the chat that shows the message. */
     private static boolean pending;
@@ -85,7 +92,7 @@ public final class DirectRender {
             if (mc == null) {
                 return;
             }
-            Framebuffer fb = mc.getFramebuffer();
+            Framebuffer fb = suspended ? null : mc.getFramebuffer();
             if (on) {
                 // The framebuffer goes away while the game still sees it as on: the game's delete
                 // checks that.
@@ -121,7 +128,45 @@ public final class DirectRender {
      * LoadingScreenRenderer.
      */
     public static boolean framebufferEnabled() {
-        return !direct && OpenGlHelper.isFramebufferEnabled();
+        return !drawingDirect() && OpenGlHelper.isFramebufferEnabled();
+    }
+
+    /** Whether the frame goes straight to the window now: the option on and not suspended. */
+    private static boolean drawingDirect() {
+        return direct && !suspended;
+    }
+
+    /**
+     * While {@code on}, the game's framebuffer is used even with the option on (the Lens's light on
+     * OpenGL draws the world in 16 bits, which the window cannot hold): with the option on, the
+     * framebuffer is created now, and deleted again when the suspension ends. Render thread.
+     */
+    public static void suspend(boolean on) {
+        if (on == suspended) {
+            return;
+        }
+        Minecraft mc = Minecraft.getMinecraft();
+        Framebuffer fb = direct && mc != null ? mc.getFramebuffer() : null;
+        if (on) {
+            // (the game's create and delete act only while the framebuffer counts as on)
+            suspended = true;
+            if (fb != null) {
+                fb.createBindFramebuffer(mc.displayWidth, mc.displayHeight);
+            }
+        } else {
+            if (fb != null) {
+                fb.deleteFramebuffer();
+            }
+            suspended = false;
+        }
+        if (fb == null) {
+            return;
+        }
+        Log.info(
+                "direct",
+                on
+                        ? "direct drawing suspended: the Lens's light needs the game framebuffer"
+                        : "direct drawing back");
     }
 
     /**
@@ -150,7 +195,7 @@ public final class DirectRender {
      * deferred.
      */
     public static Object screenshot(Object dir, int width, int height, Object framebuffer) {
-        if (!direct) {
+        if (!drawingDirect()) {
             return ScreenShotHelper.saveScreenshot(
                     (File) dir, width, height, (Framebuffer) framebuffer);
         }

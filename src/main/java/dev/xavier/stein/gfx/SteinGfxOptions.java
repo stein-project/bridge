@@ -68,6 +68,33 @@ public final class SteinGfxOptions {
     public static final boolean NO_CLOUD_SHADOWS = Opt.flag("steinbridge.gfx.noCloudShadows");
 
     /**
+     * {@code -Dsteinbridge.gfx.noMotes=true}: no dust motes in the light of enclosed places ({@link
+     * SteinVolume#motes}), for A/B (default: with them).
+     */
+    public static final boolean NO_MOTES = Opt.flag("steinbridge.gfx.noMotes");
+
+    /**
+     * {@code -Dsteinbridge.gfx.noLeafLight=true}: the sun does not come through the leaves seen
+     * against it ({@link SteinGlow}'s mask leaves them out), for A/B (default: it does).
+     */
+    public static final boolean NO_LEAF_LIGHT = Opt.flag("steinbridge.gfx.noLeafLight");
+
+    /**
+     * {@code -Dsteinbridge.gfx.glScene8=true}: on OpenGL the Lens's light keeps the game's
+     * framebuffer in 8 bits, its lights clipped at white, for A/B (default: 16 bits, as with
+     * Vulkan; see {@link SteinHdr#framebufferWide}).
+     */
+    public static final boolean GL_SCENE_8 = Opt.flag("steinbridge.gfx.glScene8");
+
+    /**
+     * {@code -Dsteinbridge.gfx.fireWarmth=X}: how far the block light turns to a torch flame's
+     * colour with the Lens's light, at the same luminance, 0 to 1 ({@link SteinWorldLight}; 0: the
+     * game's colour; default: 0.6).
+     */
+    static final float FIRE_WARMTH =
+            (float) Math.max(0.0, Math.min(1.0, Opt.decimal("steinbridge.gfx.fireWarmth", 0.6)));
+
+    /**
      * Repeated bindings kept away from the driver: pipelines with the same layout share the VAO,
      * and vertex, index, uniform and storage buffers already bound at the same point are not bound
      * again. {@code -Dsteinbridge.gfx.bindCache=false} turns it off.

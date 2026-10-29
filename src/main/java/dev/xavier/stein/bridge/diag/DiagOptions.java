@@ -436,6 +436,12 @@ final class DiagOptions {
     static final long SHOWCASE_AT = Opt.number("steinbridge.diag.showcaseAtSec", -1L);
 
     /**
+     * {@code -Dsteinbridge.diag.showcaseCloseAtSec=N}: closes the showcase opened by {@link
+     * #SHOWCASE_AT} N seconds after startup (default: it stays open).
+     */
+    static final long SHOWCASE_CLOSE_AT = Opt.number("steinbridge.diag.showcaseCloseAtSec", -1L);
+
+    /**
      * {@code -Dsteinbridge.diag.showcaseNightAtSec=N}: turns the showcase to night N seconds after
      * startup, and back to day N seconds after that, alternating (default: off).
      */

@@ -70,10 +70,18 @@ final class SteinVkDescriptors {
     }
 
     private long createPool(MemoryStack stack) {
-        VkDescriptorPoolSize.Buffer sizes = VkDescriptorPoolSize.calloc(3, stack);
+        VkDescriptorPoolSize.Buffer sizes =
+                VkDescriptorPoolSize.calloc(dev.rayTracing ? 4 : 3, stack);
         sizes.get(0).type(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER).descriptorCount(4096);
         sizes.get(1).type(VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER).descriptorCount(4096);
         sizes.get(2).type(VK_DESCRIPTOR_TYPE_STORAGE_BUFFER).descriptorCount(1024);
+        if (dev.rayTracing) {
+            sizes.get(3)
+                    .type(
+                            org.lwjgl.vulkan.KHRAccelerationStructure
+                                    .VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR)
+                    .descriptorCount(256);
+        }
         LongBuffer lp = stack.mallocLong(1);
         SteinVkDevice.check(
                 vkCreateDescriptorPool(

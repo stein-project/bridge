@@ -34,6 +34,7 @@ import static org.lwjgl.util.spvc.Spvc.SPVC_COMPILER_OPTION_GLSL_ENABLE_420PACK_
 import static org.lwjgl.util.spvc.Spvc.SPVC_COMPILER_OPTION_GLSL_ES;
 import static org.lwjgl.util.spvc.Spvc.SPVC_COMPILER_OPTION_GLSL_VERSION;
 import static org.lwjgl.util.spvc.Spvc.SPVC_COMPILER_OPTION_GLSL_VULKAN_SEMANTICS;
+import static org.lwjgl.util.spvc.Spvc.SPVC_RESOURCE_TYPE_ACCELERATION_STRUCTURE;
 import static org.lwjgl.util.spvc.Spvc.SPVC_RESOURCE_TYPE_SAMPLED_IMAGE;
 import static org.lwjgl.util.spvc.Spvc.SPVC_RESOURCE_TYPE_STORAGE_BUFFER;
 import static org.lwjgl.util.spvc.Spvc.SPVC_RESOURCE_TYPE_UNIFORM_BUFFER;
@@ -146,6 +147,10 @@ public final class ShaderBuild {
             defines.add(f[i]);
         }
         String source = expand(src, src.resolve(f[2]), 0);
+        if (defines.contains("RT") && source.startsWith("#version 450")) {
+            // ray queries need GLSL 4.60; these variants are Vulkan only
+            source = "#version 460" + source.substring("#version 450".length());
+        }
         ByteBuffer spirv = compile(compiler, name, source, kind, defines);
         if (spirv == null) {
             return false;
@@ -157,13 +162,16 @@ public final class ShaderBuild {
             // compute only exists with a storage buffer, which in GLSL below 430 is an
             // extension: it goes in 430 (the device only uses compute with GL 4.3); the
             // rest stays in 410, which level 4.1 compiles
+            // RT: ray queries, Vulkan only; OpenGL never loads these (a placeholder GLSL)
+            boolean vulkanOnly = defines.contains("RT");
             CrossResult cross =
                     crossGl(
                             spirv,
                             name,
                             kind == shaderc_glsl_compute_shader
                                     ? GLSL_VERSION_COMPUTE
-                                    : GLSL_VERSION_DEFAULT);
+                                    : GLSL_VERSION_DEFAULT,
+                            !vulkanOnly);
             if (cross == null) {
                 return false;
             }
@@ -250,7 +258,7 @@ public final class ShaderBuild {
      * backend finds each slot's binding through it; OpenGL binds the slots by name (on top of the
      * 430 binding).
      */
-    private static CrossResult crossGl(ByteBuffer spirv, String name, int version) {
+    private static CrossResult crossGl(ByteBuffer spirv, String name, int version, boolean toGlsl) {
         try (MemoryStack stack = MemoryStack.stackPush()) {
             PointerBuffer pp = stack.mallocPointer(1);
             check(spvc_context_create(pp), "context", name);
@@ -284,6 +292,9 @@ public final class ShaderBuild {
                         options, SPVC_COMPILER_OPTION_GLSL_ENABLE_420PACK_EXTENSION, false);
                 spvc_compiler_install_compiler_options(compiler, options);
                 String res = reflect(compiler, name);
+                if (!toGlsl) {
+                    return new CrossResult("// Vulkan only (ray queries)\n", res);
+                }
                 PointerBuffer text = stack.mallocPointer(1);
                 if (spvc_compiler_compile(compiler, text) != SPVC_SUCCESS) {
                     System.err.println(
@@ -308,9 +319,10 @@ public final class ShaderBuild {
             int[] types = {
                 SPVC_RESOURCE_TYPE_UNIFORM_BUFFER,
                 SPVC_RESOURCE_TYPE_STORAGE_BUFFER,
-                SPVC_RESOURCE_TYPE_SAMPLED_IMAGE
+                SPVC_RESOURCE_TYPE_SAMPLED_IMAGE,
+                SPVC_RESOURCE_TYPE_ACCELERATION_STRUCTURE
             };
-            String[] kinds = {"uniform", "storage", "texture"};
+            String[] kinds = {"uniform", "storage", "texture", "acceleration"};
             for (int t = 0; t < types.length; t++) {
                 PointerBuffer list = stack.mallocPointer(1);
                 PointerBuffer count = stack.mallocPointer(1);

@@ -62,7 +62,9 @@ public final class SteinShader {
         public enum Kind {
             UNIFORM,
             STORAGE,
-            TEXTURE
+            TEXTURE,
+            /** A ray tracing acceleration structure (Vulkan only). */
+            ACCELERATION
         }
     }
 

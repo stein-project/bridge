@@ -8,6 +8,7 @@
 
 package dev.xavier.stein.bridge.lens;
 
+import dev.xavier.stein.gfx.SteinBackend;
 import dev.xavier.stein.gfx.SteinPostFx;
 
 import net.minecraft.client.Minecraft;
@@ -24,10 +25,10 @@ import net.minecraft.client.settings.GameSettings;
  *       frame), compact angles;
  *   <li><b>Fancy</b>: the game as Mojang ships it;
  *   <li><b>Medium</b>: Fancy with a soft bloom and 4x anisotropic filtering;
- *   <li><b>High</b>: soft bloom, smooth edges, 8x anisotropic, supersampled pixels, light
- *       sharpening;
- *   <li><b>Ultra</b>: strong bloom, smooth edges, 16x anisotropic, supersampled pixels, medium
- *       sharpening, HDR at maximum quality (the others: quick).
+ *   <li><b>High</b>: soft bloom, smooth edges, soft corner shading, 8x anisotropic, supersampled
+ *       pixels, light sharpening;
+ *   <li><b>Ultra</b>: strong bloom, smooth edges, strong corner shading, 16x anisotropic,
+ *       supersampled pixels, medium sharpening, HDR at maximum quality (the others: quick).
  * </ul>
  *
  * <p>Light and shadows: Medium has low shadows; High medium shadows, moonlight and darkness; Ultra
@@ -55,7 +56,10 @@ final class Presets {
                 true,
                 false,
                 0,
-                0),
+                0,
+                0,
+                false,
+                false),
         FANCY(
                 "fancy",
                 true,
@@ -71,7 +75,10 @@ final class Presets {
                 true,
                 false,
                 0,
-                0),
+                0,
+                0,
+                false,
+                false),
         MEDIUM(
                 "medium",
                 true,
@@ -87,7 +94,10 @@ final class Presets {
                 true,
                 true,
                 0,
-                1),
+                1,
+                0,
+                false,
+                false),
         HIGH(
                 "high",
                 true,
@@ -103,7 +113,10 @@ final class Presets {
                 true,
                 true,
                 1,
-                2),
+                2,
+                1,
+                true,
+                true),
         ULTRA(
                 "ultra",
                 true,
@@ -119,7 +132,33 @@ final class Presets {
                 false,
                 true,
                 2,
-                3);
+                3,
+                2,
+                true,
+                true),
+        /**
+         * Above Ultra: Ultra's options and ray tracing (Vulkan, a GPU that has it; from the next
+         * start). Offered only on such a GPU.
+         */
+        STEIN(
+                "stein",
+                true,
+                2,
+                2,
+                0,
+                true,
+                SteinPostFx.BLOOM_HIGH,
+                true,
+                16,
+                true,
+                2,
+                false,
+                true,
+                2,
+                3,
+                2,
+                true,
+                true);
 
         private final String key;
         final boolean fancy;
@@ -136,6 +175,9 @@ final class Presets {
         final boolean dynamicLights;
         final int atmosphere;
         final int sunShadows;
+        final int occlusion;
+        final boolean sky;
+        final boolean reflections;
 
         Position(
                 String key,
@@ -152,7 +194,10 @@ final class Presets {
                 boolean hdrQuick,
                 boolean dynamicLights,
                 int atmosphere,
-                int sunShadows) {
+                int sunShadows,
+                int occlusion,
+                boolean sky,
+                boolean reflections) {
             this.key = key;
             this.fancy = fancy;
             this.smoothLighting = smoothLighting;
@@ -168,6 +213,14 @@ final class Presets {
             this.dynamicLights = dynamicLights;
             this.atmosphere = atmosphere;
             this.sunShadows = sunShadows;
+            this.occlusion = occlusion;
+            this.sky = sky;
+            this.reflections = reflections;
+        }
+
+        /** The Stein mode: ray tracing on. */
+        boolean rayTracing() {
+            return this == STEIN;
         }
 
         /** Name of the level, for the translation key (steinlens.quality.&lt;key&gt;). */
@@ -199,6 +252,9 @@ final class Presets {
                     && s.field_181151_V == p.shadows
                     && c.bloom == p.bloom
                     && c.smoothEdges == p.smoothEdges
+                    && c.occlusion == p.occlusion
+                    && c.sky == p.sky
+                    && c.reflections == p.reflections
                     && c.anisotropy == p.anisotropy
                     && c.supersample == p.supersample
                     && c.sharpen == p.sharpen
@@ -208,7 +264,8 @@ final class Presets {
                     && c.shadows == p.sunShadows
                     && c.moonlight == (p.sunShadows >= 2)
                     && c.darkness == (p.sunShadows >= 2)
-                    && c.glowingBlocks == glowOf(p)) {
+                    && c.glowingBlocks == glowOf(p)
+                    && p.rayTracing() == SteinBackend.rayTracingRequested()) {
                 return p;
             }
         }
@@ -232,6 +289,9 @@ final class Presets {
         s.field_178881_t = true; // VBO (faster than lists)
         c.bloom = p.bloom;
         c.smoothEdges = p.smoothEdges;
+        c.occlusion = p.occlusion;
+        c.sky = p.sky;
+        c.reflections = p.reflections;
         c.anisotropy = p.anisotropy;
         c.supersample = p.supersample;
         c.sharpen = p.sharpen;
@@ -242,6 +302,9 @@ final class Presets {
         c.moonlight = p.sunShadows >= 2; // High and Ultra: the Stein night
         c.darkness = p.sunShadows >= 2;
         c.glowingBlocks = glowOf(p);
+        if (p.rayTracing() != SteinBackend.rayTracingRequested()) {
+            SteinBackend.setRayTracing(p.rayTracing()); // the device's, from the next start
+        }
         boolean fast = p == Position.FAST;
         c.directRender = fast;
         c.compactAngles = fast;

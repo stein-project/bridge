@@ -27,7 +27,7 @@ layout(location = 6) in vec3 vEye;
 layout(location = 0) out vec4 color;
 void main() {
 #ifdef LENS
-    float shadow = sunShadow(vEye, false);   // (derivatives: before any discard)
+    float shadow = sunShadow(vEye, false, vLight.y / 16.0);   // (derivatives: before any discard)
 #endif
     int flags = int(vFlags.x);
     vec4 t = texture(tex, vUv);   // always sampled (derivatives outside of branches)

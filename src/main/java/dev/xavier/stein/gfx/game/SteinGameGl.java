@@ -11,6 +11,7 @@ package dev.xavier.stein.gfx.game;
 import dev.xavier.stein.gfx.SteinDevice;
 import dev.xavier.stein.gfx.SteinGfxOptions;
 import dev.xavier.stein.gfx.SteinGlTrack;
+import dev.xavier.stein.gfx.SteinHdr;
 import dev.xavier.stein.gfx.SteinTessCapture;
 
 import org.lwjgl.opengl.ARBFramebufferObject;
@@ -80,7 +81,31 @@ public final class SteinGameGl {
             SteinGameTextures.texImage2D(target, level, internalFormat, w, h, format, type, pixels);
             return;
         }
-        GL11.glTexImage2D(target, level, internalFormat, w, h, border, format, type, pixels);
+        GL11.glTexImage2D(
+                target,
+                level,
+                glInternal(internalFormat, pixels == null),
+                w,
+                h,
+                border,
+                format,
+                type,
+                pixels);
+    }
+
+    /**
+     * On OpenGL, the internal format of a texture made without pixels: the game's framebuffer
+     * colour (Framebuffer.createFramebuffer, the only GL_RGBA8 made empty; the game's own textures
+     * ask for GL_RGBA) in 16 bits while the Lens's light is on ({@link SteinHdr#framebufferWide}),
+     * so the lights go past white until the post-processing brings them back, as with Vulkan.
+     */
+    private static int glInternal(int internalFormat, boolean empty) {
+        return empty
+                        && internalFormat == GL11.GL_RGBA8
+                        && !SteinGfxOptions.GL_SCENE_8
+                        && SteinHdr.framebufferWide()
+                ? GL30.GL_RGBA16F
+                : internalFormat;
     }
 
     public static void glTexImage2D(
@@ -97,7 +122,16 @@ public final class SteinGameGl {
             SteinGameTextures.texImage2D(target, level, internalFormat, w, h, format, type, pixels);
             return;
         }
-        GL11.glTexImage2D(target, level, internalFormat, w, h, border, format, type, pixels);
+        GL11.glTexImage2D(
+                target,
+                level,
+                glInternal(internalFormat, pixels == null),
+                w,
+                h,
+                border,
+                format,
+                type,
+                pixels);
     }
 
     public static void glTexSubImage2D(

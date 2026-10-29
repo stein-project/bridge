@@ -147,6 +147,9 @@ public abstract class SteinPipeline {
         /** Storage block name (std430, compute only) -> slot. */
         public final Map<String, Integer> storage;
 
+        /** Acceleration structures (ray queries, Vulkan only) by name, to their slot. */
+        public final Map<String, Integer> accelerations;
+
         private Desc(Builder b) {
             this.name = b.name;
             this.vertex = b.vertex;
@@ -165,6 +168,7 @@ public abstract class SteinPipeline {
             this.textures = Collections.unmodifiableMap(new LinkedHashMap<>(b.textures));
             this.uniforms = Collections.unmodifiableMap(new LinkedHashMap<>(b.uniforms));
             this.storage = Collections.unmodifiableMap(new LinkedHashMap<>(b.storage));
+            this.accelerations = Collections.unmodifiableMap(new LinkedHashMap<>(b.accelerations));
         }
 
         public boolean isCompute() {
@@ -189,7 +193,8 @@ public abstract class SteinPipeline {
                     && d.alphaWrite == alphaWrite
                     && d.textures.equals(textures)
                     && d.uniforms.equals(uniforms)
-                    && d.storage.equals(storage);
+                    && d.storage.equals(storage)
+                    && d.accelerations.equals(accelerations);
         }
 
         @Override
@@ -236,6 +241,7 @@ public abstract class SteinPipeline {
         private final Map<String, Integer> textures = new LinkedHashMap<>();
         private final Map<String, Integer> uniforms = new LinkedHashMap<>();
         private final Map<String, Integer> storage = new LinkedHashMap<>();
+        private final Map<String, Integer> accelerations = new LinkedHashMap<>();
 
         private Builder(String name) {
             this.name = name;
@@ -321,6 +327,12 @@ public abstract class SteinPipeline {
 
         public Builder storage(String blockName, int slot) {
             storage.put(blockName, slot);
+            return this;
+        }
+
+        /** An acceleration structure the shaders trace rays in (Vulkan only). */
+        public Builder acceleration(String name, int slot) {
+            accelerations.put(name, slot);
             return this;
         }
 

@@ -208,6 +208,16 @@ public final class SteinTessCapture {
             return true;
         }
         int mode = wr.getDrawMode();
+        if (SteinSkyDome.drawing
+                && (mode == GL11.GL_TRIANGLE_FAN
+                        || SteinGameState.texture2D(0)
+                                && SteinSkyDome.skipsTexture(SteinGameState.textureName(0)))) {
+            // the game's sunrise fan (the only fan of the sky) and its sun: the Lens's own sky has
+            // its band and its sun
+            wr.finishDrawing();
+            wr.reset();
+            return true;
+        }
         boolean lines =
                 mode == GL11.GL_LINES || mode == GL11.GL_LINE_STRIP || mode == GL11.GL_LINE_LOOP;
         int out =

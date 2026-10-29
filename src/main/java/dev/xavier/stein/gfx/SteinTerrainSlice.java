@@ -39,6 +39,12 @@ final class SteinTerrainSlice {
     /** Seen in the translucent layer: it casts no shadow. */
     boolean translucent;
 
+    /** Its bottom-level acceleration structure (SteinRayScene), or null. */
+    dev.xavier.stein.gfx.vk.SteinVkRay.Bottom ray;
+
+    /** Its place among the rays' built slices, -1 for none. */
+    int rayIndex = -1;
+
     SteinTerrainSlice(
             SteinTerrainRegion region, int first, int count, int opaque, int x, int y, int z) {
         this.region = region;

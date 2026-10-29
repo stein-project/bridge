@@ -19,7 +19,9 @@ import static org.lwjgl.vulkan.VK10.vkUnmapMemory;
 
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.vulkan.VK12;
 import org.lwjgl.vulkan.VkDevice;
+import org.lwjgl.vulkan.VkMemoryAllocateFlagsInfo;
 import org.lwjgl.vulkan.VkMemoryAllocateInfo;
 import org.lwjgl.vulkan.VkMemoryRequirements;
 import org.lwjgl.vulkan.VkPhysicalDeviceMemoryProperties;
@@ -138,10 +140,14 @@ final class SteinVkMemory {
     /** Per memory type, two lists of blocks: [0] buffers, [1] images. */
     private final Map<Integer, List<Block>[]> pools = new HashMap<>();
 
-    SteinVkMemory(VkDevice device, VkPhysicalDeviceMemoryProperties props) {
+    SteinVkMemory(VkDevice device, VkPhysicalDeviceMemoryProperties props, boolean deviceAddress) {
         this.device = device;
         this.props = props;
+        this.deviceAddress = deviceAddress;
     }
+
+    /** With ray tracing: every block can back a buffer read by its address. */
+    private final boolean deviceAddress;
 
     private int memoryType(int bits, int flags) {
         for (int i = 0; i < props.memoryTypeCount(); i++) {
@@ -212,6 +218,12 @@ final class SteinVkMemory {
                             .sType$Default()
                             .allocationSize(size)
                             .memoryTypeIndex(type);
+            if (deviceAddress) {
+                info.pNext(
+                        VkMemoryAllocateFlagsInfo.calloc(stack)
+                                .sType$Default()
+                                .flags(VK12.VK_MEMORY_ALLOCATE_DEVICE_ADDRESS_BIT));
+            }
             int r = vkAllocateMemory(device, info, null, lp);
             if (r == VK_SUCCESS) {
                 out[0] = lp.get(0);

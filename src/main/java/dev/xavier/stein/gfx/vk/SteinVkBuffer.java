@@ -26,6 +26,8 @@ import dev.xavier.stein.gfx.SteinBuffer;
 
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
+import org.lwjgl.vulkan.KHRAccelerationStructure;
+import org.lwjgl.vulkan.VK12;
 import org.lwjgl.vulkan.VkBufferCopy;
 import org.lwjgl.vulkan.VkCommandBuffer;
 
@@ -78,6 +80,17 @@ final class SteinVkBuffer extends SteinBuffer {
         // draw reads
         if (desc.usage.contains(Usage.INDIRECT) || desc.usage.contains(Usage.STORAGE)) {
             usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT;
+        }
+        // with ray tracing, geometry the acceleration structures are built from, read by address
+        if (device.rayTracing
+                && (desc.usage.contains(Usage.VERTEX)
+                        || desc.usage.contains(Usage.INDEX)
+                        || desc.usage.contains(Usage.STORAGE))) {
+            usage |=
+                    VK12.VK_BUFFER_USAGE_SHADER_DEVICE_ADDRESS_BIT
+                            | KHRAccelerationStructure
+                                    .VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT_KHR
+                            | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
         }
         SteinVkMemory.Allocation[] a = new SteinVkMemory.Allocation[1];
         if (desc.memory == Memory.UPLOAD) {

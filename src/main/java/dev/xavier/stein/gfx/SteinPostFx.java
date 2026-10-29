@@ -208,7 +208,7 @@ public final class SteinPostFx {
      */
     public static void worldClear(int mask) {
         if (mask == GL11.GL_DEPTH_BUFFER_BIT
-                && (edges || SteinAtmosphere.wanted())
+                && (edges || SteinAtmosphere.wanted() || SteinAo.on())
                 && !noDepth
                 && available()) {
             try {
@@ -236,9 +236,17 @@ public final class SteinPostFx {
         boolean hdr = SteinHdr.active();
         boolean atmosphere = SteinAtmosphere.active() && !noDepth;
         boolean wide = wideScene();
+        boolean ao = SteinAo.on() && !noDepth;
         if (!available()
-                || level == BLOOM_OFF && !smooth && !hdr && !wide && sharpen == 0 && !atmosphere) {
+                || level == BLOOM_OFF
+                        && !smooth
+                        && !hdr
+                        && !wide
+                        && sharpen == 0
+                        && !atmosphere
+                        && !ao) {
             SteinAtmosphere.worldEnd();
+            SteinAo.worldEnd();
             return;
         }
         try {
@@ -260,8 +268,9 @@ public final class SteinPostFx {
         SteinRenderTarget game = dev.gameTarget();
         int w = game.width();
         int h = game.height();
-        // the depths: for the edges and for the atmosphere
-        boolean depth = smooth || atmosphere;
+        // the depths: for the edges, the atmosphere and the corner shading
+        boolean ao = SteinAo.on();
+        boolean depth = smooth || atmosphere || ao;
         sceneSize(dev, w, h, depth);
         if (!dev.copyTarget(game, scene, depth) && depth) {
             noDepth = true;
@@ -277,6 +286,10 @@ public final class SteinPostFx {
         if (depth && !worldCopied) {
             // no hand this frame (no clear before it): the depth now is the world's
             dev.copyTarget(game, world, true);
+        }
+        if (ao && depth) {
+            // into the copy before the bloom: the shading dims what glows from it too
+            SteinAo.apply(dev, sceneColor, worldDepth, sceneDepth, handApart, w, h);
         }
         boolean wide = wideScene() && sceneColor.desc().format == SteinFormat.RGBA16F;
         if (level != BLOOM_OFF || hdr || wide) {
@@ -562,6 +575,7 @@ public final class SteinPostFx {
         B[10] = (float) SteinGfxOptions.POST_EDGE_FLOOR;
         B[11] = hdr ? (float) SteinGfxOptions.HDR_BOOST : 0f;
         threshold(12, wide);
+        B[16] = wide ? SteinExposure.value() : 1f;
         B[17] = HDR_GLOW_GAIN;
         B[18] = EDGE_DISTANCE;
         B[19] = wide ? 1f : 0f;
@@ -608,9 +622,16 @@ public final class SteinPostFx {
 
     /** The copy of the game's image at its size; the depth only while the edges need it. */
     private static void sceneSize(SteinDevice dev, int w, int h, boolean depth) {
-        // the copy in the game image's own format (16 bits with HDR or the Stein light)
+        // the copy in the game image's own format (16 bits with HDR or the Stein light); OpenGL's
+        // game target does not describe its colour: the game's framebuffer was made by the same
+        // rule (SteinGameGl)
         SteinTexture gameColor = dev.gameTarget().color(0);
-        SteinFormat sceneFormat = gameColor != null ? gameColor.desc().format : SteinFormat.RGBA8;
+        SteinFormat sceneFormat =
+                gameColor != null
+                        ? gameColor.desc().format
+                        : SteinHdr.framebufferWide() && !SteinGfxOptions.GL_SCENE_8
+                                ? SteinFormat.RGBA16F
+                                : SteinFormat.RGBA8;
         boolean resized =
                 sceneColor == null
                         || sceneColor.width() != w

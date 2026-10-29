@@ -96,6 +96,8 @@ final class DiagSingleplayerScene {
                         true,
                         false,
                         WorldType.DEFAULT);
+        // commands on, so chat entries (chatFile) can build a scene (a new world only)
+        settings.enableCommands();
         // Through the client's task queue: loading draws its own progress screen
         // (Display.update inside it), and here we are already inside a Display.update.
         mc.addScheduledTask(

@@ -102,9 +102,54 @@ float casterTaps(vec3 c) {
     return lit / 6.0;
 }
 
+// The sun where the map does not reach (past it, and fading in towards its edge): the game's own sky light says it,
+// full only where the sky is open straight above (level 15). Without it an overhang, a cave's mouth or the land under a
+// far mountain took the full sun out there.
+float skyOpen(float sky) {
+    return smoothstep(12.0, 15.0, sky);
+}
+
+// Whether the sun reaches the side of a leaf block that faces it, for the light seen through it from behind: the map at
+// the point moved a block towards the sun (the leaf block itself would shadow the point), a few taps, no facing; past
+// the map the sky light says it.
+float sunBehind(vec3 eye, float sky) {
+    if (shadowInfo.x <= 0.0) {
+        return 0.0;
+    }
+    float a = 6.2831853 * fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
+    mat2 turn = mat2(cos(a), sin(a), -sin(a), cos(a));
+    vec3 s;
+    float lit = mapLit(shadowMap, shadowMatrix, eye + sunEye.xyz, turn, 3, 0, 0.0, s);
+    if (lit < 0.0) {
+        return skyOpen(sky) * cloudShade(eye);
+    }
+    return mix(lit, skyOpen(sky), smoothstep(0.8, 0.95, length(s.xy))) * cloudShade(eye);
+}
+
 // axisFaces: the terrain's faces are axis-aligned; one that is not (a cross plant) has no useful normal for the
-// facing and keeps only the map.
-float sunShadow(vec3 eye, bool axisFaces) {
+// facing and keeps only the map. sky: the point's sky light level, 0..15.
+// The entities' shadow and the clouds' alone (the Stein mode: the blocks' shadow comes from the rays, SteinRayLight):
+// 1 where neither falls.
+float casterShade(vec3 eye) {
+    if (shadowInfo.x <= 0.0) {
+        return 1.0;
+    }
+    float lit = cloudShade(eye);
+    if (casterInfo.x > 0.0) {
+        vec3 cr = cross(dFdx(eye), dFdy(eye));
+        vec3 n = dot(cr, cr) > 1e-20 ? normalize(cr) : vec3(0.0, 1.0, 0.0);
+        if (dot(n, eye) > 0.0) {
+            n = -n;
+        }
+        vec3 q = (casterMatrix * vec4(eye + n * 0.05, 1.0)).xyz * 0.5 + 0.5;
+        if (q.x > 0.0 && q.y > 0.0 && q.x < 1.0 && q.y < 1.0 && q.z < 1.0) {
+            lit *= casterTaps(q);
+        }
+    }
+    return lit;
+}
+
+float sunShadow(vec3 eye, bool axisFaces, float sky) {
     vec3 cr = cross(dFdx(eye), dFdy(eye));
     if (shadowInfo.x <= 0.0) {
         return 1.0;
@@ -134,7 +179,7 @@ float sunShadow(vec3 eye, bool axisFaces) {
     float lit = mapLit(shadowMap, shadowMatrix, p, turn, fading ? 2 : 1, 0, graze, s);
     float clouds = cloudShade(eye);
     if (lit < 0.0) {
-        return towards * clouds;   // past the map: no shadow known but the clouds'
+        return towards * clouds * skyOpen(sky);   // past the map: the clouds' and the sky light's
     }
     if (fading) {
         // just after a step of the sun the map before it still has a share: the shadows move over a second instead
@@ -152,7 +197,7 @@ float sunShadow(vec3 eye, bool axisFaces) {
             lit = min(lit, casterTaps(q));
         }
     }
-    // towards the map's edge the shadow fades out instead of ending in a line
-    lit = mix(lit, 1.0, smoothstep(0.8, 0.95, length(s.xy)));
+    // towards the map's edge the shadow fades into the sky light's instead of ending in a line
+    lit = mix(lit, skyOpen(sky), smoothstep(0.8, 0.95, length(s.xy)));
     return lit * towards * clouds;
 }

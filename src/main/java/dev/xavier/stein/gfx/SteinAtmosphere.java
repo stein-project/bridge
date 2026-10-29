@@ -174,8 +174,12 @@ public final class SteinAtmosphere {
         b[73] =
                 SteinClouds
                         .sunVisible(); // params18.y: the sun past the clouds (the glare's measure)
-        return SteinVolume.write(b, level, PROJ, VIEW, far);
+        volumeDrawn = SteinVolume.write(b, level, PROJ, VIEW, far);
+        return volumeDrawn;
     }
+
+    /** The light in the air was drawn this frame (the composite's dust motes need it). */
+    private static boolean volumeDrawn;
 
     /** After the world's drawing and its post-processing: the next drawing captures again. */
     static void worldEnd() {
@@ -224,21 +228,64 @@ public final class SteinAtmosphere {
             sy = -sy;
             k = 0.35f;
         } else {
-            k = 1f - 0.6f * clamp01((sy - 0.15f) / 0.6f);
+            k = sunGlow(sx, sy);
         }
         k *= clamp01(sy / 0.08f) * (1f - rain);
         b[36] = VIEW[0] * sx + VIEW[3] * sy;
         b[37] = VIEW[1] * sx + VIEW[4] * sy;
         b[38] = VIEW[2] * sx + VIEW[5] * sy;
         b[39] = 2.5f * k;
-        float[] tint = moon ? MOON_HAZE : SUN_HAZE;
+        float[] tint = moon ? MOON_HAZE : sunHaze(sx, sy);
         b[40] = tint[0] * k;
         b[41] = tint[1] * k;
         b[42] = tint[2] * k;
+        SteinVolume.motes(b, level, VIEW, rays && volumeDrawn);
+        volumeDrawn = false;
     }
 
-    /** The haze's light towards the sun (golden) and the moon (cold). */
-    private static final float[] SUN_HAZE = {1.35f, 1.0f, 0.32f};
+    /** The haze's light towards the sun by the hour: noon, sunrise, sunset; and the moon (cold). */
+    private static final float[] NOON_HAZE = {1.15f, 1.05f, 0.85f};
+
+    private static final float[] RISE_HAZE = {1.4f, 1.1f, 0.5f};
+    private static final float[] SET_HAZE = {1.35f, 0.6f, 0.18f};
+    private static final float[] HAZE = new float[3];
+
+    /** The glow strength at the noon, at sunrise and at sunset (the sun low). */
+    private static final float GLOW_NOON = 0.3f;
+
+    private static final float GLOW_RISE = 1.0f;
+    private static final float GLOW_SET = 0.22f;
+
+    /**
+     * How low the sun is for its glow: 1 at the horizon, 0 from a little under halfway up. {@code
+     * sx, sy}: the sun's direction as the sky draws it (+x at sunrise, -x at sunset).
+     */
+    private static float low(float sy) {
+        return 1f - clamp01((sy - 0.05f) / 0.45f);
+    }
+
+    /**
+     * The sun's glow by the hour (the glare, the light in the air, the sky's halo): high at
+     * sunrise, a balance at noon, weaker at sunset.
+     */
+    static float sunGlow(float sx, float sy) {
+        float peak = sx > 0f ? GLOW_RISE : GLOW_SET;
+        return GLOW_NOON + (peak - GLOW_NOON) * low(sy);
+    }
+
+    /** How much of the sunset's orange the sun's glow takes now (0 at noon and at sunrise). */
+    static float sunsetShare(float sx, float sy) {
+        return sx < 0f ? low(sy) : 0f;
+    }
+
+    private static float[] sunHaze(float sx, float sy) {
+        float[] to = sx > 0f ? RISE_HAZE : SET_HAZE;
+        float t = low(sy);
+        for (int i = 0; i < 3; i++) {
+            HAZE[i] = NOON_HAZE[i] + (to[i] - NOON_HAZE[i]) * t;
+        }
+        return HAZE;
+    }
 
     private static final float[] MOON_HAZE = {0.42f, 0.34f, 0.90f};
 

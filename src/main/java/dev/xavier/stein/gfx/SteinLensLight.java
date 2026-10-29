@@ -10,9 +10,9 @@ package dev.xavier.stein.gfx;
 
 /**
  * Whether any of the Lens's light is on: sun shadows, glowing blocks, dynamic lights, moonlight,
- * darkness or the texture filters. The terrain and entity shaders come in two variants; the LENS
- * one reads the shadow maps, the glow mask and the extra Frame fields, the other is the game's
- * pixel at the game's cost.
+ * darkness, the texture filters or the reflections. The terrain and entity shaders come in two
+ * variants; the LENS one reads the shadow maps, the glow mask and the extra Frame fields, the other
+ * is the game's pixel at the game's cost.
  *
  * <p>Why: the Lens's code in the one shader cost the GPU 10-25% in light scenes with every option
  * off (more texture reads, more varyings, a longer pixel), against the rule that an option turned
@@ -29,6 +29,7 @@ public final class SteinLensLight {
                 || SteinDynamicLights.enabled()
                 || SteinWorldLight.enabled()
                 || SteinTextureFilter.anisotropy() > 1
-                || SteinTextureFilter.supersample();
+                || SteinTextureFilter.supersample()
+                || SteinMaterials.on();
     }
 }

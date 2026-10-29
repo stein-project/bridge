@@ -84,6 +84,9 @@ public final class SteinSky {
     /** In place of vbo.drawArrays(mode) in RenderGlobal.renderSky. */
     public static void draw(Object vb, int mode) {
         Object role = ROLE.get(vb);
+        if (SteinSkyDome.drawing && (role == SKY || role == SKY2)) {
+            return; // the Lens's own sky is under the sun, the moon and the stars instead
+        }
         if (role != null && mode == GL11.GL_QUADS) {
             SteinEntityDeferred.skyNoUv = true;
             try {

@@ -485,6 +485,21 @@ final class SteinVkCommands extends SteinCommands {
         }
     }
 
+    /** The acceleration structures bound by slot (ray queries). */
+    private final long[] accelerations = new long[MAX_SLOTS];
+
+    @Override
+    public void bindAccelerationStructure(int slot, long handle) {
+        check();
+        if (slot < 0 || slot >= MAX_SLOTS) {
+            throw new IllegalArgumentException("acceleration slot out of range: " + slot);
+        }
+        if (accelerations[slot] != handle) {
+            accelerations[slot] = handle;
+            descDirty = true;
+        }
+    }
+
     @Override
     public void bindStorage(int slot, SteinBuffer buffer, long offset, long size) {
         check();
@@ -536,7 +551,13 @@ final class SteinVkCommands extends SteinCommands {
                         .dstArrayElement(0)
                         .descriptorType(SteinVkPipeline.descriptorType(b.kind()));
                 int k = i * 3;
-                if (b.kind() == SteinShader.Resource.Kind.TEXTURE) {
+                if (b.kind() == SteinShader.Resource.Kind.ACCELERATION) {
+                    d.pNext(
+                            org.lwjgl.vulkan.VkWriteDescriptorSetAccelerationStructureKHR.calloc(
+                                            stack)
+                                    .sType$Default()
+                                    .pAccelerationStructures(stack.longs(now[k])));
+                } else if (b.kind() == SteinShader.Resource.Kind.TEXTURE) {
                     VkDescriptorImageInfo.Buffer ii = VkDescriptorImageInfo.calloc(1, stack);
                     ii.get(0)
                             .sampler(now[k + 1])
@@ -576,6 +597,12 @@ final class SteinVkCommands extends SteinCommands {
      */
     private void resolveBinding(SteinVkPipeline.Binding b, long[] out, int at) {
         int slot = b.slot();
+        if (b.kind() == SteinShader.Resource.Kind.ACCELERATION) {
+            out[at] = slot < 0 ? VK_NULL_HANDLE : accelerations[slot];
+            out[at + 1] = 0L;
+            out[at + 2] = 0L;
+            return;
+        }
         if (b.kind() != SteinShader.Resource.Kind.TEXTURE) {
             boolean u = b.kind() == SteinShader.Resource.Kind.UNIFORM;
             SteinBuffer buf = slot < 0 ? null : u ? uniforms[slot] : storage[slot];

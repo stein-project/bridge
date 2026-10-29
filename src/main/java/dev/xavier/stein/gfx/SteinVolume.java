@@ -49,6 +49,12 @@ final class SteinVolume {
     /** The enclosed dust halves over this many blocks from the camera. */
     private static final float NEAR_BLOCKS = 14f;
 
+    /**
+     * How bright the dust motes in the light are, per atmosphere level (post_composite.frag): only
+     * where the camera is enclosed, where a beam crosses still air.
+     */
+    private static final float[] MOTES = {0f, 0.6f, 1.0f};
+
     /** The moon lights the air this much of what it lights the ground (it glowed violet). */
     private static final float MOON_AIR = 0.3f;
 
@@ -116,6 +122,7 @@ final class SteinVolume {
         float k = SteinShadows.drawnStrength();
         float[] light = SteinWorldLight.direct();
         if (SteinGfxOptions.NO_VOLUME
+                || !SteinRayLight.active() // the light in the air: the Stein mode only
                 || level <= 0
                 || k <= 0f
                 || light[0] + light[1] + light[2] <= 0.01f
@@ -154,6 +161,33 @@ final class SteinVolume {
         b[74] = roof; // params18.z: the ground's top around the camera (the enclosed dust's
         // ceiling)
         return true;
+    }
+
+    /**
+     * The motes' part of the composite's block (params11 to params14, from {@code b[44]}): the
+     * camera's rotation (world -> eye, by columns) and its place in the world (wrapped as the
+     * volume's), the time, how enclosed the camera is and the motes' strength (params13.w, 0: none,
+     * the shader skips them). {@code view}: the camera's rotation as the atmosphere keeps it.
+     */
+    static void motes(float[] b, int level, float[] view, boolean volume) {
+        float k =
+                volume && enclosed > 0f && !SteinGfxOptions.NO_MOTES && SteinRayLight.active()
+                        ? MOTES[level] * enclosed
+                        : 0f;
+        if (k <= 0f) {
+            return; // (the block starts cleared: params13.w is 0)
+        }
+        for (int c = 0; c < 3; c++) {
+            b[44 + c * 4] = view[c * 3];
+            b[45 + c * 4] = view[c * 3 + 1];
+            b[46 + c * 4] = view[c * 3 + 2];
+        }
+        b[47] = (System.nanoTime() / 1_000_000L % 3_600_000L) / 1000f;
+        b[51] = enclosed;
+        b[55] = k;
+        b[56] = (float) (camX - Math.floor(camX / WRAP) * WRAP);
+        b[57] = (float) camY;
+        b[58] = (float) (camZ - Math.floor(camZ / WRAP) * WRAP);
     }
 
     /**

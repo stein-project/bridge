@@ -66,7 +66,7 @@ vec4 shade(vec4 t, int flags, float shadow, out bool keep) {
 }
 void main() {
 #ifdef LENS
-    float shadow = sunShadow(vEye, false);   // (derivatives: before any discard)
+    float shadow = sunShadow(vEye, false, vLight.y / 16.0);   // (derivatives: before any discard)
 #else
     float shadow = 1.0;
 #endif

@@ -21,11 +21,11 @@ layout(std140, set = 0, binding = 0) uniform Frame {
     vec4 shadowInfo;    // x strength (0: none), y a texel of the map, z a texel in blocks, w wide edges
     mat4 casterMatrix;  // eye space -> the entities' shadow map (SteinEntityShadows)
     vec4 casterInfo;    // x on, y a texel of that map, z a texel in blocks
-    vec4 sunColor;      // rgb: the sun's (or moon's) direct light at this strength (SteinWorldLight)
+    vec4 sunColor;      // rgb: the sun's (or moon's) direct light at this strength (SteinWorldLight); w: warm fire
     vec4 skyAmbient;    // rgb: what stays of the sky's light in the shade; w: moonlight
     vec4 lightFlags;    // x darkness, y night, z block light boost, w glow strength (SteinGlow)
     mat4 shadowPrev;    // eye space -> the previous shadow map's clip space, while it fades (SteinShadows)
     vec4 shadowFade;    // x: the previous map's share (0: none)
     mat4 cloudMatrix;   // eye space -> the clouds' texture, along the sun up to their layer (SteinClouds)
-    vec4 cloudInfo;     // x: the share of the sun a cloud takes (0: no cloud shadows)
+    vec4 cloudInfo;     // x: the share of the sun a cloud takes (0: no cloud shadows); yzw: the sky's zenith (reflections, 0: off)
 };

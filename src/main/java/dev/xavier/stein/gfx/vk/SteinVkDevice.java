@@ -50,6 +50,7 @@ import static org.lwjgl.vulkan.VK12.vkWaitSemaphores;
 
 import dev.xavier.stein.bridge.bench.BenchCounters;
 import dev.xavier.stein.bridge.core.Log;
+import dev.xavier.stein.gfx.SteinBackend;
 import dev.xavier.stein.gfx.SteinBuffer;
 import dev.xavier.stein.gfx.SteinCaps;
 import dev.xavier.stein.gfx.SteinCommands;
@@ -71,9 +72,12 @@ import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.EXTDepthClipControl;
 import org.lwjgl.vulkan.EXTHdrMetadata;
+import org.lwjgl.vulkan.KHRAccelerationStructure;
+import org.lwjgl.vulkan.KHRDeferredHostOperations;
 import org.lwjgl.vulkan.KHRDynamicRendering;
 import org.lwjgl.vulkan.KHRPortabilitySubset;
 import org.lwjgl.vulkan.KHRPushDescriptor;
+import org.lwjgl.vulkan.KHRRayQuery;
 import org.lwjgl.vulkan.KHRSurface;
 import org.lwjgl.vulkan.KHRSwapchain;
 import org.lwjgl.vulkan.VK13;
@@ -89,6 +93,7 @@ import org.lwjgl.vulkan.VkFormatProperties;
 import org.lwjgl.vulkan.VkInstance;
 import org.lwjgl.vulkan.VkMemoryRequirements;
 import org.lwjgl.vulkan.VkPhysicalDevice;
+import org.lwjgl.vulkan.VkPhysicalDeviceAccelerationStructureFeaturesKHR;
 import org.lwjgl.vulkan.VkPhysicalDeviceDepthClipControlFeaturesEXT;
 import org.lwjgl.vulkan.VkPhysicalDeviceDynamicRenderingFeatures;
 import org.lwjgl.vulkan.VkPhysicalDeviceFeatures;
@@ -98,6 +103,7 @@ import org.lwjgl.vulkan.VkPhysicalDeviceMemoryProperties;
 import org.lwjgl.vulkan.VkPhysicalDeviceProperties;
 import org.lwjgl.vulkan.VkPhysicalDeviceProperties2;
 import org.lwjgl.vulkan.VkPhysicalDevicePushDescriptorPropertiesKHR;
+import org.lwjgl.vulkan.VkPhysicalDeviceRayQueryFeaturesKHR;
 import org.lwjgl.vulkan.VkPhysicalDeviceVulkan12Features;
 import org.lwjgl.vulkan.VkPipelineCacheCreateInfo;
 import org.lwjgl.vulkan.VkQueue;
@@ -187,6 +193,13 @@ public final class SteinVkDevice extends SteinDevice {
 
     /** VK_EXT_hdr_metadata: the HDR swapchain tells the system the calibration's light levels. */
     final boolean hdrMetadata;
+
+    /**
+     * Ray tracing on (the Lens): the acceleration structure and ray query extensions, buffers read
+     * by their address. Only when asked for ({@link SteinBackend#rayTracingRequested}) and the GPU
+     * has them.
+     */
+    final boolean rayTracing;
 
     /** Logical operations on the colour (SteinPipeline.LogicOp): an optional feature. */
     final boolean logicOp;
@@ -301,14 +314,42 @@ public final class SteinVkDevice extends SteinDevice {
             hdrMetadata =
                     surface != VK_NULL_HANDLE
                             && devExt.contains(EXTHdrMetadata.VK_EXT_HDR_METADATA_EXTENSION_NAME);
+            // ray tracing (the Lens): only asked for, and only with the GPU's extensions
+            boolean rtHas =
+                    devExt.contains(
+                                    KHRAccelerationStructure
+                                            .VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME)
+                            && devExt.contains(KHRRayQuery.VK_KHR_RAY_QUERY_EXTENSION_NAME)
+                            && devExt.contains(
+                                    KHRDeferredHostOperations
+                                            .VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
+            SteinBackend.rayTracingSupported(rtHas);
+            boolean rtExt =
+                    SteinBackend.rayTracingRequested()
+                            && devExt.contains(
+                                    KHRAccelerationStructure
+                                            .VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME)
+                            && devExt.contains(KHRRayQuery.VK_KHR_RAY_QUERY_EXTENSION_NAME)
+                            && devExt.contains(
+                                    KHRDeferredHostOperations
+                                            .VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME);
 
             // ---- resources the GPU has ----
+            VkPhysicalDeviceRayQueryFeaturesKHR rqQ =
+                    VkPhysicalDeviceRayQueryFeaturesKHR.calloc(stack).sType$Default();
+            VkPhysicalDeviceAccelerationStructureFeaturesKHR asQ =
+                    VkPhysicalDeviceAccelerationStructureFeaturesKHR.calloc(stack)
+                            .sType$Default()
+                            .pNext(rqQ.address());
             VkPhysicalDeviceDepthClipControlFeaturesEXT clipQ =
                     VkPhysicalDeviceDepthClipControlFeaturesEXT.calloc(stack).sType$Default();
+            if (clipExt) {
+                clipQ.pNext(rtExt ? asQ.address() : 0L);
+            }
             VkPhysicalDeviceDynamicRenderingFeatures dynQ =
                     VkPhysicalDeviceDynamicRenderingFeatures.calloc(stack)
                             .sType$Default()
-                            .pNext(clipExt ? clipQ.address() : 0L);
+                            .pNext(clipExt ? clipQ.address() : rtExt ? asQ.address() : 0L);
             VkPhysicalDeviceVulkan12Features v12Q =
                     VkPhysicalDeviceVulkan12Features.calloc(stack)
                             .sType$Default()
@@ -335,6 +376,11 @@ public final class SteinVkDevice extends SteinDevice {
                                 + " OpenGL's depth (-1 to 1) into Vulkan's (0 to 1)");
             }
             hostQueryReset = v12Q.hostQueryReset();
+            rayTracing =
+                    rtExt
+                            && asQ.accelerationStructure()
+                            && rqQ.rayQuery()
+                            && v12Q.bufferDeviceAddress();
             multiDrawIndirect = has.multiDrawIndirect();
             logicOp = has.logicOp();
             wideLines = has.wideLines();
@@ -344,11 +390,22 @@ public final class SteinVkDevice extends SteinDevice {
                     VkPhysicalDeviceDepthClipControlFeaturesEXT.calloc(stack)
                             .sType$Default()
                             .depthClipControl(true);
+            VkPhysicalDeviceRayQueryFeaturesKHR rqOn =
+                    VkPhysicalDeviceRayQueryFeaturesKHR.calloc(stack)
+                            .sType$Default()
+                            .rayQuery(true)
+                            .pNext(depthClipControl ? clipOn.address() : 0L);
+            VkPhysicalDeviceAccelerationStructureFeaturesKHR asOn =
+                    VkPhysicalDeviceAccelerationStructureFeaturesKHR.calloc(stack)
+                            .sType$Default()
+                            .accelerationStructure(true)
+                            .pNext(rqOn.address());
+            long afterDyn = rayTracing ? asOn.address() : depthClipControl ? clipOn.address() : 0L;
             VkPhysicalDeviceDynamicRenderingFeatures dynOn =
                     VkPhysicalDeviceDynamicRenderingFeatures.calloc(stack)
                             .sType$Default()
                             .dynamicRendering(true)
-                            .pNext(depthClipControl ? clipOn.address() : 0L);
+                            .pNext(afterDyn);
             VkPhysicalDeviceVulkan12Features v12On =
                     VkPhysicalDeviceVulkan12Features.calloc(stack)
                             .sType$Default()
@@ -357,6 +414,8 @@ public final class SteinVkDevice extends SteinDevice {
                             // resetting timestamp queries from the CPU (gpuPassTiming): a reset
                             // command is not allowed inside a render, and passes keep theirs open
                             .hostQueryReset(v12Q.hostQueryReset())
+                            // the acceleration structures read buffers by their address
+                            .bufferDeviceAddress(rayTracing)
                             .pNext(dynOn.address());
             VkPhysicalDeviceFeatures on =
                     VkPhysicalDeviceFeatures.calloc(stack)
@@ -366,7 +425,7 @@ public final class SteinVkDevice extends SteinDevice {
                             .depthClamp(has.depthClamp())
                             .logicOp(has.logicOp())
                             .wideLines(has.wideLines());
-            PointerBuffer dext = stack.mallocPointer(8);
+            PointerBuffer dext = stack.mallocPointer(12);
             if (!core13) {
                 dext.put(stack.UTF8(KHRDynamicRendering.VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME));
             }
@@ -384,6 +443,17 @@ public final class SteinVkDevice extends SteinDevice {
             }
             if (hdrMetadata) {
                 dext.put(stack.UTF8(EXTHdrMetadata.VK_EXT_HDR_METADATA_EXTENSION_NAME));
+            }
+            if (rayTracing) {
+                dext.put(
+                        stack.UTF8(
+                                KHRAccelerationStructure
+                                        .VK_KHR_ACCELERATION_STRUCTURE_EXTENSION_NAME));
+                dext.put(stack.UTF8(KHRRayQuery.VK_KHR_RAY_QUERY_EXTENSION_NAME));
+                dext.put(
+                        stack.UTF8(
+                                KHRDeferredHostOperations
+                                        .VK_KHR_DEFERRED_HOST_OPERATIONS_EXTENSION_NAME));
             }
             dext.flip();
             VkDeviceQueueCreateInfo.Buffer qci = VkDeviceQueueCreateInfo.calloc(1, stack);
@@ -405,7 +475,12 @@ public final class SteinVkDevice extends SteinDevice {
             memory = VkPhysicalDeviceMemoryProperties.calloc();
             undo.push(memory::free);
             vkGetPhysicalDeviceMemoryProperties(physical, memory);
-            heap = new SteinVkMemory(device, memory);
+            heap = new SteinVkMemory(device, memory, rayTracing);
+            if (rayTracing) {
+                Log.info("gfx", "vulkan: ray tracing on (acceleration structures, ray queries)");
+            } else if (SteinBackend.rayTracingRequested()) {
+                Log.info("gfx", "vulkan: ray tracing asked for, but this GPU or driver lacks it");
+            }
             depth24 =
                     depthAttachable(stack, VK_FORMAT_X8_D24_UNORM_PACK32)
                             ? VK_FORMAT_X8_D24_UNORM_PACK32

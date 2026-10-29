@@ -239,7 +239,7 @@ final class SteinTerrainLayers {
     }
 
     /** The layer being listed (3: translucent). */
-    private static int ordinalNow;
+    static int ordinalNow;
 
     static void add(Object handle) {
         if (ordinalNow == 3) {

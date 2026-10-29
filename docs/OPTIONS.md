@@ -125,6 +125,7 @@ listed at the end.
 - `-Dsteinbridge.diag.yaw=N`: with `#PITCH`, keeps the player facing N degrees.
 - `-Dsteinbridge.diag.yawStep=S:D[:P]`: with `#YAW`, turns the player D more degrees (and P more down) from second S on — the same place seen a little to the side or up, for the exposure (default: off).
 - `-Dsteinbridge.diag.showcaseAtSec=N`: opens the video settings' showcase (the landscape drawn instead of the world) N seconds after startup, with a world loaded (default: off).
+- `-Dsteinbridge.diag.showcaseCloseAtSec=N`: closes the showcase opened by `#SHOWCASE_AT` N seconds after startup (default: it stays open).
 - `-Dsteinbridge.diag.showcaseNightAtSec=N`: turns the showcase to night N seconds after startup, and back to day N seconds after that, alternating (default: off).
 
 ## EngineOptions
@@ -244,6 +245,10 @@ listed at the end.
 - `-Dsteinbridge.gfx.passStateCheck=true` (diagnostics): on every tracked pass, the queries to the driver, compared with what was tracked at opening and with the game's state at closing; counts and prints the divergences.
 - `-Dsteinbridge.gfx.noVolume=true`: no light in the air (`SteinVolume`), for A/B (default: with the atmosphere and the shadows).
 - `-Dsteinbridge.gfx.noCloudShadows=true`: the clouds cast no shadows and do not dim the sun (`SteinClouds`), for A/B (default: with the clouds and the shadows).
+- `-Dsteinbridge.gfx.noMotes=true`: no dust motes in the light of enclosed places (`SteinVolume#motes`), for A/B (default: with them).
+- `-Dsteinbridge.gfx.noLeafLight=true`: the sun does not come through the leaves seen against it (`SteinGlow`'s mask leaves them out), for A/B (default: it does).
+- `-Dsteinbridge.gfx.glScene8=true`: on OpenGL the Lens's light keeps the game's framebuffer in 8 bits, its lights clipped at white, for A/B (default: 16 bits, as with Vulkan; see `SteinHdr#framebufferWide`).
+- `-Dsteinbridge.gfx.fireWarmth=X`: how far the block light turns to a torch flame's colour with the Lens's light, at the same luminance, 0 to 1 (`SteinWorldLight`; 0: the game's colour; default: 0.6).
 - `-Dsteinbridge.gfx.gpuPassTiming=true` (diagnostics): GPU time of each pass (OpenGL or Vulkan timestamps), read a few frames later and printed every 5 s.
 - `-Dsteinbridge.diag.hdrLayerView=true` (diagnostics): with HDR's quick quality, the encode paints green where it took the light from the lights layer (default: off).
 - `-Dsteinbridge.diag.hdrShotAtSec=N` (diagnostics): N seconds after startup, saves the HDR encode's output (clipped to 8 bits) to screenshots/hdr-encode.png (default: off).

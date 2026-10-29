@@ -345,6 +345,13 @@ final class DiagWorldScenes {
                 Log.info("diag", "showcase open");
             }
         }
+        if (showcaseOpened
+                && DiagOptions.SHOWCASE_CLOSE_AT >= 0
+                && sec >= DiagOptions.SHOWCASE_CLOSE_AT
+                && Showcase.active()) {
+            Showcase.close();
+            Log.info("diag", "showcase closed");
+        }
         long n = DiagOptions.SHOWCASE_NIGHT_AT;
         // also with the showcase opened by the video settings (videoAtSec)
         if (Showcase.active() && n > 0 && sec >= n) {

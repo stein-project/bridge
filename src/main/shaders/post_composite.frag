@@ -26,8 +26,10 @@
 // params5: x mist density (0 off), y the camera's height, z the mist's base height, w how fast it thins upwards.
 // params6: rgb the mist's colour, w 1 to add the rays. params7: the projection's x, y and depth terms.
 // params8: xyz the world's up in eye space, w the farthest a sky pixel counts (blocks).
+// params11..params13: the camera's rotation (world -> eye), by columns; params11.w the time (s), params12.w how enclosed
+// the camera is, params13.w the dust motes' strength (0: none). params14.xyz: the camera in the world (SteinVolume.motes).
 // params2: x debug (1: edges in red), y edge ratio, z smallest depth step that counts, w HDR boost (0: SDR).
-// params3: the light threshold (post.glsl). params4: y glow gain, z edge distance (blocks), w 1: the scene goes past
+// params3: the light threshold (post.glsl). params4: x the exposure (SteinExposure), y glow gain, z edge distance (blocks), w 1: the scene goes past
 // white (the Stein light): the bloom adds its light, then an exposure that follows the scene's mean like an eye and a
 // soft shoulder bring it back — what is below the shoulder stays as drawn; the sun and the lights roll off towards
 // white (with HDR output, towards 1 + params2.w).
@@ -163,9 +165,60 @@ float mist(vec2 uv, float d) {
     return clamp(1.0 - exp(-params5.x * start * along * dist), 0.0, 0.85);
 }
 
-// The scene past white, brought to the screen: linear light; the bloom's light added; the exposure from the adapted
-// mean (a bright view — the sun in the eyes — darkens the rest; a dark one opens a little); the shoulder from 0.6 up
-// to the white of the output, keeping the hue, and the brightest going to white like a hot light.
+vec3 hash3(vec3 p) {
+    p = fract(p * vec3(0.1031, 0.1030, 0.0973));
+    p += dot(p, p.yxz + 33.33);
+    return fract((p.xxy + p.yxx) * p.zyx);
+}
+
+// Dust motes where a beam crosses the air of an enclosed place, at full size (the volume's dust is at half the size and
+// cannot hold a grain): a sparse lattice of motes fixed to the world and drifting slowly, looked up at a few distances
+// along the pixel's ray up to 9 blocks. A mote is never drawn smaller than most of a pixel: farther ones keep their
+// light spread over that pixel instead of flickering in and out between frames. They only show where the light in the
+// air (`shafts`) is, in its colour, and twinkle as they turn.
+const float MOTE_CELL = 0.45;     // blocks between motes, at most
+const float MOTE_RADIUS = 0.006;  // blocks: two or three pixels a block away, never a soft blob
+
+vec3 motes(vec2 uv, float air, vec3 shafts) {
+    float lum = dot(shafts, vec3(0.2126, 0.7152, 0.0722));
+    if (lum < 0.003) {
+        return vec3(0.0);
+    }
+    vec2 ndc = uv * 2.0 - 1.0;
+    vec3 dir = transpose(mat3(params11.xyz, params12.xyz, params13.xyz))
+            * normalize(vec3(ndc.x / params7.x, ndc.y / params7.y, -1.0));
+    vec3 cam = params14.xyz;
+    vec3 drift = params11.w * vec3(0.05, -0.02, 0.035);
+    float pixel = 2.0 * texel.y / params7.y;   // a pixel's size at a distance of one block
+    float sum = 0.0;
+    for (int k = 0; k < 6; k++) {
+        float dist = pow(1.5, float(k));   // 1 to 7.6 blocks
+        if (dist > air) {
+            break;
+        }
+        vec3 cell = floor((cam + dir * dist + drift) / MOTE_CELL);
+        vec3 h = hash3(cell);
+        if (h.x > 0.5) {
+            continue;   // sparse: most cells hold none
+        }
+        vec3 rel = (cell + 0.2 + 0.6 * hash3(cell + 17.0)) * MOTE_CELL - drift - cam;
+        float along = dot(rel, dir);
+        if (along < 0.8 || along > air) {
+            continue;
+        }
+        float off = length(rel - dir * along);
+        float r = max(MOTE_RADIUS, pixel * along * 0.7);
+        float spread = (MOTE_RADIUS * MOTE_RADIUS) / (r * r);
+        float twinkle = 0.55 + 0.45 * sin(params11.w * (1.5 + 2.0 * h.y) + h.z * 6.2831853);
+        sum += exp(-(off * off) / (r * r)) * spread * twinkle * (1.0 - smoothstep(4.0, 9.0, along));
+    }
+    vec3 hue = shafts / max(lum, 1e-4);
+    return hue * min(4.0 * sum, 1.5) * smoothstep(0.003, 0.05, lum) * params13.w;
+}
+
+// The scene past white, brought to the screen: linear light; the bloom's light added; the exposure of the place
+// (params4.x); the shoulder from 0.6 up to the white of the output, keeping the hue, and the brightest going to white
+// like a hot light.
 // The glare of the sun (or moon) in the eyes: a round glow around it on the screen — a wide soft one and a tight hot
 // one — as much as the sky around it is open (the depth at a few points around the sun; a tree in front hides it),
 // in the haze's colour (params10: golden low, white-gold high, cold for the moon).
@@ -209,16 +262,11 @@ vec3 glare(vec2 uv, float open) {
     return params10.rgb * g * open;
 }
 
-// The world's mean luma (sRGB-coded, log mean) that is shown as drawn; brighter darkens, darker opens.
-const float EXPOSURE_KEY = 0.36;
-
 vec3 exposed(vec3 c, vec3 glow, vec2 uv, float open) {
     vec3 l = srgbToLinear(c) + srgbToLinear(min(glow, vec3(64.0))) * params.x * 0.6 + glare(uv, open);
-    // the world's mean (the log mean, without the sky): the same land as bright whatever share of sky is in view
-    float mean = exp(textureLod(average, vec2(0.5), params3.w).g);
-    // gentle: a view of bright sky and one of dark ground differed by more than twice
-    float e = clamp(pow(EXPOSURE_KEY / max(mean, 0.02), 0.35), 0.72, 1.12);
-    l *= e;
+    // the exposure from the place (SteinExposure: fixed by day outdoors, a little open enclosed or at night), not
+    // from the image: turning the camera does not change the picture's brightness
+    l *= params4.x;
     float white = 1.0 + params2.w;
     float m = max(l.r, max(l.g, l.b));
     float knee = 0.6 * white;
@@ -277,6 +325,9 @@ void main() {
         // the shafts are light in the air (post_rays leaves the near pixels out of the screen's rays itself, and
         // the light in the air is only where the air is)
         vec3 shafts = air > 0.0 ? softRays(uv, p, last) : vec3(0.0);   // none on the hand
+        if (params13.w > 0.0 && air > 0.0) {
+            shafts += motes(uv, air, shafts);
+        }
         c = params4.w > 0.0 ? c + shafts : 1.0 - (1.0 - min(c, vec3(1.0))) * (1.0 - min(shafts, vec3(1.0)));
     }
     vec3 glow = finite(texture(bloom, uv).rgb);

@@ -48,6 +48,14 @@ public abstract class SteinCommands {
     /** Storage block (std430) in the slot. */
     public abstract void bindStorage(int slot, SteinBuffer buffer, long offset, long size);
 
+    /**
+     * An acceleration structure (its backend handle) for the ray queries of the pipelines that
+     * declare it; Vulkan with ray tracing only.
+     */
+    public void bindAccelerationStructure(int slot, long handle) {
+        throw new UnsupportedOperationException("acceleration structures need Vulkan");
+    }
+
     public abstract void setViewport(int x, int y, int w, int h);
 
     /** Scissor; null disables it. */

@@ -9,6 +9,7 @@
 package dev.xavier.stein.gfx;
 
 import dev.xavier.stein.bridge.core.Log;
+import dev.xavier.stein.bridge.engine.DirectRender;
 
 import net.minecraft.client.Minecraft;
 
@@ -267,6 +268,10 @@ public final class SteinHdr {
         if (scene != sceneWide) {
             sceneWide = scene;
             recreateFramebuffer = true;
+            // on OpenGL the window holds 8 bits: the game's framebuffer comes back for the scene
+            if (!SteinGfxOptions.VULKAN) {
+                DirectRender.suspend(scene);
+            }
         }
         if (recreateFramebuffer) {
             recreateFramebuffer = false;

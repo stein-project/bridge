@@ -207,6 +207,7 @@ final class SteinVkPipeline extends SteinPipeline {
         mapSlots(SteinShader.Resource.Kind.TEXTURE, desc.textures, byBinding, slotOf);
         mapSlots(SteinShader.Resource.Kind.UNIFORM, desc.uniforms, byBinding, slotOf);
         mapSlots(SteinShader.Resource.Kind.STORAGE, desc.storage, byBinding, slotOf);
+        mapSlots(SteinShader.Resource.Kind.ACCELERATION, desc.accelerations, byBinding, slotOf);
         for (SteinShader.Resource r : byBinding.values()) {
             Integer slot = slotOf.get(r.binding());
             if (slot == null) {
@@ -324,6 +325,9 @@ final class SteinVkPipeline extends SteinPipeline {
             case TEXTURE -> VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             case UNIFORM -> VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
             case STORAGE -> VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+            case ACCELERATION ->
+                    org.lwjgl.vulkan.KHRAccelerationStructure
+                            .VK_DESCRIPTOR_TYPE_ACCELERATION_STRUCTURE_KHR;
         };
     }
 

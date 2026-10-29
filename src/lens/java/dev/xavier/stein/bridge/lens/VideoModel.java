@@ -16,9 +16,12 @@ import dev.xavier.stein.bridge.showcase.VideoSettings.Section;
 import dev.xavier.stein.gfx.SteinBackend;
 import dev.xavier.stein.gfx.SteinHdr;
 import dev.xavier.stein.gfx.SteinPostFx;
+import dev.xavier.stein.gfx.SteinRayLight;
 import dev.xavier.stein.gfx.SteinShadows;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiScreen;
+import net.minecraft.client.gui.GuiYesNo;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.client.settings.GameSettings;
 
@@ -158,9 +161,47 @@ final class VideoModel implements VideoSettings.Source {
         int from =
                 now == null ? Presets.Position.FANCY.ordinal() - Integer.signum(by) : now.ordinal();
         Presets.Position p = Presets.at(from + by);
+        if (p.rayTracing() && !SteinBackend.rayTracingSupported()) {
+            return; // the Stein mode needs a GPU with ray tracing on Vulkan
+        }
         if (p == now) {
             return;
         }
+        if (p.rayTracing()) {
+            confirmStein(p);
+            return;
+        }
+        applyPreset(p);
+    }
+
+    /**
+     * The Stein mode asks first: its terms (a joke, and what it really needs), then applies on
+     * "accept" and comes back to the settings either way.
+     */
+    private void confirmStein(Presets.Position p) {
+        Minecraft mc = Minecraft.func_71410_x();
+        GuiScreen back = mc.field_71462_r;
+        StringBuilder terms = new StringBuilder();
+        for (int i = 1; i <= 4; i++) {
+            terms.append(tr("steinlens.stein.term" + i)).append('\n');
+        }
+        terms.append('\n').append(tr("steinlens.stein.needs"));
+        mc.func_147108_a(
+                new GuiYesNo(
+                        (accepted, id) -> {
+                            if (accepted) {
+                                applyPreset(p);
+                            }
+                            mc.func_147108_a(back);
+                        },
+                        tr("steinlens.stein.title"),
+                        terms.toString(),
+                        tr("steinlens.stein.accept"),
+                        tr("steinlens.stein.cancel"),
+                        0));
+    }
+
+    private void applyPreset(Presets.Position p) {
         if (Presets.apply(mod, p)) {
             Minecraft mc = Minecraft.func_71410_x();
             if (mc.field_71438_f != null) {
@@ -243,6 +284,7 @@ final class VideoModel implements VideoSettings.Source {
                 () -> c.atmosphere = (c.atmosphere + 1) % 3,
                 () -> c.atmosphere = (c.atmosphere + 2) % 3,
                 gfx);
+        toggle("steinlens.sky", shown(() -> c.sky, gfx), () -> c.sky = !c.sky, gfx);
     }
 
     /**
@@ -273,6 +315,22 @@ final class VideoModel implements VideoSettings.Source {
                 shown(() -> c.smoothEdges, post),
                 () -> c.smoothEdges = !c.smoothEdges,
                 post);
+        // the special light effects: the Stein mode (ray tracing) only
+        BooleanSupplier stein = () -> post.getAsBoolean() && SteinRayLight.active();
+        choice(
+                "steinlens.occlusion",
+                () ->
+                        !stein.getAsBoolean() || c.occlusion == 0
+                                ? tr("options.off")
+                                : tr("steinlens.occlusion." + c.occlusion),
+                () -> c.occlusion = (c.occlusion + 1) % 3,
+                () -> c.occlusion = (c.occlusion + 2) % 3,
+                stein);
+        toggle(
+                "steinlens.reflections",
+                shown(() -> c.reflections, stein),
+                () -> c.reflections = !c.reflections,
+                stein);
         filters(post);
         BooleanSupplier hdrCan = SteinHdr::available;
         toggle("steinlens.hdr", shown(() -> c.hdr, hdrCan), () -> c.hdr = !c.hdr, hdrCan);

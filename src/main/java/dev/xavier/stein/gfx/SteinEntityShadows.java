@@ -208,6 +208,9 @@ final class SteinEntityShadows {
                     }
                     c.drawIndirect(commands, g.cmdAt, g.n);
                 }
+                // off again: the bias is state that outlives the pass on some paths (the HUD's
+                // and the inventory's items came out behind their slots)
+                c.setDepthBias(false, 0f, 0f);
             } finally {
                 c.end();
             }

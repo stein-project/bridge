@@ -16,7 +16,6 @@ import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.renderer.texture.ITextureObject;
 import net.minecraft.client.renderer.texture.TextureUtil;
 import net.minecraft.client.resources.IResourceManager;
-import net.minecraft.client.resources.IResourceManagerReloadListener;
 import net.minecraft.util.ResourceLocation;
 
 import org.lwjgl.system.MemoryUtil;
@@ -74,7 +73,6 @@ final class SteinClouds {
     private static byte[] cover;
     private static int coverW;
     private static int coverH;
-    private static boolean listening;
     private static boolean failed;
 
     private SteinClouds() {}
@@ -202,21 +200,20 @@ final class SteinClouds {
     /** The game's clouds texture wrapped for the draws; false while the game has not made it. */
     private static boolean bind(SteinDevice dev, Minecraft mc) {
         ensure(dev);
-        if (!listening) {
-            listening = true;
-            ((net.minecraft.client.resources.IReloadableResourceManager) mc.getResourceManager())
-                    .registerReloadListener((IResourceManagerReloadListener) SteinClouds::reload);
-        }
         ITextureObject t = mc.getTextureManager().getTexture(CLOUDS);
         if (t == null) {
             return false;
         }
         int id = t.getGlTextureId();
+        // a resource reload gives the clouds a new texture: its cover is read again then. (A reload
+        // listener of our own, registered in the middle of a frame, upset the game's reload after
+        // the video settings: the items in the HUD and the inventory came out in the world.)
         if (texture == null || texture.handle() != id) {
             texture =
                     dev.importTexture(
                             SteinTexture.Desc.texture2D("clouds", SteinFormat.RGBA8, 256, 256, 1),
                             id);
+            cover = null;
         }
         if (cover == null) {
             reload(mc.getResourceManager());

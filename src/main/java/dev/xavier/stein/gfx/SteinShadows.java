@@ -256,6 +256,9 @@ public final class SteinShadows {
         SteinGlow.frame();
         Minecraft mc = Minecraft.getMinecraft();
         WorldClient world = mc.theWorld;
+        SteinMaterials.frame(world);
+        // the rays' scene for this frame, at this camera (ray tracing on Vulkan only)
+        SteinRayScene.frame(cx, cy, cz);
         if (world == null || !available()) {
             SteinWorldLight.none();
             return;
@@ -422,6 +425,8 @@ public final class SteinShadows {
         MemoryUtil.memPutFloat(q + 72, 0f);
         MemoryUtil.memPutFloat(q + 76, 0f);
         SteinClouds.write(q + 80, k > 0f);
+        // cloudInfo.yzw: the sky's zenith for the reflections (SteinMaterials)
+        SteinMaterials.write(q + 80 + 68, active);
     }
 
     /**
@@ -627,6 +632,8 @@ public final class SteinShadows {
             if (n > 0) {
                 c.drawIndexedIndirect(commands, commandAt, n);
             }
+            // off again: the bias is state that outlives the pass on some paths
+            c.setDepthBias(false, 0f, 0f);
         } finally {
             c.end();
         }

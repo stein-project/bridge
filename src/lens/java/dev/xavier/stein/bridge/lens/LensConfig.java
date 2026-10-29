@@ -105,6 +105,12 @@ final class LensConfig {
     /** Smoothing of object outlines (where the depth breaks; textures stay sharp). */
     boolean smoothEdges = false;
 
+    /** Corner shading: 0 off, 1 soft, 2 strong (SteinAo). */
+    int occlusion = 0;
+
+    /** Shiny materials reflect the sky and the sun (SteinMaterials). */
+    boolean reflections = false;
+
     /** Anisotropic filtering: 1 (off), 2, 4, 8 or 16 (SteinTextureFilter). */
     int anisotropy = 1;
 
@@ -121,6 +127,9 @@ final class LensConfig {
 
     /** The atmosphere: 0 off, 1 soft, 2 strong (SteinAtmosphere). */
     int atmosphere = 0;
+
+    /** The Lens's own sky (SteinSkyDome). */
+    boolean sky = false;
 
     /** The sun's shadows (SteinShadows): 0 off, 1 low, 2 medium, 3 high. */
     int shadows = 0;
@@ -210,11 +219,14 @@ final class LensConfig {
             oldArmorHurt = bool(o, "oldArmorHurt", oldArmorHurt);
             bloom = integer(o, "bloom", bloom, 0, 2);
             smoothEdges = bool(o, "smoothEdges", smoothEdges);
+            occlusion = integer(o, "occlusion", occlusion, 0, 2);
+            reflections = bool(o, "reflections", reflections);
             anisotropy = integer(o, "anisotropy", anisotropy, 1, 16);
             supersample = bool(o, "supersample", supersample);
             sharpen = integer(o, "sharpen", sharpen, 0, 3);
             dynamicLights = bool(o, "dynamicLights", dynamicLights);
             atmosphere = integer(o, "atmosphere", atmosphere, 0, 2);
+            sky = bool(o, "sky", sky);
             // (a switch before the levels: on = medium)
             shadows =
                     o.has("shadows") && o.get("shadows").getAsJsonPrimitive().isBoolean()
@@ -289,11 +301,14 @@ final class LensConfig {
         o.addProperty("oldArmorHurt", oldArmorHurt);
         o.addProperty("bloom", bloom);
         o.addProperty("smoothEdges", smoothEdges);
+        o.addProperty("occlusion", occlusion);
+        o.addProperty("reflections", reflections);
         o.addProperty("anisotropy", anisotropy);
         o.addProperty("supersample", supersample);
         o.addProperty("sharpen", sharpen);
         o.addProperty("dynamicLights", dynamicLights);
         o.addProperty("atmosphere", atmosphere);
+        o.addProperty("sky", sky);
         o.addProperty("shadows", shadows);
         o.addProperty("moonlight", moonlight);
         o.addProperty("darkness", darkness);

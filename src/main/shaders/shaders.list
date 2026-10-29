@@ -29,6 +29,12 @@ entity_text_lens.vert     vert     entity_dynamic.vert   TEXT LENS
 terrain_lens.vert         vert     terrain.vert          LENS
 terrain_lens.frag         frag     terrain.frag          LENS
 terrain_alpha_lens.frag   frag     terrain.frag          ALPHA_TEST LENS
+terrain_lens_gbuf.frag    frag     terrain.frag          LENS GBUFFER
+terrain_alpha_lens_gbuf.frag frag  terrain.frag          ALPHA_TEST LENS GBUFFER
+ray_light.frag            frag     ray_light.frag        RT
+ray_gi.frag               frag     ray_gi.frag           RT
+terrain_water.vert        vert     terrain.vert          LENS WATER
+terrain_water.frag        frag     terrain.frag          LENS WATER RT
 terrain_inv_lens.vert     vert     terrain.vert          INVARIANT LENS
 pose.comp           comp     pose.comp
 gather.comp         comp     gather.comp
@@ -46,6 +52,9 @@ post_composite_hdr.frag frag   post_composite.frag   HDR_LAYER
 post_luma.frag        frag     post_luma.frag
 post_adapt.frag       frag     post_adapt.frag
 post_rays.frag        frag     post_rays.frag
+post_ao.frag          frag     post_ao.frag
+post_ao_apply.frag    frag     post_ao_apply.frag
+sky_dome.frag         frag     sky_dome.frag
 loading.frag          frag     loading.frag
 shadow_cast.frag      frag     shadow_cast.frag
 shadow_cast.vert      vert     terrain.vert          SHADOW_CAST

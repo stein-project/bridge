@@ -20,12 +20,15 @@ import dev.xavier.stein.bridge.engine.Visuals;
 import dev.xavier.stein.bridge.hooks.GameHooks;
 import dev.xavier.stein.bridge.hooks.HookSink;
 import dev.xavier.stein.bridge.showcase.VideoSettings;
+import dev.xavier.stein.gfx.SteinAo;
 import dev.xavier.stein.gfx.SteinAtmosphere;
 import dev.xavier.stein.gfx.SteinDynamicLights;
 import dev.xavier.stein.gfx.SteinGlow;
 import dev.xavier.stein.gfx.SteinHdr;
+import dev.xavier.stein.gfx.SteinMaterials;
 import dev.xavier.stein.gfx.SteinPostFx;
 import dev.xavier.stein.gfx.SteinShadows;
+import dev.xavier.stein.gfx.SteinSkyDome;
 import dev.xavier.stein.gfx.SteinTextureFilter;
 import dev.xavier.stein.gfx.SteinWorldLight;
 
@@ -431,9 +434,12 @@ public final class Lens implements HookSink {
         Rain.setHidden(!config.rain);
         OldAnimations.set(config.oldAnimations, oldAnimationParts(config));
         SteinPostFx.configure(config.bloom, config.smoothEdges, config.sharpen);
+        SteinAo.configure(config.occlusion);
+        SteinMaterials.configure(config.reflections);
         SteinTextureFilter.configure(config.anisotropy, config.supersample);
         SteinDynamicLights.configure(config.dynamicLights);
         SteinAtmosphere.configure(config.atmosphere);
+        SteinSkyDome.configure(config.sky);
         SteinShadows.configure(config.shadows);
         SteinWorldLight.configure(config.moonlight, config.darkness);
         SteinGlow.configure(config.glowingBlocks);

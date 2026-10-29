@@ -25,6 +25,9 @@ layout(location = 4) out float vFade;    // 0 just appeared, 1 fully in
 #ifdef LENS
 layout(location = 5) out vec3 vEye;
 #endif
+#ifdef WATER
+layout(location = 6) out vec3 vWorld;   // the world point (the camera's position mod 4096 in dynCount.yzw)
+#endif
 #ifdef INVARIANT
 invariant gl_Position;
 #endif
@@ -41,6 +44,9 @@ void main() {
     vFogDist = abs(eye.z);
 #ifdef LENS
     vEye = eye.xyz;
+#endif
+#ifdef WATER
+    vWorld = p + floor(dynCount.yzw);
 #endif
     // Chunk fading in (like newer versions): goes from the sky color to its own, fast at first and slow at the end.
     float t = (anim.y > 0.0 && iOrigin.w > 0.0) ? clamp((anim.x - iOrigin.w) / anim.y, 0.0, 1.0) : 1.0;

@@ -284,6 +284,9 @@ public final class SteinTerrain {
 
     private static final int CUTOUT = 2;
 
+    /** The translucent layer (water, stained glass, ice): not in the rays' scene yet. */
+    private static final int TRANSLUCENT = 3;
+
     private static Object uploadSlice(long src, int count, int x, int y, int z, int layer) {
         int rx = x >> REGION_SHIFT;
         int rz = z >> REGION_SHIFT;
@@ -320,6 +323,9 @@ public final class SteinTerrain {
         SteinTerrainLayers.epoch++;
         SteinTerrainSlice slice = new SteinTerrainSlice(r, first, count, opaque, x, y, z);
         SteinShadows.added(slice);
+        if (layer != TRANSLUCENT) {
+            SteinRayScene.added(slice);
+        }
         return slice;
     }
 
@@ -343,6 +349,7 @@ public final class SteinTerrain {
     /** The chunk dropped the layer (new build, empty, or chunk deleted). */
     public static void release(Object handle) {
         SteinShadows.removed((SteinTerrainSlice) handle);
+        SteinRayScene.removed((SteinTerrainSlice) handle);
         PENDING.add(new Pending((SteinTerrainSlice) handle, frame));
         SteinChunkFade.departure(
                 ((SteinTerrainSlice) handle).x,
@@ -453,7 +460,19 @@ public final class SteinTerrain {
             d.pipeKey = pipeKey;
         }
         long t1 = STATS ? System.nanoTime() : 0L;
-        SteinCommands cmd = dev.beginPass(SteinRenderPass.keep("terrain", dev.gameTarget()));
+        // the opaque layers in the Stein mode: the game's target with the G-buffer (SteinRayLight)
+        boolean opaqueLayer = SteinTerrainLayers.ordinalNow < TRANSLUCENT;
+        SteinRenderTarget target =
+                lens && opaqueLayer ? SteinRayLight.target(dev) : dev.gameTarget();
+        if (lens && opaqueLayer) {
+            SteinRayLight.frame(frameUbo, frameAt);
+        }
+        // the Stein water reads the image and the depth from before the translucent layer
+        waterLayer = lens && !opaqueLayer && SteinRayLight.capable();
+        if (waterLayer) {
+            SteinRayLight.beforeTranslucent(dev);
+        }
+        SteinCommands cmd = dev.beginPass(SteinRenderPass.keep("terrain", target));
         long t2 = STATS ? System.nanoTime() : 0L;
         try {
             if (d.split) {
@@ -486,6 +505,12 @@ public final class SteinTerrain {
         }
         sections += count;
     }
+
+    /** The camera's block for the Frame block being written. */
+    private static int frameCamX;
+
+    private static int frameCamY;
+    private static int frameCamZ;
 
     /** The layer's offsets in the three rings, reserved by {@link #reserveRings}. */
     private static long originAt;
@@ -532,6 +557,9 @@ public final class SteinTerrain {
                         (long) count * COMMAND_BYTES);
             }
         }
+        frameCamX = camX;
+        frameCamY = camY;
+        frameCamZ = camZ;
         writeFrame(
                 frameUbo.address(frameAt),
                 (float) (vx - camX),
@@ -650,6 +678,13 @@ public final class SteinTerrain {
         cmd.bindTexture(5, SteinShadows.previous(), SteinShadows.sampler());
         SteinClouds.ensure(SteinDevice.get());
         cmd.bindTexture(6, SteinClouds.texture(), SteinClouds.sampler());
+        if (SteinRayLight.capable()) {
+            cmd.bindTexture(
+                    7, SteinMaterialMap.texture(SteinDevice.get()), SteinMaterialMap.sampler());
+        }
+        if (waterLayer) {
+            SteinRayLight.bindWater(cmd);
+        }
     }
 
     /**
@@ -698,6 +733,32 @@ public final class SteinTerrain {
         return r == null ? null : r.buffer;
     }
 
+    /** The camera's block of the last Frame block written (the Stein mode's reprojection). */
+    static int frameCamX() {
+        return frameCamX;
+    }
+
+    static int frameCamY() {
+        return frameCamY;
+    }
+
+    static int frameCamZ() {
+        return frameCamZ;
+    }
+
+    /** The layer being drawn is the Stein mode's translucent one (our water). */
+    private static boolean waterLayer;
+
+    /** The blocks' atlas as last bound for the terrain (the light pass reads it). */
+    static SteinTexture atlasTexture() {
+        return atlas;
+    }
+
+    /** The lightmap as last bound for the terrain. */
+    static SteinTexture lightmapTexture() {
+        return lightmap;
+    }
+
     /** The common index buffer (quads as two triangles). */
     static SteinBuffer indices() {
         return indices;
@@ -742,6 +803,7 @@ public final class SteinTerrain {
             }
             // the atmosphere keeps this camera for the post-processing (the first layer only)
             SteinAtmosphere.capture(b, m, fogColor);
+            SteinAo.capture(b);
             int mode = SteinGameState.fogMode();
             MemoryUtil.memPutFloat(
                     p + FRAME_FOG_MODE, mode == GL11.GL_EXP ? 1f : mode == GL11.GL_EXP2 ? 2f : 0f);
@@ -761,6 +823,10 @@ public final class SteinTerrain {
             MemoryUtil.memPutFloat(p + FRAME_ANISOTROPY, SteinTextureFilter.anisotropy());
             SteinDynamicLights.update(m);
             SteinDynamicLights.write(p + FRAME_DYNAMIC);
+            // the camera's position mod 4096 (dynCount.yzw): the Stein mode's world points and rays
+            MemoryUtil.memPutFloat(p + FRAME_DYNAMIC + 4, Math.floorMod(frameCamX, 4096) + fx);
+            MemoryUtil.memPutFloat(p + FRAME_DYNAMIC + 8, Math.floorMod(frameCamY, 4096) + fy);
+            MemoryUtil.memPutFloat(p + FRAME_DYNAMIC + 12, Math.floorMod(frameCamZ, 4096) + fz);
             SteinShadows.write(p + FRAME_SHADOW);
         }
     }

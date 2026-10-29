@@ -73,6 +73,7 @@ import dev.xavier.stein.bridge.engine.ServerWatch;
 import dev.xavier.stein.gfx.SteinBackend;
 import dev.xavier.stein.gfx.SteinDevice;
 import dev.xavier.stein.gfx.SteinGfxOptions;
+import dev.xavier.stein.gfx.SteinHdr;
 import dev.xavier.stein.gfx.game.SteinGameFramebuffers;
 import dev.xavier.stein.gfx.gl.SteinGlDebug;
 import dev.xavier.stein.gfx.gl.SteinGlFrame;
@@ -424,6 +425,10 @@ public final class Display {
             SteinGameFramebuffers.present();
         } else {
             glfwSwapBuffers(Win.handle);
+            if (SteinGfxOptions.ENABLED) {
+                // the Lens's 16-bit scene follows its options, as Vulkan's present does
+                SteinHdr.betweenFrames();
+            }
         }
         BenchZones.end(BenchZones.SWAP);
         long t1 = TIME_SWAP ? System.nanoTime() : 0L;

@@ -14,9 +14,14 @@
 // - Moonlight (skyAmbient.w): blue on what is open to the sky at night.
 // - Glowing blocks (lightFlags.z): the block light stronger and warmer right next to a source (the level it ends at
 //   is the game's: it does not reach farther).
+// - Warm fire (sunColor.w): the block light takes a torch's colour at the same luminance — warmer, not brighter, and
+//   not farther.
 
 // The sunlight thrown back by the lit ground and walls into the shade: warm, a little (no shadow is ever only sky).
 const float BOUNCE = 0.15;
+
+// A torch's flame (about 1900 K), scaled to a luminance of 1: the block light keeps its brightness, only its hue moves.
+const vec3 FIRE = vec3(1.476, 0.915, 0.443);
 
 vec3 darkened(vec3 c) {
     float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
@@ -29,6 +34,7 @@ vec3 worldLight(vec3 full, vec3 block, vec2 level, float sun) {
         block = darkened(block);
     }
     vec3 skyPart = max(full - block, vec3(0.0));
+    block = mix(block, FIRE * dot(block, vec3(0.2126, 0.7152, 0.0722)), sunColor.w);
     // the extra light right next to a source is a fire's: orange, not more white (next to lava the stone turned white)
     vec3 light = block * (vec3(1.0) + lightFlags.z * smoothstep(0.6, 1.0, level.x / 15.0) * vec3(0.95, 0.5, 0.16))
             + skyPart * (skyAmbient.rgb + sunColor.rgb * (BOUNCE + (1.0 - BOUNCE) * sun));

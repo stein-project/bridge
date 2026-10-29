@@ -81,6 +81,7 @@ public final class SteinOpaqueCutout {
     public static void beginStitch() {
         atlas = null; // the chunks built from now on wait for the new atlas
         stitched = ENABLED ? new HashMap<>() : null;
+        SteinMaterialMap.beginStitch();
     }
 
     /**
@@ -94,11 +95,13 @@ public final class SteinOpaqueCutout {
         if (s != null) {
             s.put(origin(x, y), opaque(levels));
         }
+        SteinMaterialMap.uploaded(levels, width, height, x, y);
         TextureUtil.uploadTextureMipmap(levels, width, height, x, y, blur, clamp);
     }
 
     /** After the block atlas is stitched: builds the lookup from what {@link #uploadMipmap} saw. */
     public static void endStitch(Object mapObj) {
+        SteinMaterialMap.endStitch((TextureMap) mapObj);
         Map<Long, Boolean> s = stitched;
         stitched = null;
         if (s == null) {

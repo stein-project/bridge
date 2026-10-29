@@ -201,6 +201,62 @@ public enum SteinBackend {
         }
     }
 
+    /** The file's key for ray tracing (the Lens option, applied at the next start). */
+    private static final String RAY_TRACING = "rt";
+
+    /**
+     * Whether ray tracing was asked for: {@code -Dsteinbridge.gfx.rt=true} or the file's {@code
+     * rt=true} (the Lens option). Read when the Vulkan device is made; it only adds the device's
+     * ray tracing extensions when the GPU has them.
+     */
+    public static synchronized boolean rayTracingRequested() {
+        return Boolean.getBoolean("steinbridge.gfx.rt")
+                || Boolean.parseBoolean(load().getProperty(RAY_TRACING));
+    }
+
+    private static volatile boolean rayTracingSupported;
+
+    /**
+     * Whether this session's GPU has ray tracing (Vulkan: acceleration structures and ray queries),
+     * asked for or not: the Lens offers the Stein mode only then.
+     */
+    public static boolean rayTracingSupported() {
+        return rayTracingSupported;
+    }
+
+    /** Set by the Vulkan device when it is made. */
+    public static void rayTracingSupported(boolean supported) {
+        rayTracingSupported = supported;
+    }
+
+    /** The Lens option: saved for the next start. */
+    public static synchronized void setRayTracing(boolean on) {
+        Properties p = load();
+        p.setProperty(RAY_TRACING, String.valueOf(on));
+        store(p);
+        chosen = on || Boolean.getBoolean("steinbridge.gfx.rt");
+    }
+
+    /**
+     * The Stein mode as chosen now (read once, then kept with each choice): see {@link
+     * #rayTracingChosen}.
+     */
+    private static volatile Boolean chosen;
+
+    /**
+     * Whether the Stein mode is chosen now: {@link #rayTracingRequested}, kept in memory (each
+     * frame asks) and changed at once by the Lens's choice, while the device's ray tracing itself
+     * waits for the next start. Choosing Ultra turns the Stein effects off right away.
+     */
+    public static boolean rayTracingChosen() {
+        Boolean c = chosen;
+        if (c == null) {
+            c = rayTracingRequested();
+            chosen = c;
+        }
+        return c;
+    }
+
     private static Properties load() {
         Properties p = new Properties();
         File f = file();

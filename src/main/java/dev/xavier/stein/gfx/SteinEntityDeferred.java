@@ -196,11 +196,14 @@ public final class SteinEntityDeferred {
      */
     public static void skyBegin() {
         timeStart(1);
+        // the Lens's own sky first, under what the game draws of its sky (SteinSkyDome)
+        SteinSkyDome.begin();
         sessionBegin(true);
     }
 
     public static void skyEnd() {
         sessionEnd();
+        SteinSkyDome.end();
         timeEnd(1);
     }
 
