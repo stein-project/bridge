@@ -72,6 +72,11 @@ public final class SteinDynamicLights {
         on = enabled;
     }
 
+    /** Whether the Lens option is on. */
+    static boolean enabled() {
+        return on;
+    }
+
     /**
      * At each terrain layer's Frame block, with the camera's matrix {@code m} (column major): the
      * first time in a world drawing, gathers the sources.

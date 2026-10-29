@@ -1,6 +1,52 @@
 # Client optimizations applied by patching. They go only into the
 # SteinBridge variants; the vanilla variant remains the baseline.
 # class	name2	descriptor	name3	newOwner
+# The benchmark's CPU zones (dev.xavier.stein.bridge.bench.BenchZones, only with -Dsteinbridge.bench): the begin of
+# each zone. The hooks run in the order of the rules, so the begins are here, before every other rule of the same call,
+# and the ends at the bottom of redirects-mods.tsv, after every other: each zone covers the game's call AND the Stein
+# hooks around it (the recording sessions and their flushes, the mods' events).
+# Minecraft.runTick in runGameLoop.
+ave	s	()V	tickBegin	dev/xavier/stein/bridge/bench/BenchZones	before	ave.av
+# Inside runTick: TextureManager.tick (the animated textures), WorldClient.updateEntities, WorldClient.tick and
+# EffectRenderer.updateEffects, so a tick's time can be told apart (the rest is tick_other).
+bmj	e	()V	tickTexturesBegin	dev/xavier/stein/bridge/bench/BenchZones	before	ave.s()V
+bdb	i	()V	tickEntitiesBegin	dev/xavier/stein/bridge/bench/BenchZones	before	ave.s()V
+bdb	c	()V	tickWorldBegin	dev/xavier/stein/bridge/bench/BenchZones	before	ave.s()V
+bec	a	()V	tickParticlesBegin	dev/xavier/stein/bridge/bench/BenchZones	before	ave.s()V
+# GlStateManager.clear of the main framebuffer in runGameLoop: the frame start (clear + bindFramebuffer).
+bfl	m	(I)V	frameStartBegin	dev/xavier/stein/bridge/bench/BenchZones	before	ave.av
+# EntityRenderer.updateCameraAndRender in runGameLoop.
+bfk	a	(FJ)V	renderBegin	dev/xavier/stein/bridge/bench/BenchZones	before	ave.av
+# Framebuffer.framebufferRender (the main framebuffer to the window) in runGameLoop.
+bfw	c	(II)V	blitBegin	dev/xavier/stein/bridge/bench/BenchZones	before	ave.av
+# renderWorld in updateCameraAndRender.
+bfk	b	(FJ)V	worldBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(FJ)V
+# updateLightmap in renderWorld.
+bfk	g	(F)V	lightmapBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.b(FJ)V
+# RenderGlobal.setupTerrain in renderWorldPass.
+bfr	a	(Lpk;DLbia;IZ)V	terrainSetupBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(IFJ)V
+# RenderGlobal.updateChunks in renderWorldPass.
+bfr	a	(J)V	chunkUploadBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(IFJ)V
+# RenderGlobal.renderBlockLayer (each layer) in renderWorldPass.
+bfr	a	(Ladf;DILpk;)I	terrainBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(IFJ)V
+# RenderGlobal.renderSky in renderWorldPass.
+bfr	a	(FI)V	skyBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(IFJ)V
+# renderCloudsCheck in renderWorldPass.
+bfk	a	(Lbfr;FI)V	cloudsBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(IFJ)V
+# RenderGlobal.renderEntities in renderWorldPass.
+bfr	a	(Lpk;Lbia;F)V	entitiesBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(IFJ)V
+# EffectRenderer.renderParticles in renderWorldPass.
+bec	a	(Lpk;F)V	particlesBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(IFJ)V
+# EffectRenderer.renderLitParticles in renderWorldPass.
+bec	b	(Lpk;F)V	particlesBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(IFJ)V
+# renderRainSnow in renderWorldPass.
+bfk	c	(F)V	weatherBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(IFJ)V
+# renderHand in renderWorldPass.
+bfk	b	(FI)V	handBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(IFJ)V
+# GuiIngame.renderGameOverlay in updateCameraAndRender.
+avo	a	(F)V	hudBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(FJ)V
+# GuiScreen.drawScreen in updateCameraAndRender.
+axu	a	(IIF)V	screenBegin	dev/xavier/stein/bridge/bench/BenchZones	before	bfk.a(FJ)V
 # LongHashMap.getHashedKey: the x^z hash collides massively on the chunks around the player.
 nq	g	(J)I	hashedKey	dev/xavier/stein/bridge/engine/ChunkHash
 # World.setActivePlayerChunksAndCheckLight: O(players x radius^2) per tick; runs with one representative per chunk.
@@ -31,6 +77,12 @@ bqs	f	()Z	useVbo	dev/xavier/stein/bridge/engine/ChunkArena
 bfz	a	(Lbfd;)V	upload	dev/xavier/stein/bridge/engine/ChunkArena	static	bho.a(Lbfd;Lbmt;)V
 bfh	a	(Ladf;)V	render	dev/xavier/stein/bridge/engine/ChunkArena	static	bfr.a(Ladf;)V
 bmt	c	()V	delete	dev/xavier/stein/bridge/engine/ChunkArena	static	bht.a()V
+# The layer of each upload (Stein GFX's opaque cutout faces): getVertexBufferByLayer (bht.b) in
+# ChunkRenderDispatcher.uploadChunk notes the layer just before uploadVertexBuffer runs.
+bht	b	(I)Lbmt;	uploadBuffer	dev/xavier/stein/bridge/engine/ChunkArena	static	bho.a(Ladf;Lbfd;Lbht;Lbhq;)Lcom/google/common/util/concurrent/ListenableFuture;
+# TextureUtil.uploadTextureMipmap of each texture in TextureMap.loadTextureAtlas: Stein GFX notes which
+# ones are opaque at every mipmap level (SteinOpaqueCutout), then uploads as before.
+bml	a	([[IIIIIZZ)V	uploadMipmap	dev/xavier/stein/gfx/SteinOpaqueCutout	static	bmh.b(Lbni;)V
 bmt	sbRegion	Ljava/lang/Object;	-	-	field
 bmt	sbFirst	I	-	-	field
 bmt	sbCount	I	-	-	field
@@ -162,6 +214,58 @@ bfr	c	(Lcj;)Ljava/util/Set;	visibleFacings	dev/xavier/stein/bridge/engine/ChunkG
 bfr	a	(Lpk;DLbia;IZ)V	setupTerrain	dev/xavier/stein/bridge/engine/ChunkGraph	static	bfk.a(IFJ)V
 java/util/Queue	isEmpty	()Z	bfsLoop	dev/xavier/stein/bridge/engine/ChunkGraph	static	bfr.a(Lpk;DLbia;IZ)V
 bht	sbInfo	Ljava/lang/Object;	-	-	field
+# EnumFacing.values() in the game's own search loop (vanillaBfs, checkBfs): the cached array, not a
+# copy per visited chunk.
+cq	values	()[Lcq;	facingValues	dev/xavier/stein/bridge/engine/ChunkGraph	static	bfr.a(Lpk;DLbia;IZ)V
+# EnumFacing.values() (engine/Facings): one shared array instead of a copy per call, only where the game walks the
+# array with a for-each loop or reads its length (checked in the bytecode): World.getRawLight, checkLightFor and
+# isBlockIndirectlyGettingPowered, ChunkCache.getLightForExt, Chunk's relight check, BlockModelRenderer (ambient
+# occlusion, flat, fillQuadBounds, brightness/colour), RenderChunk.setPosition, RenderItem.renderModel, BlockLiquid.checkForMixing.
+cq	values	()[Lcq;	values	dev/xavier/stein/bridge/engine/Facings	static	adm.a(Lcj;Lads;)I
+cq	values	()[Lcq;	values	dev/xavier/stein/bridge/engine/Facings	static	adm.c(Lads;Lcj;)Z
+cq	values	()[Lcq;	values	dev/xavier/stein/bridge/engine/Facings	static	adm.A(Lcj;)I
+cq	values	()[Lcq;	values	dev/xavier/stein/bridge/engine/Facings	static	adv.a(Lads;Lcj;)I
+cq	values	()[Lcq;	values	dev/xavier/stein/bridge/engine/Facings	static	amy.m()V
+cq	values	()[Lcq;	values	dev/xavier/stein/bridge/engine/Facings	static	bgf.a(Ladq;Lboq;Lafh;Lcj;Lbfd;Z)Z
+cq	values	()[Lcq;	values	dev/xavier/stein/bridge/engine/Facings	static	bgf.b(Ladq;Lboq;Lafh;Lcj;Lbfd;Z)Z
+cq	values	()[Lcq;	values	dev/xavier/stein/bridge/engine/Facings	static	bgf.a(Lafh;[ILcq;[FLjava/util/BitSet;)V
+cq	values	()[Lcq;	values	dev/xavier/stein/bridge/engine/Facings	static	bgf.a(Lboq;FFFF)V
+cq	values	()[Lcq;	values	dev/xavier/stein/bridge/engine/Facings	static	bht.a(Lcj;)V
+cq	values	()[Lcq;	values	dev/xavier/stein/bridge/engine/Facings	static	bjh.a(Lboq;ILzx;)V
+cq	values	()[Lcq;	values	dev/xavier/stein/bridge/engine/Facings	static	ahv.e(Ladm;Lcj;Lalz;)Z
+# ChunkRenderDispatcher.clearChunkUpdates in setupTerrain (engine/ChunkQueue): the waiting build tasks drained under one
+# lock and finished in the same order, instead of three locks and a walk of the queue per task on every frame.
+bho	e	()V	clearChunkUpdates	dev/xavier/stein/bridge/engine/ChunkQueue	static	bfr.a(Lpk;DLbia;IZ)V
+# BiomeColorHelper's grass, foliage and water tints (engine/BiomeColors): during a chunk build, each position's colour
+# is computed once and the nine around the block are averaged with the game's arithmetic.
+aea	a	(Ladq;Lcj;)I	grass	dev/xavier/stein/bridge/engine/BiomeColors	body
+aea	b	(Ladq;Lcj;)I	foliage	dev/xavier/stein/bridge/engine/BiomeColors	body
+aea	c	(Ladq;Lcj;)I	water	dev/xavier/stein/bridge/engine/BiomeColors	body
+# IntCache.resetIntCache (engine/IntCachePool): the world generator's spare arrays are kept instead of one of each size
+# being dropped on every reset and allocated again by the next biome question.
+asc	a	()V	reset	dev/xavier/stein/bridge/engine/IntCachePool	body
+# BlockPos.offset(facing) as a reused position per thread (engine/NeighbourPos), only where the neighbour is read and
+# dropped (checked in the bytecode of each callee): World.getRawLight's six neighbours (light updates, mostly the
+# integrated server), the side test of BlockModelRenderer's ambient-occlusion and flat paths, and the corners of
+# AmbientOcclusionFace.updateVertexBrightness.
+cj	a	(Lcq;)Lcj;	light	dev/xavier/stein/bridge/engine/NeighbourPos	static	adm.a(Lcj;Lads;)I
+cj	a	(Lcq;)Lcj;	side	dev/xavier/stein/bridge/engine/NeighbourPos	static	bgf.a(Ladq;Lboq;Lafh;Lcj;Lbfd;Z)Z
+cj	a	(Lcq;)Lcj;	side	dev/xavier/stein/bridge/engine/NeighbourPos	static	bgf.b(Ladq;Lboq;Lafh;Lcj;Lbfd;Z)Z
+cj	a	(Lcq;)Lcj;	corner	dev/xavier/stein/bridge/engine/NeighbourPos	static	bgf$b.a(Ladq;Lafh;Lcj;Lcq;[FLjava/util/BitSet;)V
+# renderModelAmbientOcclusion's scratch objects (engine/AoScratch, mode "new"): the quad bounds, the bound flags and the
+# AmbientOcclusionFace, one set per thread instead of one per smooth-lit block.
+[F	<init>	(I)V	quadBounds	dev/xavier/stein/bridge/engine/AoScratch	new	bgf.a(Ladq;Lboq;Lafh;Lcj;Lbfd;Z)Z
+java/util/BitSet	<init>	(I)V	boundsFlags	dev/xavier/stein/bridge/engine/AoScratch	new	bgf.a(Ladq;Lboq;Lafh;Lcj;Lbfd;Z)Z
+bgf$b	<init>	(Lbgf;)V	face	dev/xavier/stein/bridge/engine/AoScratch	new	bgf.a(Ladq;Lboq;Lafh;Lcj;Lbfd;Z)Z
+# RegionRenderCache's light and block-state arrays (engine/RegionArrays, mode "new"): each build thread reuses its pair,
+# given to the first region made during each RenderChunk.rebuildChunk (marked in ChunkRenderWorker.processTask).
+[I	<init>	(I)V	lights	dev/xavier/stein/bridge/engine/RegionArrays	new	bff.<init>
+[Lalz;	<init>	(I)V	states	dev/xavier/stein/bridge/engine/RegionArrays	new	bff.<init>
+bht	b	(FFFLbhn;)V	buildBegin	dev/xavier/stein/bridge/engine/RegionArrays	before	bhp.a(Lbhn;)V
+bht	b	(FFFLbhn;)V	buildEnd	dev/xavier/stein/bridge/engine/RegionArrays	after	bhp.a(Lbhn;)V
+# VisGraph.floodFill (ChunkFlood): the queue in an int array, without a LinkedList node and a
+# copy of EnumFacing.values() per block reached; on every chunk build and every camera-block change.
+bhw	a	(I)Ljava/util/Set;	floodFill	dev/xavier/stein/bridge/engine/ChunkGraph	body
 # Version of the compilations, for the search check (ChunkGraph.compiled): after each
 # RenderChunk.setCompiledChunk and stopCompileTask.
 bht	a	(Lbhq;)V	compiled	dev/xavier/stein/bridge/engine/ChunkGraph	after
@@ -191,6 +295,25 @@ amz	a	(IIILalz;)V	bump	dev/xavier/stein/bridge/engine/ChunkGraph	before
 amy	a	([BIZ)V	bump	dev/xavier/stein/bridge/engine/ChunkGraph	before
 bcz	c	(II)Lamy;	chunkMap	dev/xavier/stein/bridge/engine/ChunkGraph	before
 bcz	b	(II)V	chunkMap	dev/xavier/stein/bridge/engine/ChunkGraph	before
+# The client world's chunk lookup (ClientChunks): World.getChunkFromChunkCoords — behind every
+# World.getBlockState — answered on the client thread from a table of recent columns instead of the
+# chunk map; World.isChunkLoaded (every isAreaLoaded) asks it the same way. The table's version
+# changes before and after every ChunkProviderClient.loadChunk and unloadChunk, and
+# Minecraft.loadWorld lets go of it.
+adm	a	(II)Lamy;	chunkAt	dev/xavier/stein/bridge/engine/ClientChunks	body
+adm	a	(IIZ)Z	loaded	dev/xavier/stein/bridge/engine/ClientChunks	body
+bcz	c	(II)Lamy;	changed	dev/xavier/stein/bridge/engine/ClientChunks	before
+bcz	c	(II)Lamy;	changed	dev/xavier/stein/bridge/engine/ClientChunks	after
+bcz	b	(II)V	changed	dev/xavier/stein/bridge/engine/ClientChunks	before
+bcz	b	(II)V	changed	dev/xavier/stein/bridge/engine/ClientChunks	after
+ave	a	(Lbdb;Ljava/lang/String;)V	forget	dev/xavier/stein/bridge/engine/ClientChunks	before
+# WorldClient.updateBlocks: previousActiveChunkSet.retainAll(activeChunkSet) skipped when the active
+# set was kept from the previous tick and so cannot lose anything (ActiveReuse).
+java/util/Set	retainAll	(Ljava/util/Collection;)Z	retainAll	dev/xavier/stein/bridge/engine/ActiveReuse	static	bdb.h()V
+# World.getClosestPlayer and isAnyPlayerWithinRangeAt (mob spawners, enchanting tables): the distance
+# before the spectator test, which on the client is a tab-list lookup per player (PlayerRange).
+adm	a	(DDDD)Lwn;	closest	dev/xavier/stein/bridge/engine/PlayerRange	body
+adm	b	(DDDD)Z	anyWithin	dev/xavier/stein/bridge/engine/PlayerRange	body
 # renderEntities (bfr.a(Lpk;Lbia;F)V): the chunk of each section kept by BlockPos, world and
 # chunk map version (ChunkGraph.chunkAt), instead of a map lookup every frame.
 bdb	f	(Lcj;)Lamy;	chunkAt	dev/xavier/stein/bridge/engine/ChunkGraph	static	bfr.a(Lpk;Lbia;F)V

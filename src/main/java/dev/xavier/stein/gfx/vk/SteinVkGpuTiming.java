@@ -15,12 +15,12 @@ import static org.lwjgl.vulkan.VK10.VK_QUERY_RESULT_64_BIT;
 import static org.lwjgl.vulkan.VK10.VK_QUERY_RESULT_WITH_AVAILABILITY_BIT;
 import static org.lwjgl.vulkan.VK10.VK_QUERY_TYPE_TIMESTAMP;
 import static org.lwjgl.vulkan.VK10.VK_SUCCESS;
+import static org.lwjgl.vulkan.VK10.nvkGetQueryPoolResults;
 import static org.lwjgl.vulkan.VK10.vkCmdWriteTimestamp;
 import static org.lwjgl.vulkan.VK10.vkCreateQueryPool;
 import static org.lwjgl.vulkan.VK10.vkDestroyQueryPool;
 import static org.lwjgl.vulkan.VK10.vkGetPhysicalDeviceProperties;
 import static org.lwjgl.vulkan.VK10.vkGetPhysicalDeviceQueueFamilyProperties;
-import static org.lwjgl.vulkan.VK10.vkGetQueryPoolResults;
 import static org.lwjgl.vulkan.VK12.vkResetQueryPool;
 
 import dev.xavier.stein.bridge.core.Log;
@@ -42,11 +42,17 @@ import java.nio.LongBuffer;
  * the labels, the ring and the report are {@link SteinGpuPassTiming}'s, the same as OpenGL's, so
  * the two APIs can be compared pass by pass.
  *
- * <p>Each ring slot owns two queries of one pool (start, end). A slot is reset from the CPU when it
- * is claimed again ({@code hostQueryReset}, Vulkan 1.2): a reset command would not be allowed
- * inside a render, and a pass may start inside the render the previous one left open. Results are
- * read without waiting, only for frames whose last timestamp is already available; ticks become
- * nanoseconds with the GPU's timestampPeriod, masked to the queue's valid bits.
+ * <p>Each ring slot owns two queries of one pool (start, end), so a frame's slots are one
+ * contiguous range of queries (two when the ring wraps). The oldest frame is read with one {@code
+ * vkGetQueryPoolResults} over its whole range (64-bit values with availability) into memory
+ * allocated once, and its slots are reset from the CPU as one range when they leave the ring
+ * ({@code hostQueryReset}, Vulkan 1.2): a reset command would not be allowed inside a render, and a
+ * pass may start inside the render the previous one left open. A call costs about the same for one
+ * query as for the whole range, and the benchmark turns this timer on, so one call per query (two
+ * reads and a reset per pass) was itself a visible part of the frame. Results are read without
+ * waiting, only for frames whose last timestamp is already available; a query of that frame not yet
+ * available reads as 0 (an impossible result, counted). Ticks become nanoseconds with the GPU's
+ * timestampPeriod, masked to the queue's valid bits.
  *
  * <p>Pipeline: Stein GFX only.
  */
@@ -63,24 +69,57 @@ public final class SteinVkGpuTiming {
     private static double nanosPerTick;
     private static long validMask;
 
-    /** Two longs per query (value, availability), reused for every read. */
-    private static final LongBuffer RESULT = MemoryUtil.memAllocLong(2);
+    /** Bytes per query in {@link #results}: the value and its availability, two longs. */
+    private static final long STRIDE = 16L;
+
+    private static final int FLAGS = VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT;
+
+    /**
+     * Native memory for every query of the pool, at the query's own index (allocated with the
+     * pool): a frame's range lands where its slots are, wrapped or not, with no copy.
+     */
+    private static long results;
 
     private static final SteinGpuPassTiming.Timestamps READ =
             new SteinGpuPassTiming.Timestamps() {
                 @Override
+                public void fetch(int first, int n) {
+                    int q = 2 * first;
+                    int count = 2 * n;
+                    int untilEnd = 2 * SLOTS - q;
+                    if (count <= untilEnd) {
+                        read(q, count);
+                    } else {
+                        read(q, untilEnd);
+                        read(0, count - untilEnd);
+                    }
+                }
+
+                @Override
                 public boolean arrived(int slot) {
-                    return read(2 * slot + 1) && RESULT.get(1) != 0;
+                    return available(2 * slot + 1);
                 }
 
                 @Override
                 public long begin(int slot) {
-                    return read(2 * slot) ? nanos(RESULT.get(0)) : 0L;
+                    return value(2 * slot);
                 }
 
                 @Override
                 public long end(int slot) {
-                    return read(2 * slot + 1) ? nanos(RESULT.get(0)) : 0L;
+                    return value(2 * slot + 1);
+                }
+
+                @Override
+                public void released(int first, int n) {
+                    // read already, and the GPU is past them: free for their next claim
+                    int untilEnd = SLOTS - first;
+                    if (n <= untilEnd) {
+                        vkResetQueryPool(device.vk(), pool, 2 * first, 2 * n);
+                    } else {
+                        vkResetQueryPool(device.vk(), pool, 2 * first, 2 * untilEnd);
+                        vkResetQueryPool(device.vk(), pool, 0, 2 * (n - untilEnd));
+                    }
                 }
             };
 
@@ -121,6 +160,7 @@ public final class SteinVkGpuTiming {
             SteinVkDevice.check(vkCreateQueryPool(d.vk(), info, null, lp), "timestamp pool");
             pool = lp.get(0);
             vkResetQueryPool(d.vk(), pool, 0, 2 * SLOTS);
+            results = MemoryUtil.nmemCallocChecked(2L * SLOTS, STRIDE);
         }
         device = d;
         timing = new SteinGpuPassTiming(SLOTS);
@@ -134,8 +174,7 @@ public final class SteinVkGpuTiming {
         }
         int slot = timing.claim(name);
         if (slot >= 0) {
-            // the slot's previous use was read already (it left the ring): its queries are free
-            vkResetQueryPool(d.vk(), pool, 2 * slot, 2);
+            // the slot's queries were reset when its previous use left the ring (released)
             vkCmdWriteTimestamp(c, VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT, pool, 2 * slot);
         }
         return slot;
@@ -162,20 +201,34 @@ public final class SteinVkGpuTiming {
             vkDestroyQueryPool(d.vk(), pool, null);
             pool = 0L;
             broken = true;
+            MemoryUtil.nmemFree(results);
+            results = 0L;
         }
     }
 
-    private static boolean read(int query) {
+    /**
+     * {@code count} queries from {@code query} into {@link #results}, without waiting. With the
+     * availability bit every query's availability is written, available or not, so a value left
+     * from the slot's previous lap is never taken as this one's.
+     */
+    private static void read(int query, int count) {
+        long at = results + query * STRIDE;
         int r =
-                vkGetQueryPoolResults(
-                        device.vk(),
-                        pool,
-                        query,
-                        1,
-                        RESULT,
-                        16L,
-                        VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WITH_AVAILABILITY_BIT);
-        return r == VK_SUCCESS || r == VK_NOT_READY;
+                nvkGetQueryPoolResults(
+                        device.vk(), pool, query, count, count * STRIDE, at, STRIDE, FLAGS);
+        if (r != VK_SUCCESS && r != VK_NOT_READY) {
+            // an error (device lost): nothing of the range counts as arrived
+            MemoryUtil.memSet(at, 0, count * STRIDE);
+        }
+    }
+
+    private static boolean available(int query) {
+        return MemoryUtil.memGetLong(results + query * STRIDE + 8L) != 0L;
+    }
+
+    /** The query's time in nanoseconds; 0 (an impossible result) if it has not arrived. */
+    private static long value(int query) {
+        return available(query) ? nanos(MemoryUtil.memGetLong(results + query * STRIDE)) : 0L;
     }
 
     private static long nanos(long ticks) {

@@ -5,7 +5,11 @@
 //
 // Copyright (c) 2026 Breno Xavier
 // The terrain (SteinTerrain): a 16-byte vertex, the chunk origin per instance.
+// INVARIANT: the variant of the cutout depth pre-pass (SteinTerrain), whose two pipelines must compute the same
+// depth bit for bit (the colour pass tests EQUAL against the pre-pass). LENS: also the eye position, for the Lens's
+// light (terrain.frag).
 #include "common/terrain_frame.glsl"
+#include "common/clip_depth.glsl"
 #ifdef SHADOW_CAST
 #include "common/shadow_distort.glsl"
 #endif
@@ -18,11 +22,16 @@ layout(location = 1) out vec2 vUv;
 layout(location = 2) out vec2 vLight;
 layout(location = 3) out float vFogDist;
 layout(location = 4) out float vFade;    // 0 just appeared, 1 fully in
+#ifdef LENS
 layout(location = 5) out vec3 vEye;
+#endif
+#ifdef INVARIANT
+invariant gl_Position;
+#endif
 void main() {
     vec3 p = vec3(aPos.xyz) * (1.0 / 1024.0) - 16.0 + iOrigin.xyz;   // exact: no gaps
     vec4 eye = modelview * vec4(p, 1.0);
-    gl_Position = projection * eye;
+    gl_Position = clipDepth(projection * eye);
 #ifdef SHADOW_CAST
     gl_Position.xy = shadowDistort(gl_Position.xy);   // (an ortho projection: w is 1)
 #endif
@@ -30,7 +39,9 @@ void main() {
     vUv = vec2(aUv) * (1.0 / 32768.0);
     vLight = vec2(float(aPos.w & 255u), float(aPos.w >> 8));
     vFogDist = abs(eye.z);
+#ifdef LENS
     vEye = eye.xyz;
+#endif
     // Chunk fading in (like newer versions): goes from the sky color to its own, fast at first and slow at the end.
     float t = (anim.y > 0.0 && iOrigin.w > 0.0) ? clamp((anim.x - iOrigin.w) / anim.y, 0.0, 1.0) : 1.0;
     vFade = 1.0 - (1.0 - t) * (1.0 - t);

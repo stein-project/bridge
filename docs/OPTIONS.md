@@ -18,6 +18,27 @@ listed at the end.
 - `-Dsteinlens.hdr=true|false`: overrides the file's HDR output setting without saving (default: unset, the file decides).
 - `-Dsteinlens.debug=true`: zoom state (every 2 s and on every change) and custom items lookups, recomputed choices and enchantment version steps (every 2 s) in the log (default: off).
 
+## BenchOptions
+
+`dev.xavier.stein.bridge.bench.BenchOptions`
+
+- `-Dsteinbridge.bench=true`: runs the benchmark — opens a fresh world with a fixed seed, plays a fixed route on its own with the player's input locked, and writes `stein-bench/<date>.zip` in the game folder (default: off). It also turns on the GPU time per pass.
+- `-Dsteinbridge.bench.settings=standard|player`: `standard` plays with the same video settings on every machine (render distance 12, Fancy, smooth lighting, all particles, fancy clouds, no frame limit, no VSync), so two machines compare; `player` keeps the player's own (default: standard). Either way the player's settings come back at the end and options.txt is never written.
+- `-Dsteinbridge.bench.scale=X`: multiplies how long each part of the route is measured (default 1.0, about four minutes in all; 0.25 for a quick check).
+- `-Dsteinbridge.bench.repeat=N`: plays the whole route N times (default 1).
+- `-Dsteinbridge.bench.only=a,b`: plays only these parts of the route, by name (default: all; the names are in the report and in docs/BENCHMARK.md).
+- `-Dsteinbridge.bench.maxBiomes=N`: visits at most N biomes in the biome tour, the nearest first (default 0: every biome the seed has within 2000 blocks of the spawn).
+- `-Dsteinbridge.bench.size=WxH`: sets the window to this size for the run, for two machines to measure the same pixels (default: unset, the window as it is).
+- `-Dsteinbridge.bench.quit=true`: closes the game when the report is written (default: off, the game stays open and says where the file is).
+- `-Dsteinbridge.bench.startAtSec=N`: seconds after startup before the benchmark opens its world (default 5).
+- `-Dsteinbridge.bench.external=false`: no external tools (nvidia-smi and typeperf for the GPU and processor clocks, reg and powercfg for the machine description; all read-only) (default: they run, the clocks at one sample per second).
+- `-Dsteinbridge.bench.gpu=false`: no GPU time per pass during the run, to measure what the timestamps themselves cost (default: on; set in `core.Opt` before Stein GFX reads it).
+- `-Dsteinbridge.bench.modes=auto|current|vulkan,opengl,fixed`: the graphics modes to run, one run each, the game reopening itself between them and joining the reports at the end: `auto`, every mode this machine has (Stein GFX on Vulkan and on OpenGL, the fixed-function pipeline); `current`, only the mode the game started in; or a list (default: auto).
+- `-Dsteinbridge.bench.jfr=false`: no flight recording in the report (default: on, when the running Java has the jdk.jfr module).
+- `-Dsteinbridge.bench.session=name`: set by the benchmark when it reopens the game, so the runs of every mode go into one report (default: unset, a new session).
+- `-Dsteinbridge.bench.modesLeft=a,b`: set by the benchmark when it reopens the game: the modes still to run after this one (default: unset).
+- `-Dsteinbridge.bench.dir=path`: where the report goes (default: `stein-bench` in the game folder).
+
 ## CoreOptions
 
 `dev.xavier.stein.bridge.core.CoreOptions`
@@ -114,8 +135,14 @@ listed at the end.
 - `-Dsteinbridge.diag.idleLimit=true`: keeps the idle frame limit on the test bench too, where `-Dsteinbridge.diag.background` turns it off so measurements run at full speed (default: off).
 - `-Dsteinbridge.diag.loadingShot=true`: the loading screen saves its frame, through the game's own capture, to screenshots/loading.png when the opening's bar passes half (default: off).
 - `-Dsteinbridge.opt.vanillaActiveChunks=true`: turns the active-chunks bookkeeping optimisation off (default: on).
-- `-Dsteinbridge.opt.checkActiveChunks=true`: runs both active-chunk paths every tick and compares the sets (default: off).
+- `-Dsteinbridge.opt.vanillaActiveChunkFill=true`: keeps one player per chunk but lets the game insert every chunk of their squares, overlaps included, instead of each chunk once (default: once).
+- `-Dsteinbridge.opt.checkActiveChunks=true`: runs both active-chunk paths every tick and compares the sets and the ambient countdown (default: off).
 - `-Dsteinbridge.opt.vanillaChunkAt=true`: does the chunk lookup every frame instead of caching it per column (default: cached).
+- `-Dsteinbridge.opt.vanillaClientChunks=true`: the client world's chunk lookup goes to the chunk map every time instead of the table of recent columns (default: table).
+- `-Dsteinbridge.opt.checkClientChunks=true`: uses the table of recent columns and compares every answer with the chunk map (default: off).
+- `-Dsteinbridge.opt.vanillaActiveReuse=true`: rebuilds the client's active-chunk set every tick even when the players stayed in the same chunks (default: kept).
+- `-Dsteinbridge.opt.checkActiveReuse=true`: rebuilds the kept active-chunk set anyway and compares it, in iteration order, with the kept one; also runs the skipped retainAll and checks it removed nothing (default: off).
+- `-Dsteinbridge.opt.vanillaPlayerRange=true`: the closest-player and player-in-range searches test the spectator mode before the distance, as in 1.8.9 (default: distance first).
 - `-Dsteinbridge.opt.vanillaCull=true`: uses the game's visibility search and chunk culling (default: Stein's).
 - `-Dsteinbridge.opt.checkCull=true`: computes the visibility graph both ways and compares them (default: off).
 - `-Dsteinbridge.opt.vanillaChunkHash=true`: restores the original chunk hash (default: Stein's).
@@ -188,6 +215,16 @@ listed at the end.
 - `-Dsteinbridge.opt.vanillaChunkLoading=true`: the integrated server loads and generates every chunk of the view distance in the tick that asks for it, as the game does (default: spread over the ticks, nearest first; see `LazyChunks`).
 - `-Dsteinbridge.opt.vanillaPendingTicks=true`: saving a chunk walks every scheduled block update of the world, as the game does (default: one index per save; see `PendingTicks`).
 - `-Dsteinbridge.opt.checkPendingTicks=true`: answers every chunk of a save both ways and compares the lists (default: off).
+- `-Dsteinbridge.opt.vanillaFacings=true`: the game's hot loops get a fresh copy of EnumFacing.values() on every call, as in 1.8.9 (default: one shared array; see `Facings`).
+- `-Dsteinbridge.opt.vanillaIntCache=true`: the world generator's IntCache drops one spare array on every reset, as the game does (default: keeps them; see `IntCachePool`).
+- `-Dsteinbridge.opt.vanillaBiomeColors=true`: every grass, foliage and water tint of a chunk build reads the nine biomes around the block again (default: each position's colour computed once per build; see `BiomeColors`).
+- `-Dsteinbridge.opt.checkBiomeColors=true`: computes every tint both ways and compares (default: off).
+- `-Dsteinbridge.opt.vanillaRawLight=true`: World.getRawLight allocates a BlockPos for each of the six neighbours, as the game does (default: one reused position per thread; see `NeighbourPos`).
+- `-Dsteinbridge.opt.vanillaBlockNeighbours=true`: the block renderer allocates a BlockPos for every side test and ambient-occlusion corner, as the game does (default: reused positions per thread; see `NeighbourPos`).
+- `-Dsteinbridge.opt.vanillaAoScratch=true`: every smooth-lit block allocates its quad bounds, bound flags and AmbientOcclusionFace, as the game does (default: one set per thread; see `AoScratch`).
+- `-Dsteinbridge.opt.vanillaRegionArrays=true`: every chunk build's RegionRenderCache allocates its light and block-state arrays, as the game does (default: each build thread reuses its pair; see `RegionArrays`).
+- `-Dsteinbridge.opt.vanillaClearUpdates=true`: setupTerrain's clearChunkUpdates takes the waiting build tasks out one lock at a time, as the game does (default: all at once; see `ChunkQueue`).
+- `-Dsteinbridge.opt.vanillaPlayerUnload=true`: a chunk unloaded on the integrated server also unloads a player still standing in it, as 1.8.9 does after a long teleport, leaving that player frozen until a dimension change (default: the player stays; see `PlayerUnload`).
 - `-Dsteinbridge.opt.noWatchdog=true`: turns the freeze watchdog off (default: on).
 - `-Dsteinbridge.watchdog.silenceSec=N`: seconds of silence before the watchdog reports a freeze (default: 20).
 - `-Dsteinbridge.watchdog.tickSec=N`: seconds between the watchdog's checks (default: 10).
@@ -210,6 +247,7 @@ listed at the end.
 - `-Dsteinbridge.gfx.gpuPassTiming=true` (diagnostics): GPU time of each pass (OpenGL or Vulkan timestamps), read a few frames later and printed every 5 s.
 - `-Dsteinbridge.diag.hdrLayerView=true` (diagnostics): with HDR's quick quality, the encode paints green where it took the light from the lights layer (default: off).
 - `-Dsteinbridge.diag.hdrShotAtSec=N` (diagnostics): N seconds after startup, saves the HDR encode's output (clipped to 8 bits) to screenshots/hdr-encode.png (default: off).
+- `-Dsteinbridge.gfx.gpuPassTiming.every=N`: only one frame in N carries the per-pass timestamps (default: 1, every frame; the benchmark asks for 16). With Vulkan on AMD, writing the timestamps of every pass cost a heavy scene a fifth of its frames per second and halved its 1% low; one frame in 16 still gives each part hundreds of GPU frames.
 - `-Dsteinbridge.gfx.recordFrameCheck=true` (diagnostics): on one frame in 300, each command is described at recording and again at replay, compared one by one, and the resources it uses are checked in the driver at replay time (buffer, texture, sampler and framebuffer still exist).
 - `-Dsteinbridge.gfx.frameSubmitStats=true` (diagnostics): submissions to the driver per frame and the reason (and the caller) of each submission outside the end of the frame, every 5 s.
 - `-Dsteinbridge.gfx.passTiming=true`: (diagnostics) measures the CPU time to open and close each pass and prints it periodically (default: off).
@@ -235,11 +273,18 @@ listed at the end.
 - `-Dsteinbridge.gfx.ownPose=...`: Stein's own player pose computation (default: on).
 - `-Dsteinbridge.gfx.poseStats=...`: (diagnostics) prints the player pose numbers (default: off).
 - `-Dsteinbridge.gfx.gpuPose=...`: player pose in the compute shader (default: on).
+- `-Dsteinbridge.gfx.entityNearFirst=...`: with the pose on the GPU, the players' opaque draws go out nearest first, so the GPU's early depth test rejects the pixels of the players behind (default: off; no gain measured on AMD, kept for Intel A/B).
+- `-Dsteinbridge.gfx.entityArmorFirst=...`: with entityNearFirst, the players' armor groups draw before the body group they cover, so the body's hidden pixels are rejected early (default: on, only matters when entityNearFirst is on).
+- `-Dsteinbridge.gfx.entityBatch=...`: outside strict order, each opaque group of model parts goes out as one instanced command per distinct part (its instances gathered by a compute shader) instead of one command per part of each entity. Equal depths between two entities on the same pixel may resolve in another order, as on the GL 4.1 path (default: on).
+- `-Dsteinbridge.gfx.glintMerge=...`: the two passes of the players' armor glint drawn as one, the shader summing both (at most one colour level of difference) (default: on).
 - `-Dsteinbridge.gfx.gpuPoseCheck=...`: (diagnostics) reads back the GPU pose and compares it with the CPU's (default: off).
 - `-Dsteinbridge.gfx.poseThreads=...`: number of player pose threads (default: half the processors minus one, between 1 and 4).
 - `-Dsteinbridge.gfx.segmentCheck=...`: (diagnostics) checks the segment assembly (default: off).
 - `-Dsteinbridge.gfx.terrainStats=...`: (diagnostics) prints the terrain numbers periodically (default: off).
 - `-Dsteinbridge.gfx.terrainOneBuffer=...`: each terrain layer in one buffer instead of 128-block regions (default: on).
+- `-Dsteinbridge.gfx.terrainDirectDraws=true` (experiment): the terrain issues one indexed draw per chunk section, as without indirect drawing, instead of one multi-draw indirect per layer; for drivers whose indirect multi-draw costs more on the CPU than the draws it replaces (Intel Iris Xe, 2021). Same draws, same image (default: off).
+- `-Dsteinbridge.gfx.terrainCutoutPrepass=...`: the alpha-tested terrain layers (leaves, grass) first write only depth, with the cheap alpha test, and then draw their colour with depth EQUAL and no depth writes, so the GPU's early depth test shades each pixel once. The image is the same (default: off until measured on more GPUs).
+- `-Dsteinbridge.gfx.terrainOpaqueCutout=...`: in the alpha-tested terrain layers (leaves, grass, flowers, glass), the faces whose atlas texture is fully opaque at every mipmap level go first and draw without the alpha test, so the GPU keeps its early depth test on them; only the faces with transparent texels still discard. Same layer, texture filter and shading: the image changes only where two faces lie in the same plane (the opaque one now draws first) and on texture edges sampled with anisotropic filtering (default: off until compared on screen and measured on more GPUs).
 - `-Dsteinbridge.gfx.terrainCache=...`: each terrain layer's draw kept between frames (default: on).
 - `-Dsteinbridge.gfx.terrainCacheCheck=...`: (diagnostics) checks the terrain cache against a reassembly (default: off).
 - `-Dsteinbridge.gfx.terrainCacheCheckEvery=...`: uses of the terrain cache between checks (default 30).
@@ -276,18 +321,25 @@ listed at the end.
 - `-Dsteinbridge.gfx.test.noGame=true`: runs without the game, for the out-of-game test (default: off).
 - `-Dsteinbridge.gfx.gpuPassTiming.slots=N`: timer-query ring slots (default: 4096, minimum 8).
 - `-Dsteinbridge.gfx.gpuOpTiming=true`: measures GPU time per replayed command (default: off).
+- `-Dsteinbridge.gfx.glDeviceWritten=false`: the buffers the GPU writes too (entity instances and commands) stay a single persistent mapping, as before, instead of a mapped CPU side copied into a device buffer (default: on).
 
 ## SteinVkOptions
 
 `dev.xavier.stein.gfx.vk.SteinVkOptions`
 
 - `-Dsteinbridge.gfx.vkValidation=true`: turns on the Vulkan SDK validation layers (default: off).
+- `-Dsteinbridge.gfx.vkNoDepthClipControl=true`: acts as if the device had no VK_EXT_depth_clip_control, as older drivers: the game goes to OpenGL (default: off; to test that path).
+- `-Dsteinbridge.gfx.vkAllowOldDriver=true`: runs Vulkan on a device without VK_EXT_depth_clip_control anyway, with the shaders' depth remap (default: off).
 - `-Dsteinbridge.gfx.vkNoPush=true`: does not use push descriptors (default: off).
 - `-Dsteinbridge.gfx.vkDevice=N`: chooses the physical device by driver order (default: -1, automatic).
 - `-Dsteinbridge.gfx.vkGameCopy=false` (diagnostics): the game's textures are not copied into the renderer's texture arrays; entities and the HUD draw with the game's texture itself (default: copied).
 - `-Dsteinbridge.gfx.vkDebugDrawsAtSec=N` (diagnostics): logs every draw of one frame, N seconds after startup — pass, pipeline state, textures and the start of the uniforms (default: off).
 - `-Dsteinbridge.gfx.vkSyncEachPass=true` (diagnostics): submits and waits for the GPU at the end of every pass, so nothing the CPU writes afterwards can reach a pass already recorded (default: off).
 - `-Dsteinbridge.gfx.vkPipelineStats=true` (diagnostics): every 5 s, how many draw pipelines were compiled on the render thread and how long they took (total and worst): the hitches a new pipeline costs in the middle of a frame (default: off).
+- `-Dsteinbridge.gfx.vkEarlyUploads=false`: every texture upload is recorded where it happens, interrupting the open render, instead of going to the start of the submission when nothing recorded before it in the submission touches that texture (the animated textures on every client tick; default: on).
+- `-Dsteinbridge.gfx.vkSwapchainImages=N` (experiment): asks the window for N swapchain images, within what the surface allows; more images give the presentation engine slack, so a present waits less often (default: 0, the surface minimum plus one).
+- `-Dsteinbridge.gfx.vkMailbox=true` (experiment, visible): without VSync, MAILBOX before IMMEDIATE when the driver has it: no tearing, the newest finished frame replaces the one waiting for the refresh (default: off, IMMEDIATE first).
+- `-Dsteinbridge.gfx.vkParallelRecord=true` (experiment): the entity pass's bulk writes (the camera-corrected instances of retained tile entities and the indirect commands of the entity groups) run on the pose threads (`poseThreads`) at the flush instead of on the render thread, into the same reserved ring bytes; the draws are recorded as before, so the image is the same (default: off; without pose threads it writes on the render thread).
 
 ## Removed options
 

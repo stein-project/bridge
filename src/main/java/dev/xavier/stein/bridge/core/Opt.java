@@ -22,6 +22,28 @@ public final class Opt {
 
     private Opt() {}
 
+    /**
+     * The benchmark ({@code -Dsteinbridge.bench}) measures the GPU time of each pass: the option is
+     * set here, before any options class reads it, unless the command line already decides ({@code
+     * -Dsteinbridge.bench.gpu=false} keeps it off, to measure what the timing costs).
+     */
+    static {
+        if (Boolean.getBoolean("steinbridge.bench")) {
+            // the whole console from here on goes into the report too
+            dev.xavier.stein.bridge.bench.BenchConsole.install();
+        }
+        if (Boolean.getBoolean("steinbridge.bench")
+                && System.getProperty("steinbridge.gfx.gpuPassTiming") == null
+                && !"false".equals(System.getProperty("steinbridge.bench.gpu"))) {
+            System.setProperty("steinbridge.gfx.gpuPassTiming", "true");
+            if (System.getProperty("steinbridge.gfx.gpuPassTiming.every") == null) {
+                // the timestamps cost the frames that carry them: one in 16, left out of the stats
+                System.setProperty("steinbridge.gfx.gpuPassTiming.every", "16");
+            }
+            System.setProperty("steinbridge.bench.setByBench", "steinbridge.gfx.gpuPassTiming");
+        }
+    }
+
     /** A flag that is off unless the property is {@code true}. */
     public static boolean flag(String name) {
         return Boolean.getBoolean(name);

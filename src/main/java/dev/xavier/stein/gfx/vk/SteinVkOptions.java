@@ -25,6 +25,19 @@ public final class SteinVkOptions {
      */
     static final boolean VALIDATION = Opt.flag("steinbridge.gfx.vkValidation");
 
+    /**
+     * {@code -Dsteinbridge.gfx.vkNoDepthClipControl=true}: acts as if the device had no
+     * VK_EXT_depth_clip_control, as older drivers: the game goes to OpenGL (default: off; to test
+     * that path).
+     */
+    static final boolean NO_DEPTH_CLIP_CONTROL = Opt.flag("steinbridge.gfx.vkNoDepthClipControl");
+
+    /**
+     * {@code -Dsteinbridge.gfx.vkAllowOldDriver=true}: runs Vulkan on a device without
+     * VK_EXT_depth_clip_control anyway, with the shaders' depth remap (default: off).
+     */
+    static final boolean ALLOW_OLD_DRIVER = Opt.flag("steinbridge.gfx.vkAllowOldDriver");
+
     /** {@code -Dsteinbridge.gfx.vkNoPush=true}: does not use push descriptors (default: off). */
     static final boolean NO_PUSH = Opt.flag("steinbridge.gfx.vkNoPush");
 
@@ -61,4 +74,35 @@ public final class SteinVkOptions {
      * hitches a new pipeline costs in the middle of a frame (default: off).
      */
     static final boolean PIPELINE_STATS = Opt.flag("steinbridge.gfx.vkPipelineStats");
+
+    /**
+     * {@code -Dsteinbridge.gfx.vkEarlyUploads=false}: every texture upload is recorded where it
+     * happens, interrupting the open render, instead of going to the start of the submission when
+     * nothing recorded before it in the submission touches that texture (the animated textures on
+     * every client tick; default: on).
+     */
+    static final boolean EARLY_UPLOADS = Opt.flag("steinbridge.gfx.vkEarlyUploads", true);
+
+    /**
+     * {@code -Dsteinbridge.gfx.vkSwapchainImages=N} (experiment): asks the window for N swapchain
+     * images, within what the surface allows; more images give the presentation engine slack, so a
+     * present waits less often (default: 0, the surface minimum plus one).
+     */
+    static final int SWAPCHAIN_IMAGES = Opt.integer("steinbridge.gfx.vkSwapchainImages", 0);
+
+    /**
+     * {@code -Dsteinbridge.gfx.vkMailbox=true} (experiment, visible): without VSync, MAILBOX before
+     * IMMEDIATE when the driver has it: no tearing, the newest finished frame replaces the one
+     * waiting for the refresh (default: off, IMMEDIATE first).
+     */
+    static final boolean MAILBOX = Opt.flag("steinbridge.gfx.vkMailbox");
+
+    /**
+     * {@code -Dsteinbridge.gfx.vkParallelRecord=true} (experiment): the entity pass's bulk writes
+     * (the camera-corrected instances of retained tile entities and the indirect commands of the
+     * entity groups) run on the pose threads ({@code poseThreads}) at the flush instead of on the
+     * render thread, into the same reserved ring bytes; the draws are recorded as before, so the
+     * image is the same (default: off; without pose threads it writes on the render thread).
+     */
+    public static final boolean PARALLEL_RECORD = Opt.flag("steinbridge.gfx.vkParallelRecord");
 }

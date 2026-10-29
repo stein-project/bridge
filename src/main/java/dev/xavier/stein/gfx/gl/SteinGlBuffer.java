@@ -25,6 +25,14 @@ import java.nio.ByteBuffer;
  * Memory#UPLOAD} is then persistently and coherently mapped, and the CPU writes straight to {@link
  * #address}. Without it, a plain buffer and every write goes through {@link #upload}.
  *
+ * <p>{@link Usage#GPU_WRITE} with a persistent buffer ({@code
+ * -Dsteinbridge.gfx.glDeviceWritten=false} turns it off): the mapping is only the CPU's side, and
+ * the GPU reads and writes a second buffer without client access, in device memory. On NVIDIA a
+ * persistent coherent mapping lives in system memory, so the compute shader that fills the entity
+ * instances and commands used to write across PCIe and every draw fetched them back the same way;
+ * now {@link #commit} copies only what the CPU wrote, at the same offsets, into the device buffer
+ * (the ring's fences cover both: the copy is queued before the draws that read it).
+ *
  * <p>To create and write, the buffer is bound to {@code GL_COPY_WRITE_BUFFER} (which the game does
  * not use) and whatever was bound there is restored afterwards; the game's {@code GL_ARRAY_BUFFER}
  * is never touched.
@@ -41,6 +49,12 @@ final class SteinGlBuffer extends SteinBuffer {
     private int id;
     private long base;
 
+    /**
+     * The persistently mapped buffer the CPU writes ({@link Usage#GPU_WRITE}); {@link #id} is then
+     * the device buffer the GPU uses. 0 without the split.
+     */
+    private int staging;
+
     /** {@link #base} is a CPU-side copy (no persistent mapping), not the buffer's memory. */
     private boolean shadow;
 
@@ -50,17 +64,24 @@ final class SteinGlBuffer extends SteinBuffer {
         id = GL15.glGenBuffers();
         int previous = bind(id);
         try {
-            if (desc.memory == Memory.UPLOAD) {
+            if (desc.memory == Memory.UPLOAD
+                    && persistent
+                    && desc.usage.contains(Usage.GPU_WRITE)
+                    && SteinGlOptions.DEVICE_WRITTEN) {
+                // the GPU's copy: no client access, so the driver keeps it in device memory
+                GL44.glBufferStorage(TARGET, desc.size, 0);
+                staging = GL15.glGenBuffers();
+                GL15.glBindBuffer(TARGET, staging);
+                SteinGlBindings.noteCopyWrite(staging);
+                base = mapPersistent(desc);
+                if (base == 0L) {
+                    GL15.glDeleteBuffers(staging);
+                    SteinGlBindings.noteDeleteBuffer(staging);
+                    staging = 0;
+                }
+            } else if (desc.memory == Memory.UPLOAD) {
                 if (persistent) {
-                    int flags =
-                            GL30.GL_MAP_WRITE_BIT
-                                    | GL44.GL_MAP_PERSISTENT_BIT
-                                    | GL44.GL_MAP_COHERENT_BIT;
-                    GL44.glBufferStorage(TARGET, desc.size, flags);
-                    base = GL30.nglMapBufferRange(TARGET, 0L, desc.size, flags);
-                    if (base == 0L) {
-                        Log.info("gfx", "buffer '" + desc.name + "': persistent mapping failed");
-                    }
+                    base = mapPersistent(desc);
                 } else {
                     // Without a persistent buffer (4.1): the CPU writes to a copy in ordinary
                     // memory (the usual address()) and the written range is uploaded with
@@ -77,6 +98,35 @@ final class SteinGlBuffer extends SteinBuffer {
         } finally {
             unbind(previous);
         }
+    }
+
+    /** Immutable storage on the copy target, persistently and coherently mapped for writing. */
+    private static long mapPersistent(Desc desc) {
+        int flags = GL30.GL_MAP_WRITE_BIT | GL44.GL_MAP_PERSISTENT_BIT | GL44.GL_MAP_COHERENT_BIT;
+        GL44.glBufferStorage(TARGET, desc.size, flags);
+        long address = GL30.nglMapBufferRange(TARGET, 0L, desc.size, flags);
+        if (address == 0L) {
+            Log.info("gfx", "buffer '" + desc.name + "': persistent mapping failed");
+        }
+        return address;
+    }
+
+    /**
+     * Copies on the GPU between two buffers: into the recorded frame when there is one, otherwise
+     * now on the copy targets (restored as they were).
+     */
+    private static void copy(int src, int dst, long offset, long bytes) {
+        if (SteinGlFrame.pending()) {
+            SteinGlFrame.copyBuffer(src, offset, dst, offset, bytes);
+            return;
+        }
+        int prevRead = SteinGlBindings.copyRead();
+        int prevWrite = SteinGlBindings.copyWrite();
+        GL15.glBindBuffer(GL31.GL_COPY_READ_BUFFER, src);
+        GL15.glBindBuffer(TARGET, dst);
+        GL31.glCopyBufferSubData(GL31.GL_COPY_READ_BUFFER, TARGET, offset, offset, bytes);
+        GL15.glBindBuffer(GL31.GL_COPY_READ_BUFFER, prevRead);
+        GL15.glBindBuffer(TARGET, prevWrite);
     }
 
     /**
@@ -117,6 +167,14 @@ final class SteinGlBuffer extends SteinBuffer {
 
     @Override
     public void upload(long offset, ByteBuffer data) {
+        if (staging != 0) {
+            // the CPU's side, then the copy (in the frame's order, as the other uploads)
+            int n = data.remaining();
+            checkRange(offset, n);
+            MemoryUtil.memCopy(MemoryUtil.memAddress(data), base + offset, n);
+            commit(offset, n);
+            return;
+        }
         if (SteinGlFrame.pending() && !shadow) {
             // Recorded frame with a pending list: the upload goes into the list (the data copied
             // now), and the draw recorded earlier reads the previous contents, as in the
@@ -176,7 +234,14 @@ final class SteinGlBuffer extends SteinBuffer {
 
     @Override
     public void commit(long offset, long bytes) {
-        if (!shadow || bytes <= 0) {
+        if (bytes <= 0) {
+            return;
+        }
+        if (staging != 0) {
+            copy(staging, id, offset, bytes);
+            return;
+        }
+        if (!shadow) {
             return;
         }
         int previous = bind(id);
@@ -190,6 +255,19 @@ final class SteinGlBuffer extends SteinBuffer {
     @Override
     public void destroy() {
         if (id == 0) {
+            return;
+        }
+        if (staging != 0) {
+            if (SteinGlFrame.pending()) {
+                SteinGlFrame.deleteBuffer(staging, true);
+                SteinGlFrame.deleteBuffer(id, false);
+            } else {
+                deleteNow(staging, true);
+                deleteNow(id, false);
+            }
+            staging = 0;
+            base = 0L;
+            id = 0;
             return;
         }
         if (SteinGlFrame.pending() && !shadow) {

@@ -14,6 +14,7 @@ import dev.xavier.stein.bridge.core.Log;
 
 import net.minecraft.client.renderer.RenderGlobal;
 import net.minecraft.client.renderer.chunk.RenderChunk;
+import net.minecraft.client.renderer.chunk.VisGraph;
 import net.minecraft.util.EnumFacing;
 
 import java.lang.invoke.MethodHandle;
@@ -206,6 +207,19 @@ public final class ChunkGraph {
      */
     public static Object visibleFacings(Object rg, Object pos) {
         return ChunkCull.visibleFacings(rg, pos);
+    }
+
+    /**
+     * EnumFacing.values() in the visibility search's loop (the game's own loop: vanillaBfs and
+     * checkBfs): the one cached array instead of a copy per visited chunk. The loop only reads it.
+     */
+    public static Object facingValues() {
+        return ChunkFlood.facings();
+    }
+
+    /** Body of VisGraph.floodFill(int) (bhw.a(I)): see {@link ChunkFlood}. */
+    public static Object floodFill(Object graph, int start) {
+        return ChunkFlood.fill((VisGraph) graph, start);
     }
 
     static void offsets() {

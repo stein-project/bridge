@@ -48,6 +48,7 @@ import static org.lwjgl.vulkan.VK12.VK_SEMAPHORE_TYPE_TIMELINE;
 import static org.lwjgl.vulkan.VK12.vkGetSemaphoreCounterValue;
 import static org.lwjgl.vulkan.VK12.vkWaitSemaphores;
 
+import dev.xavier.stein.bridge.bench.BenchCounters;
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.gfx.SteinBuffer;
 import dev.xavier.stein.gfx.SteinCaps;
@@ -111,6 +112,7 @@ import java.nio.ByteBuffer;
 import java.nio.LongBuffer;
 import java.nio.file.Path;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Set;
 
 /**
@@ -170,6 +172,13 @@ public final class SteinVkDevice extends SteinDevice {
     /** Device memory, shared in blocks by the small resources. */
     private final SteinVkMemory heap;
 
+    /** A driver too old for Stein's Vulkan: the game runs OpenGL instead (SteinVkWindow). */
+    public static final class OldDriver extends IllegalStateException {
+        OldDriver(String message) {
+            super(message);
+        }
+    }
+
     /** The device is 1.3 (core dynamic rendering) or 1.2 with VK_KHR_dynamic_rendering. */
     final boolean core13;
 
@@ -206,6 +215,16 @@ public final class SteinVkDevice extends SteinDevice {
     private long completedCache;
     private final long commandPool;
     private VkCommandBuffer cmd;
+
+    /**
+     * The early command buffer of the submission being recorded, submitted before {@link #cmd} in
+     * the same batch (null until a texture upload goes there: {@link SteinVkTexture#upload}).
+     */
+    private VkCommandBuffer early;
+
+    /** The textures with uploads in {@link #early}, put back to rest at the submission. */
+    private final ArrayList<SteinVkTexture> earlyTextures = new ArrayList<>();
+
     private final ArrayDeque<Pending> inflight = new ArrayDeque<>();
     private final ArrayDeque<VkCommandBuffer> freeCmds = new ArrayDeque<>();
     private final ArrayDeque<Pending> retired = new ArrayDeque<>();
@@ -217,6 +236,12 @@ public final class SteinVkDevice extends SteinDevice {
 
     /** The pass with its render open, possibly already ended (see {@code SteinVkCommands#end}). */
     private SteinVkCommands renderOwner;
+
+    /**
+     * The two pass objects {@link #beginPass} alternates between (see {@code
+     * SteinVkCommands#open}): a new pass takes the one that is not the render owner.
+     */
+    private final SteinVkCommands[] passes = {new SteinVkCommands(this), new SteinVkCommands(this)};
 
     private final SteinVkDynamic dynamic = new SteinVkDynamic();
 
@@ -271,7 +296,8 @@ public final class SteinVkDevice extends SteinDevice {
                     devExt.contains(KHRPushDescriptor.VK_KHR_PUSH_DESCRIPTOR_EXTENSION_NAME)
                             && !SteinVkOptions.NO_PUSH;
             boolean clipExt =
-                    devExt.contains(EXTDepthClipControl.VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME);
+                    devExt.contains(EXTDepthClipControl.VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME)
+                            && !SteinVkOptions.NO_DEPTH_CLIP_CONTROL;
             hdrMetadata =
                     surface != VK_NULL_HANDLE
                             && devExt.contains(EXTHdrMetadata.VK_EXT_HDR_METADATA_EXTENSION_NAME);
@@ -296,11 +322,17 @@ public final class SteinVkDevice extends SteinDevice {
                         "GPU without timeline semaphores or dynamic rendering");
             }
             depthClipControl = clipExt && clipQ.depthClipControl();
+            if (!depthClipControl && !SteinVkOptions.ALLOW_OLD_DRIVER) {
+                // every current driver has it; one without is old (Intel's before 2022 among them),
+                // and those also showed blank frames: OpenGL there (the shaders' depth remap below
+                // stays for vkAllowOldDriver)
+                throw new OldDriver("GPU driver without VK_EXT_depth_clip_control");
+            }
             if (!depthClipControl) {
                 Log.info(
                         "gfx",
-                        "vulkan: no VK_EXT_depth_clip_control: the near half of OpenGL's"
-                                + " NDC depth (-1 to 1) is lost");
+                        "vulkan: no VK_EXT_depth_clip_control: the vertex shaders move"
+                                + " OpenGL's depth (-1 to 1) into Vulkan's (0 to 1)");
             }
             hostQueryReset = v12Q.hostQueryReset();
             multiDrawIndirect = has.multiDrawIndirect();
@@ -604,34 +636,56 @@ public final class SteinVkDevice extends SteinDevice {
     /** The current submission's command buffer (starts one if there is none). */
     VkCommandBuffer cmd() {
         if (cmd == null) {
-            VkCommandBuffer c = freeCmds.poll();
-            try (MemoryStack stack = MemoryStack.stackPush()) {
-                if (c == null) {
-                    PointerBuffer pp = stack.mallocPointer(1);
-                    check(
-                            vkAllocateCommandBuffers(
-                                    device,
-                                    VkCommandBufferAllocateInfo.calloc(stack)
-                                            .sType$Default()
-                                            .commandPool(commandPool)
-                                            .level(VK_COMMAND_BUFFER_LEVEL_PRIMARY)
-                                            .commandBufferCount(1),
-                                    pp),
-                            "command buffer");
-                    c = new VkCommandBuffer(pp.get(0), device);
-                }
-                dynamic.forget(); // a begun command buffer holds no dynamic state yet
-                check(
-                        vkBeginCommandBuffer(
-                                c,
-                                VkCommandBufferBeginInfo.calloc(stack)
-                                        .sType$Default()
-                                        .flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)),
-                        "begin command buffer");
-            }
-            cmd = c;
+            dynamic.forget(); // a begun command buffer holds no dynamic state yet
+            cmd = beginCommandBuffer();
         }
         return cmd;
+    }
+
+    /**
+     * The submission's early command buffer (starts one if there is none): what is recorded here
+     * runs before everything in {@link #cmd()} of the same submission. Only for work that nothing
+     * recorded so far in the submission depends on.
+     */
+    VkCommandBuffer early() {
+        if (early == null) {
+            early = beginCommandBuffer();
+        }
+        return early;
+    }
+
+    /** {@code t} received uploads in {@link #early()}: it goes back to rest at the submission. */
+    void earlyTexture(SteinVkTexture t) {
+        earlyTextures.add(t);
+    }
+
+    /** A free (or new) primary command buffer, begun for one submission. */
+    private VkCommandBuffer beginCommandBuffer() {
+        VkCommandBuffer c = freeCmds.poll();
+        try (MemoryStack stack = MemoryStack.stackPush()) {
+            if (c == null) {
+                PointerBuffer pp = stack.mallocPointer(1);
+                check(
+                        vkAllocateCommandBuffers(
+                                device,
+                                VkCommandBufferAllocateInfo.calloc(stack)
+                                        .sType$Default()
+                                        .commandPool(commandPool)
+                                        .level(VK_COMMAND_BUFFER_LEVEL_PRIMARY)
+                                        .commandBufferCount(1),
+                                pp),
+                        "command buffer");
+                c = new VkCommandBuffer(pp.get(0), device);
+            }
+            check(
+                    vkBeginCommandBuffer(
+                            c,
+                            VkCommandBufferBeginInfo.calloc(stack)
+                                    .sType$Default()
+                                    .flags(VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT)),
+                    "begin command buffer");
+        }
+        return c;
     }
 
     /**
@@ -640,6 +694,9 @@ public final class SteinVkDevice extends SteinDevice {
      * the next draw).
      */
     VkCommandBuffer outside() {
+        if (openPass != null || renderOwner != null) {
+            BenchCounters.renderBreak();
+        }
         if (openPass != null) {
             openPass.suspend();
         }
@@ -692,6 +749,15 @@ public final class SteinVkDevice extends SteinDevice {
         }
         VkCommandBuffer c = cmd();
         check(vkEndCommandBuffer(c), "end command buffer");
+        VkCommandBuffer e = early;
+        if (e != null) {
+            for (int i = 0; i < earlyTextures.size(); i++) {
+                earlyTextures.get(i).endEarly(e);
+            }
+            earlyTextures.clear();
+            check(vkEndCommandBuffer(e), "end early command buffer");
+            early = null;
+        }
         long value = submitted + 1;
         try (MemoryStack stack = MemoryStack.stackPush()) {
             // the value of a binary semaphore is ignored, but the counts must match
@@ -705,7 +771,7 @@ public final class SteinVkDevice extends SteinDevice {
                     VkSubmitInfo.calloc(stack)
                             .sType$Default()
                             .pNext(t.address())
-                            .pCommandBuffers(stack.pointers(c))
+                            .pCommandBuffers(e != null ? stack.pointers(e, c) : stack.pointers(c))
                             .pSignalSemaphores(
                                     two ? stack.longs(timeline, signal) : stack.longs(timeline));
             if (wait != VK_NULL_HANDLE) {
@@ -716,6 +782,9 @@ public final class SteinVkDevice extends SteinDevice {
             check(vkQueueSubmit(queue, s, VK_NULL_HANDLE), "submit");
         }
         inflight.add(new Pending(value, c, null));
+        if (e != null) {
+            inflight.add(new Pending(value, e, null));
+        }
         submitted = value;
         cmd = null;
         descriptors.onSubmit(value);
@@ -923,7 +992,14 @@ public final class SteinVkDevice extends SteinDevice {
 
     @Override
     public SteinCommands beginPass(SteinRenderPass pass) {
-        return new SteinVkCommands(this, pass);
+        if (openPass != null) {
+            // checked before taking an object: the open pass may be the one that would be reused
+            throw new IllegalStateException(
+                    "pass '" + pass.name + "' opened inside '" + openPass.name() + "'");
+        }
+        SteinVkCommands c = passes[0] != renderOwner ? passes[0] : passes[1];
+        c.open(pass);
+        return c;
     }
 
     @Override

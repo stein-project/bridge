@@ -40,6 +40,9 @@ final class SteinDeferredFrame {
     static long[] sortKeys = new long[1024];
 
     static void flush() {
+        // the retained tile blocks queued for the threads (vkParallelRecord) land before anything
+        // below commits or draws the ring
+        SteinParallelWrites.drain();
         if (pending == 0) {
             return;
         }
@@ -51,15 +54,28 @@ final class SteinDeferredFrame {
         long frameAt = prepareFrame(dev);
         // The commands of all groups before the pass: the on-GPU pose needs to know where each of
         // its blocks landed.
-        for (int i = 0; i < order.size(); i++) {
-            Group g = order.get(i);
-            g.cmdAt = indirect && g.n > 0 ? writeCommands(g) : 0;
+        if (indirect && SteinParallelWrites.parallelCommands(pending, order.size())) {
+            // reserved here in the same order (same offsets), filled across the threads
+            for (int i = 0; i < order.size(); i++) {
+                Group g = order.get(i);
+                g.cmdAt = g.n > 0 ? reserveCommands(g) : 0;
+            }
+            SteinParallelWrites.fillCommands(order);
+        } else {
+            for (int i = 0; i < order.size(); i++) {
+                Group g = order.get(i);
+                g.cmdAt = indirect && g.n > 0 ? writeCommands(g) : 0;
+            }
         }
         boolean poseGpu = SteinPoseGpu.pending();
         if (poseGpu && !SteinPoseGpu.prepare()) {
             clearPoseBlocks();
             poseGpu = false;
         }
+        SteinEntityBatch.plan(poseGpu);
+        // What the CPU wrote of the commands reaches the GPU's copy (GPU_WRITE: a device buffer on
+        // OpenGL; otherwise nothing to do).
+        commands.commitRing();
         long ft1 = TIMING ? System.nanoTime() : 0L;
         SteinRenderPass rp = SteinRenderPass.keep(passName, dev.gameTarget());
         if (viewportW > 0) {
@@ -113,19 +129,26 @@ final class SteinDeferredFrame {
             SteinPoseGpu.dispatch(c, instances, commands);
         }
         if (SteinEntityShadows.castOnly) {
-            return; // the first-person player: only into the entities' shadow map
+            // the first-person player: only into the entities' shadow map, which reads the
+            // recorded commands, not the batched ones (the gather has nothing to feed)
+            return;
         }
+        // after the pose (it reads the instances the pose wrote), before any draw
+        SteinEntityBatch.dispatch(c);
         c.bindVertexBuffer(0, SteinModelInstancer.geometry(), 0);
         passVb0 = SteinModelInstancer.geometry();
         c.bindVertexBuffer(1, instances, 0);
         c.bindUniforms(0, frame, frameAt, FRAME_BYTES);
         c.bindTexture(1, lightmap, linear);
-        SteinShadows.ensure(SteinDevice.get());
-        c.bindTexture(2, SteinShadows.texture(), SteinShadows.sampler());
-        c.bindTexture(3, SteinEntityShadows.texture(), SteinShadows.sampler());
-        c.bindTexture(5, SteinShadows.previous(), SteinShadows.sampler());
-        SteinClouds.ensure(SteinDevice.get());
-        c.bindTexture(6, SteinClouds.texture(), SteinClouds.sampler());
+        passLens = SteinLensLight.on();
+        if (passLens) {
+            SteinShadows.ensure(SteinDevice.get());
+            c.bindTexture(2, SteinShadows.texture(), SteinShadows.sampler());
+            c.bindTexture(3, SteinEntityShadows.texture(), SteinShadows.sampler());
+            c.bindTexture(5, SteinShadows.previous(), SteinShadows.sampler());
+            SteinClouds.ensure(SteinDevice.get());
+            c.bindTexture(6, SteinClouds.texture(), SteinClouds.sampler());
+        }
         if (strictOrder) {
             // Strict order in segments: in the order they were opened, each with its pipeline and
             // its texture.
@@ -172,11 +195,14 @@ final class SteinDeferredFrame {
             SteinPoseGpu.afterFlush(instances, commands);
         } finally {
             poseBlocks = 0;
+            SteinEntityBatch.afterFlush();
         }
         for (int i = 0; i < order.size(); i++) {
             Group g = order.get(i);
             g.n = 0;
             g.entries = 0;
+            g.listed = false;
+            g.batchN = 0;
         }
         order.clear();
         last = null;
@@ -208,8 +234,11 @@ final class SteinDeferredFrame {
      * The commands {@code [from, from + count)} of the group (in units of {@code n}; the whole
      * group outside strict order), with its pipeline, vertex buffer, texture and offset.
      */
+    /** The pass draws the groups' LENS pipelines (SteinLensLight), set at its start. */
+    private static boolean passLens;
+
     static void drawRange(SteinCommands c, Group g, int from, int count) {
-        c.bindPipeline(g.pipeline);
+        c.bindPipeline(passLens ? SteinDeferredResources.lensPipeline(g) : g.pipeline);
         if (g.offset != 0) {
             polygonOffset(c, g.offset);
         }
@@ -264,6 +293,10 @@ final class SteinDeferredFrame {
 
     static void drawGroup(SteinCommands c, Group g, int from, int count) {
         if (indirect) {
+            if (SteinEntityBatch.batched(g, from, count)) {
+                SteinEntityBatch.draw(c, g);
+                return;
+            }
             c.drawIndirect(commands, g.cmdAt + (long) from * COMMAND_BYTES, count);
         } else {
             drawSorted(c, g, from, count);
@@ -325,15 +358,30 @@ final class SteinDeferredFrame {
     }
 
     static long writeCommands(Group g) {
+        long at = reserveCommands(g);
+        if (at >= 0) {
+            fillCommands(g, at);
+        }
+        return at;
+    }
+
+    /** Reserves the ring slice of the group's {@code n} commands; -1 = did not fit. */
+    static long reserveCommands(Group g) {
         long bytes = (long) g.n * COMMAND_BYTES;
         long at = commands.reserve(bytes);
         if (at == -2) {
             commands.nextRegion();
             at = commands.reserve(bytes);
         }
-        if (at < 0) {
-            return -1;
-        }
+        return at < 0 ? -1 : at;
+    }
+
+    /**
+     * Writes the group's commands into its slice at {@code at} and notes where its on-GPU pose
+     * blocks landed. Touches only that slice and the group's own blocks: safe on a pose thread
+     * ({@link SteinParallelWrites}).
+     */
+    static void fillCommands(Group g, long at) {
         long p = commands.address(at);
         int[] cm = g.cmds;
         int index = (int) (at / COMMAND_BYTES);
@@ -352,6 +400,5 @@ final class SteinDeferredFrame {
             p += COMMAND_BYTES;
             index++;
         }
-        return at;
     }
 }

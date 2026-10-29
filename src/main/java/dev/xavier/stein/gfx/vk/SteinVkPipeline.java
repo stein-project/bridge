@@ -69,6 +69,8 @@ import org.lwjgl.vulkan.VkPipelineVertexInputStateCreateInfo;
 import org.lwjgl.vulkan.VkPipelineViewportDepthClipControlCreateInfoEXT;
 import org.lwjgl.vulkan.VkPipelineViewportStateCreateInfo;
 import org.lwjgl.vulkan.VkShaderModuleCreateInfo;
+import org.lwjgl.vulkan.VkSpecializationInfo;
+import org.lwjgl.vulkan.VkSpecializationMapEntry;
 import org.lwjgl.vulkan.VkVertexInputAttributeDescription;
 import org.lwjgl.vulkan.VkVertexInputBindingDescription;
 
@@ -119,6 +121,15 @@ final class SteinVkPipeline extends SteinPipeline {
 
     /** Resources through push descriptors (the GPU supports it, and the set fits its limit). */
     private boolean push;
+
+    /**
+     * Pipelines with the same set 0 (same bindings fed from the same slots, same stages, push or
+     * not) share this number: their pipeline layouts are compatible, so the descriptors written for
+     * one stay valid when the commands switch to another ({@link SteinVkCommands}).
+     */
+    private int layoutClass;
+
+    private static final Map<List<Object>, Integer> LAYOUT_CLASSES = new HashMap<>();
 
     private final Map<SteinVkRenderTarget.Formats, Long> variants = new HashMap<>();
 
@@ -212,6 +223,15 @@ final class SteinVkPipeline extends SteinPipeline {
             bindings.add(new Binding(r.kind(), r.binding(), slot == null ? -1 : slot, r.arrayed()));
         }
         push = device.pushDescriptors && bindings.size() <= device.maxPushDescriptors;
+        synchronized (LAYOUT_CLASSES) {
+            List<Object> key = List.of(List.copyOf(bindings), desc.isCompute(), push);
+            Integer known = LAYOUT_CLASSES.get(key);
+            if (known == null) {
+                known = LAYOUT_CLASSES.size() + 1;
+                LAYOUT_CLASSES.put(key, known);
+            }
+            layoutClass = known;
+        }
 
         try (MemoryStack stack = MemoryStack.stackPush()) {
             LongBuffer lp = stack.mallocLong(1);
@@ -336,6 +356,11 @@ final class SteinVkPipeline extends SteinPipeline {
         return push;
     }
 
+    /** See {@link #layoutClass}: never 0. */
+    int layoutClass() {
+        return layoutClass;
+    }
+
     long setLayout() {
         return setLayout;
     }
@@ -430,6 +455,16 @@ final class SteinVkPipeline extends SteinPipeline {
                     .stage(VK_SHADER_STAGE_VERTEX_BIT)
                     .module(vertexModule)
                     .pName(stack.UTF8(ENTRY_POINT));
+            if (!device.depthClipControl) {
+                // OpenGL's clip depth moved into Vulkan's in the vertex shader (clip_depth.glsl)
+                ByteBuffer on = stack.calloc(4);
+                on.putInt(0, 1);
+                VkSpecializationMapEntry.Buffer entry =
+                        VkSpecializationMapEntry.calloc(1, stack).constantID(0).offset(0).size(4);
+                stages.get(0)
+                        .pSpecializationInfo(
+                                VkSpecializationInfo.calloc(stack).pMapEntries(entry).pData(on));
+            }
             if (stageCount == 2) {
                 stages.get(1)
                         .sType$Default()

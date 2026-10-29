@@ -74,6 +74,8 @@ public final class ModRemap {
         "javax/",
         "jdk/",
         "sun/",
+        // jdk.management, in the runtime the installer builds (the benchmark's allocation and GC)
+        "com/sun/management/",
         "com/google/",
         "org/apache/",
         "io/netty/",

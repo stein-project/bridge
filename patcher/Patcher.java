@@ -9,6 +9,7 @@
 import org.objectweb.asm.ClassReader;
 import org.objectweb.asm.ClassVisitor;
 import org.objectweb.asm.ClassWriter;
+import org.objectweb.asm.Label;
 import org.objectweb.asm.MethodVisitor;
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.Type;
@@ -47,6 +48,7 @@ public final class Patcher {
         FIELD,
         SOLO,
         STATIC,
+        NEW,
         RENAME;
 
         static Mode of(String column) {
@@ -57,6 +59,7 @@ public final class Patcher {
                 case "field" -> FIELD;
                 case "solo" -> SOLO;
                 case "static" -> STATIC;
+                case "new" -> NEW;
                 default -> RENAME;
             };
         }
@@ -122,6 +125,14 @@ public final class Patcher {
     private static final Map<String, List<String>> FIELDS = new LinkedHashMap<>();
 
     /**
+     * Allocations handed to a static method: "type.&lt;init&gt;:descriptor" -> scoped targets. The
+     * type is a class (its constructor with that descriptor) or an array descriptor such as "[F"
+     * with "(I)V" (the length). For scratch objects a hot method allocates on every call and drops
+     * before returning: the target may hand out a kept one instead.
+     */
+    private static final Map<String, List<Target>> NEWS = new LinkedHashMap<>();
+
+    /**
      * -Dpatcher.lenient=true: a rule with no call site is not an error. For mod jars, which go
      * through the same rules as the game (LWJGL renaming, matrix stack, batch) and only have call
      * sites for some of them.
@@ -143,7 +154,12 @@ public final class Patcher {
             }
         }
         System.out.println(
-                "rules loaded: " + (count(MAP) + BODIES.size() + count(BEFORE) + count(AFTER)));
+                "rules loaded: "
+                        + (count(MAP)
+                                + BODIES.size()
+                                + count(BEFORE)
+                                + count(AFTER)
+                                + count(NEWS)));
 
         rewriteJar(in, out);
         reportUnused();
@@ -215,6 +231,11 @@ public final class Patcher {
             }
         }
         keys.addAll(BODIES.keySet());
+        for (Map.Entry<String, List<Target>> e : NEWS.entrySet()) {
+            for (Target t : e.getValue()) {
+                keys.add(ruleKey(e.getKey(), t));
+            }
+        }
         for (Map.Entry<String, List<Target>> e : BEFORE.entrySet()) {
             for (Target h : e.getValue()) {
                 keys.add(hookKey("before ", e.getKey(), h));
@@ -264,6 +285,11 @@ public final class Patcher {
      *       this, arguments...);
      *   <li>modes "before" / "after": inserts newOwner.name3() — static, no arguments — before /
      *       after each call site of class.name2, which stays there;
+     *   <li>mode "new" (scope required): in the scoped method, the allocation of class (NEW, DUP,
+     *       the arguments, invokespecial &lt;init&gt; with the descriptor) becomes
+     *       newOwner.name3(the same arguments, references as Object), cast back to the class; with
+     *       class an array descriptor ("[F", "[Lalz;") and descriptor "(I)V", the NEWARRAY /
+     *       ANEWARRAY becomes newOwner.name3(int length);
      *   <li>scope "class.method": only applies to call sites inside methods with that name (e.g.
      *       "xy.&lt;init&gt;"), to divert a call in one place only; "class.method(descriptor)"
      *       tells overloads apart (e.g. "bcy.a(Lfy;)V").
@@ -299,6 +325,15 @@ public final class Patcher {
                 case FIELD ->
                         FIELDS.computeIfAbsent(owner, k -> new ArrayList<>())
                                 .add(f[1] + ":" + f[2]);
+                case NEW -> {
+                    if (scope == null || !f[1].equals("<init>")) {
+                        throw new IllegalArgumentException(
+                                "a \"new\" rule needs <init> and a scope: " + line);
+                    }
+                    List<Target> l = NEWS.computeIfAbsent(key, k -> new ArrayList<>());
+                    l.removeIf(x -> Objects.equals(x.scope, scope));
+                    l.add(new Target(newOwner, f[3], true, scope));
+                }
                 default -> {
                     List<Target> l = MAP.computeIfAbsent(key, k -> new ArrayList<>());
                     l.removeIf(x -> Objects.equals(x.scope, scope));
@@ -351,8 +386,9 @@ public final class Patcher {
         ClassReader cr = new ClassReader(classBytes);
         // No COMPUTE_FRAMES/COMPUTE_MAXS: the stack effect of each rewritten call is identical to
         // the original (the receiver only changes role, from "this" to first argument), the hooks
-        // do not touch the stack, and the replaced bodies have no branches — they need no
-        // StackMapTable and declare their maxs themselves.
+        // do not touch the stack, a redirected allocation needs two slots less (no NEW and DUP)
+        // and has no frame or branch inside it, and the replaced bodies have no branches — they
+        // need no StackMapTable and declare their maxs themselves.
         ClassWriter cw = new ClassWriter(0);
         cr.accept(
                 new ClassVisitor(Opcodes.ASM9, cw) {
@@ -409,9 +445,192 @@ public final class Patcher {
                         final String here = className + "." + name;
                         final String hereDesc = here + desc;
                         return new MethodVisitor(Opcodes.ASM9, mv) {
+                            /**
+                             * The NEW instructions of this method whose invokespecial has not come
+                             * yet, innermost last: the type, and whether a "new" rule took it (its
+                             * NEW and DUP were not written).
+                             */
+                            private final List<String> news = new ArrayList<>();
+
+                            private final List<Boolean> taken = new ArrayList<>();
+
+                            /** A taken NEW was written as nothing: its DUP must come next. */
+                            private boolean dropDup;
+
+                            /**
+                             * Inside a taken allocation the code must run straight: a frame or a
+                             * branch there would describe the NEW that is no longer written.
+                             */
+                            private void straight(String what) {
+                                if (dropDup || taken.contains(Boolean.TRUE)) {
+                                    throw new IllegalStateException(
+                                            what
+                                                    + " inside a redirected allocation in "
+                                                    + hereDesc
+                                                    + ": not supported");
+                                }
+                            }
+
+                            /** Only the DUP may follow a taken NEW. */
+                            private void notDup() {
+                                if (dropDup) {
+                                    straight("an instruction before the DUP");
+                                }
+                            }
+
+                            private Target newRule(String type, String ctorDesc) {
+                                return pick(NEWS.get(type + ".<init>:" + ctorDesc), here, hereDesc);
+                            }
+
+                            /** Some "new" rule of this class applies in this method. */
+                            private boolean newRuleHere(String type) {
+                                String prefix = type + ".<init>:";
+                                for (Map.Entry<String, List<Target>> e : NEWS.entrySet()) {
+                                    if (e.getKey().startsWith(prefix)
+                                            && pick(e.getValue(), here, hereDesc) != null) {
+                                        return true;
+                                    }
+                                }
+                                return false;
+                            }
+
+                            /** The allocation's static call, cast back to the allocated type. */
+                            private void allocate(String key, Target t, Type[] args, String type) {
+                                hit(ruleKey(key, t));
+                                super.visitMethodInsn(
+                                        Opcodes.INVOKESTATIC,
+                                        t.owner,
+                                        t.name,
+                                        erasedDescriptor(args, Type.getObjectType(type), false),
+                                        false);
+                                super.visitTypeInsn(Opcodes.CHECKCAST, type);
+                            }
+
+                            /** NEWARRAY / ANEWARRAY of this array descriptor: true if taken. */
+                            private boolean array(String array) {
+                                Target t = newRule(array, "(I)V");
+                                if (t == null) {
+                                    return false;
+                                }
+                                allocate(
+                                        array + ".<init>:(I)V",
+                                        t,
+                                        new Type[] {Type.INT_TYPE},
+                                        array);
+                                return true;
+                            }
+
+                            @Override
+                            public void visitTypeInsn(int op, String type) {
+                                notDup();
+                                if (op == Opcodes.NEW) {
+                                    boolean take = newRuleHere(type);
+                                    news.add(type);
+                                    taken.add(take);
+                                    if (take) {
+                                        dropDup = true;
+                                        return;
+                                    }
+                                } else if (op == Opcodes.ANEWARRAY
+                                        && array("[" + Type.getObjectType(type).getDescriptor())) {
+                                    return;
+                                }
+                                super.visitTypeInsn(op, type);
+                            }
+
+                            @Override
+                            public void visitIntInsn(int op, int operand) {
+                                notDup();
+                                if (op == Opcodes.NEWARRAY && array("[" + primitive(operand))) {
+                                    return;
+                                }
+                                super.visitIntInsn(op, operand);
+                            }
+
+                            @Override
+                            public void visitInsn(int op) {
+                                if (dropDup && op == Opcodes.DUP) {
+                                    dropDup = false;
+                                    return;
+                                }
+                                notDup();
+                                super.visitInsn(op);
+                            }
+
+                            @Override
+                            public void visitVarInsn(int op, int var) {
+                                notDup();
+                                super.visitVarInsn(op, var);
+                            }
+
+                            @Override
+                            public void visitFieldInsn(
+                                    int op, String owner, String fName, String fDesc) {
+                                notDup();
+                                super.visitFieldInsn(op, owner, fName, fDesc);
+                            }
+
+                            @Override
+                            public void visitLdcInsn(Object value) {
+                                notDup();
+                                super.visitLdcInsn(value);
+                            }
+
+                            @Override
+                            public void visitFrame(
+                                    int type, int nLocal, Object[] local, int nStack, Object[] st) {
+                                straight("a stack map frame");
+                                super.visitFrame(type, nLocal, local, nStack, st);
+                            }
+
+                            @Override
+                            public void visitJumpInsn(int op, Label label) {
+                                straight("a jump");
+                                super.visitJumpInsn(op, label);
+                            }
+
+                            @Override
+                            public void visitTableSwitchInsn(
+                                    int min, int max, Label dflt, Label... labels) {
+                                straight("a switch");
+                                super.visitTableSwitchInsn(min, max, dflt, labels);
+                            }
+
+                            @Override
+                            public void visitLookupSwitchInsn(
+                                    Label dflt, int[] keys, Label[] labels) {
+                                straight("a switch");
+                                super.visitLookupSwitchInsn(dflt, keys, labels);
+                            }
+
                             @Override
                             public void visitMethodInsn(
                                     int op, String owner, String mName, String mDesc, boolean itf) {
+                                notDup();
+                                if (op == Opcodes.INVOKESPECIAL
+                                        && mName.equals("<init>")
+                                        && !news.isEmpty()
+                                        && news.get(news.size() - 1).equals(owner)) {
+                                    news.remove(news.size() - 1);
+                                    if (taken.remove(taken.size() - 1)) {
+                                        Target t = newRule(owner, mDesc);
+                                        if (t == null) {
+                                            throw new IllegalStateException(
+                                                    "no \"new\" rule for "
+                                                            + owner
+                                                            + ".<init>"
+                                                            + mDesc
+                                                            + " in "
+                                                            + hereDesc);
+                                        }
+                                        allocate(
+                                                owner + ".<init>:" + mDesc,
+                                                t,
+                                                Type.getArgumentTypes(mDesc),
+                                                owner);
+                                        return;
+                                    }
+                                }
                                 String key = owner + "." + mName + ":" + mDesc;
                                 Target t = pick(MAP.get(key), here, hereDesc);
                                 boolean solo = t != null && t.solo;
@@ -513,6 +732,21 @@ public final class Patcher {
         out.visitInsn(ret.getOpcode(Opcodes.IRETURN));
         out.visitMaxs(Math.max(slot, ret.getSize()), slot);
         out.visitEnd();
+    }
+
+    /** The descriptor letter of a NEWARRAY operand (Opcodes.T_INT...). */
+    private static String primitive(int operand) {
+        return switch (operand) {
+            case Opcodes.T_BOOLEAN -> "Z";
+            case Opcodes.T_CHAR -> "C";
+            case Opcodes.T_FLOAT -> "F";
+            case Opcodes.T_DOUBLE -> "D";
+            case Opcodes.T_BYTE -> "B";
+            case Opcodes.T_SHORT -> "S";
+            case Opcodes.T_INT -> "I";
+            case Opcodes.T_LONG -> "J";
+            default -> throw new IllegalArgumentException("NEWARRAY " + operand);
+        };
     }
 
     /** "(" + optional Object receiver + each argument erased + ")" + the return erased. */

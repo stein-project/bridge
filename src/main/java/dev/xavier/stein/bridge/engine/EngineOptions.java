@@ -48,8 +48,16 @@ public final class EngineOptions {
     static final boolean VANILLA_ACTIVE_CHUNKS = Opt.flag("steinbridge.opt.vanillaActiveChunks");
 
     /**
+     * {@code -Dsteinbridge.opt.vanillaActiveChunkFill=true}: keeps one player per chunk but lets
+     * the game insert every chunk of their squares, overlaps included, instead of each chunk once
+     * (default: once).
+     */
+    static final boolean VANILLA_ACTIVE_CHUNK_FILL =
+            Opt.flag("steinbridge.opt.vanillaActiveChunkFill");
+
+    /**
      * {@code -Dsteinbridge.opt.checkActiveChunks=true}: runs both active-chunk paths every tick and
-     * compares the sets (default: off).
+     * compares the sets and the ambient countdown (default: off).
      */
     static final boolean CHECK_ACTIVE_CHUNKS = Opt.flag("steinbridge.opt.checkActiveChunks");
 
@@ -58,6 +66,37 @@ public final class EngineOptions {
      * caching it per column (default: cached).
      */
     static final boolean VANILLA_CHUNK_AT = Opt.flag("steinbridge.opt.vanillaChunkAt");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaClientChunks=true}: the client world's chunk lookup goes to
+     * the chunk map every time instead of the table of recent columns (default: table).
+     */
+    static final boolean VANILLA_CLIENT_CHUNKS = Opt.flag("steinbridge.opt.vanillaClientChunks");
+
+    /**
+     * {@code -Dsteinbridge.opt.checkClientChunks=true}: uses the table of recent columns and
+     * compares every answer with the chunk map (default: off).
+     */
+    static final boolean CHECK_CLIENT_CHUNKS = Opt.flag("steinbridge.opt.checkClientChunks");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaActiveReuse=true}: rebuilds the client's active-chunk set
+     * every tick even when the players stayed in the same chunks (default: kept).
+     */
+    static final boolean VANILLA_ACTIVE_REUSE = Opt.flag("steinbridge.opt.vanillaActiveReuse");
+
+    /**
+     * {@code -Dsteinbridge.opt.checkActiveReuse=true}: rebuilds the kept active-chunk set anyway
+     * and compares it, in iteration order, with the kept one; also runs the skipped retainAll and
+     * checks it removed nothing (default: off).
+     */
+    static final boolean CHECK_ACTIVE_REUSE = Opt.flag("steinbridge.opt.checkActiveReuse");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaPlayerRange=true}: the closest-player and player-in-range
+     * searches test the spectator mode before the distance, as in 1.8.9 (default: distance first).
+     */
+    static final boolean VANILLA_PLAYER_RANGE = Opt.flag("steinbridge.opt.vanillaPlayerRange");
 
     /**
      * {@code -Dsteinbridge.opt.vanillaCull=true}: uses the game's visibility search and chunk
@@ -513,6 +552,75 @@ public final class EngineOptions {
      * compares the lists (default: off).
      */
     static final boolean CHECK_PENDING_TICKS = Opt.flag("steinbridge.opt.checkPendingTicks");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaFacings=true}: the game's hot loops get a fresh copy of
+     * EnumFacing.values() on every call, as in 1.8.9 (default: one shared array; see {@link
+     * Facings}).
+     */
+    static final boolean VANILLA_FACINGS = Opt.flag("steinbridge.opt.vanillaFacings");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaIntCache=true}: the world generator's IntCache drops one
+     * spare array on every reset, as the game does (default: keeps them; see {@link IntCachePool}).
+     */
+    static final boolean VANILLA_INT_CACHE = Opt.flag("steinbridge.opt.vanillaIntCache");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaBiomeColors=true}: every grass, foliage and water tint of a
+     * chunk build reads the nine biomes around the block again (default: each position's colour
+     * computed once per build; see {@link BiomeColors}).
+     */
+    static final boolean VANILLA_BIOME_COLORS = Opt.flag("steinbridge.opt.vanillaBiomeColors");
+
+    /**
+     * {@code -Dsteinbridge.opt.checkBiomeColors=true}: computes every tint both ways and compares
+     * (default: off).
+     */
+    static final boolean CHECK_BIOME_COLORS = Opt.flag("steinbridge.opt.checkBiomeColors");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaRawLight=true}: World.getRawLight allocates a BlockPos for
+     * each of the six neighbours, as the game does (default: one reused position per thread; see
+     * {@link NeighbourPos}).
+     */
+    static final boolean VANILLA_RAW_LIGHT = Opt.flag("steinbridge.opt.vanillaRawLight");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaBlockNeighbours=true}: the block renderer allocates a
+     * BlockPos for every side test and ambient-occlusion corner, as the game does (default: reused
+     * positions per thread; see {@link NeighbourPos}).
+     */
+    static final boolean VANILLA_BLOCK_NEIGHBOURS =
+            Opt.flag("steinbridge.opt.vanillaBlockNeighbours");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaAoScratch=true}: every smooth-lit block allocates its quad
+     * bounds, bound flags and AmbientOcclusionFace, as the game does (default: one set per thread;
+     * see {@link AoScratch}).
+     */
+    static final boolean VANILLA_AO_SCRATCH = Opt.flag("steinbridge.opt.vanillaAoScratch");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaRegionArrays=true}: every chunk build's RegionRenderCache
+     * allocates its light and block-state arrays, as the game does (default: each build thread
+     * reuses its pair; see {@link RegionArrays}).
+     */
+    static final boolean VANILLA_REGION_ARRAYS = Opt.flag("steinbridge.opt.vanillaRegionArrays");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaClearUpdates=true}: setupTerrain's clearChunkUpdates takes
+     * the waiting build tasks out one lock at a time, as the game does (default: all at once; see
+     * {@link ChunkQueue}).
+     */
+    static final boolean VANILLA_CLEAR_UPDATES = Opt.flag("steinbridge.opt.vanillaClearUpdates");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaPlayerUnload=true}: a chunk unloaded on the integrated server
+     * also unloads a player still standing in it, as 1.8.9 does after a long teleport, leaving that
+     * player frozen until a dimension change (default: the player stays; see {@link PlayerUnload}).
+     */
+    static final boolean VANILLA_PLAYER_UNLOAD = Opt.flag("steinbridge.opt.vanillaPlayerUnload");
 
     /** {@code -Dsteinbridge.opt.noWatchdog=true}: turns the freeze watchdog off (default: on). */
     static final boolean NO_WATCHDOG = Opt.flag("steinbridge.opt.noWatchdog");

@@ -31,9 +31,16 @@ import org.lwjgl.system.MemoryUtil;
 
 /**
  * The replay of the recorded frame's command list ({@link SteinGlFrame}): the commands go to the
- * driver in the order they were recorded, each pass through an {@link SteinGlCommands}. The list is
- * walked with three cursors (ints, longs and objects, see {@link SteinGlOpList}); each command
- * reads its own arguments, in the order {@link SteinGlFrame} wrote them.
+ * driver in the order they were recorded, the passes through one {@link SteinGlCommands} kept for
+ * the whole run. The list is walked with three cursors (ints, longs and objects, see {@link
+ * SteinGlOpList}); each command reads its own arguments, in the order {@link SteinGlFrame} wrote
+ * them.
+ *
+ * <p>No game code runs during a run, so the game's state is read once, at the first pass (or game
+ * clear), and given back once, at the end of the run ({@link #closePass()}): a pass starts from the
+ * driver state the previous one left, and only what differs is sent. Saving and giving back the
+ * game's state around every pass cost a few dozen calls per pass, which on some drivers (Intel's)
+ * was most of the submission.
  *
  * <p>Pipeline: Stein GFX only.
  */
@@ -48,15 +55,25 @@ final class SteinGlReplay {
     static boolean active;
 
     /**
-     * The pass being replayed (it stays open between two replays if the sync fell in the middle of
-     * it).
+     * The state of the replay (created with the first one, kept: no allocation per frame). Between
+     * the first pass of a run and {@link #closePass()} the driver holds the replay's state, not the
+     * game's.
      */
-    private static SteinGlCommands cur;
+    private static SteinGlCommands state;
 
-    /** The line width to give back at the end of the replayed pass (NaN = untouched). */
+    /** A replayed pass is open on {@link #state} (it ends at its PASS_END or at the run's end). */
+    private static boolean inPass;
+
+    /** The line width to give back at the end of the run (NaN = untouched). */
     private static float lineRestore = Float.NaN;
 
+    /** The line width on the driver while {@link #lineRestore} is set. */
+    private static float lineNow;
+
     private static final int[] SCRATCH4 = new int[4];
+
+    /** The rectangle of the scissor op being replayed. */
+    private static final int[] SCISSOR_RECT = new int[4];
 
     // the cursors in the three arrays: int, long and object arguments of the next command
     private static int ip;
@@ -64,18 +81,33 @@ final class SteinGlReplay {
     private static int op;
 
     /**
-     * Closes the replayed pass, if one is open, and gives back the line width: the end of the pass,
-     * or the sync that falls in the middle of it.
+     * The end of a run: closes the replayed pass, if one is open (the sync that falls in the middle
+     * of it), and gives the game's state back, line width included, before the game runs again.
+     * Nothing to do when called again (the sync's split of the open pass).
      */
     static void closePass() {
-        if (cur != null) {
-            cur.end();
-            cur = null;
+        if (state != null) {
+            if (inPass) {
+                state.endPass();
+                inPass = false;
+            }
+            state.finish();
         }
         if (!Float.isNaN(lineRestore)) {
-            GL11.glLineWidth(lineRestore);
+            if (lineNow != lineRestore) {
+                GL11.glLineWidth(lineRestore);
+            }
             lineRestore = Float.NaN;
         }
+    }
+
+    /** The replay's state, with the game's state read (on the first use in the run). */
+    private static SteinGlCommands tracked() {
+        if (state == null) {
+            state = new SteinGlCommands(device);
+        }
+        state.track();
+        return state;
     }
 
     /**
@@ -139,6 +171,8 @@ final class SteinGlReplay {
                 }
             }
         } finally {
+            // the game runs next (or the sync's caller does): it must find its own state
+            closePass();
             SteinGlOpList.reset();
             SteinGlFrameCheck.clearFilters();
             active = false;
@@ -154,10 +188,13 @@ final class SteinGlReplay {
         }
         int fbo = ints[ip++];
         float lw = Float.intBitsToFloat(ints[ip++]);
-        float nowLw = SteinGlBindings.lineWidth();
+        float nowLw = Float.isNaN(lineRestore) ? SteinGlBindings.lineWidth() : lineNow;
         if (lw != nowLw) {
             GL11.glLineWidth(lw);
-            lineRestore = nowLw;
+            if (Float.isNaN(lineRestore)) {
+                lineRestore = nowLw;
+            }
+            lineNow = lw;
         }
         if (checking) {
             chkRep(PASS_BEGIN, pass.name.hashCode(), (int) pass.target.handle());
@@ -165,14 +202,25 @@ final class SteinGlReplay {
                 invalid("framebuffer " + fbo + " of pass '" + pass.name + "'");
             }
         }
-        cur = new SteinGlCommands(device, pass, true);
+        if (inPass) {
+            // a pass left open without its end (not recorded that way): close it as its end would
+            state.endPass();
+        }
+        if (state == null) {
+            state = new SteinGlCommands(device);
+        }
+        state.beginPass(pass);
+        inPass = true;
     }
 
     private static void playPassEnd() {
         if (checking) {
             chkRep(PASS_END);
         }
-        closePass();
+        if (inPass) {
+            state.endPass();
+            inPass = false;
+        }
     }
 
     private static void playPipeline() {
@@ -180,7 +228,7 @@ final class SteinGlReplay {
         if (checking) {
             chkRep(PIPELINE, System.identityHashCode(p));
         }
-        cur.bindPipeline(p);
+        state.bindPipeline(p);
     }
 
     private static void playVertex() {
@@ -191,7 +239,7 @@ final class SteinGlReplay {
             chkRep(VERTEX, index, h, off);
             checkBuffer(h);
         }
-        cur.vertexBuffer(index, h, off);
+        state.vertexBuffer(index, h, off);
     }
 
     private static void playIndex() {
@@ -201,7 +249,7 @@ final class SteinGlReplay {
             chkRep(INDEX, h, u16);
             checkBuffer(h);
         }
-        cur.indexBuffer(h, u16 != 0);
+        state.indexBuffer(h, u16 != 0);
     }
 
     private static void playTexture() {
@@ -212,7 +260,7 @@ final class SteinGlReplay {
         if (checking) {
             SteinGlFrameCheck.replayTexture(slot, id, array, s);
         }
-        cur.texture(slot, id, array != 0, s);
+        state.texture(slot, id, array != 0, s);
     }
 
     /** Uniform or storage buffer range ({@code code}: which one). */
@@ -226,9 +274,9 @@ final class SteinGlReplay {
             checkBuffer(h);
         }
         if (code == UNIFORMS) {
-            cur.uniforms(slot, h, off, size);
+            state.uniforms(slot, h, off, size);
         } else {
-            cur.storage(slot, h, off, size);
+            state.storage(slot, h, off, size);
         }
     }
 
@@ -240,17 +288,22 @@ final class SteinGlReplay {
         if (checking) {
             chkRep(VIEWPORT, x, y, w, h);
         }
-        cur.setViewport(x, y, w, h);
+        state.setViewport(x, y, w, h);
     }
 
     private static void playScissor() {
         int has = ints[ip++];
-        int[] r = new int[] {ints[ip], ints[ip + 1], ints[ip + 2], ints[ip + 3]};
+        // the pass copies the rectangle (SteinGlCommands.setScissor): one array serves every op
+        int[] r = SCISSOR_RECT;
+        r[0] = ints[ip];
+        r[1] = ints[ip + 1];
+        r[2] = ints[ip + 2];
+        r[3] = ints[ip + 3];
         ip += 4;
         if (checking) {
             chkRep(SCISSOR, has, r[0], r[1], r[2], r[3]);
         }
-        cur.setScissor(has != 0 ? r : null);
+        state.setScissor(has != 0 ? r : null);
     }
 
     private static void playDraw() {
@@ -261,7 +314,7 @@ final class SteinGlReplay {
         if (checking) {
             chkRep(DRAW, a, b, c, d);
         }
-        cur.draw(a, b, c, d);
+        state.draw(a, b, c, d);
     }
 
     private static void playDrawIndexed() {
@@ -273,7 +326,7 @@ final class SteinGlReplay {
         if (checking) {
             chkRep(DRAW_INDEXED, a, b, c, d, e);
         }
-        cur.drawIndexed(a, b, c, d, e);
+        state.drawIndexed(a, b, c, d, e);
     }
 
     /** Indirect draw ({@code code}: indexed or not). */
@@ -286,9 +339,9 @@ final class SteinGlReplay {
             checkBuffer(h);
         }
         if (code == DRAW_INDIRECT) {
-            cur.drawIndirect(h, off, count);
+            state.drawIndirect(h, off, count);
         } else {
-            cur.drawIndexedIndirect(h, off, count);
+            state.drawIndexedIndirect(h, off, count);
         }
     }
 
@@ -299,7 +352,7 @@ final class SteinGlReplay {
         if (checking) {
             chkRep(DISPATCH, x, y, z);
         }
-        cur.dispatch(x, y, z);
+        state.dispatch(x, y, z);
     }
 
     private static void playPolygonOffset() {
@@ -389,6 +442,9 @@ final class SteinGlReplay {
             chkRep(DELETE_BUFFER, h, mapped);
         }
         SteinGlBuffer.deleteNow(h, mapped != 0);
+        if (state != null) {
+            SteinGlPassBindings.bufferDeleted(state, h);
+        }
     }
 
     private static void playFence() {
@@ -424,9 +480,10 @@ final class SteinGlReplay {
     }
 
     /**
-     * The game's glClear at replay: target, masks, clear values and the scissor of recording time;
-     * afterwards everything goes back to what the game believes now (the same state the tracked
-     * pass reads).
+     * The game's glClear at replay: target, masks, clear values and the scissor of recording time.
+     * The target, masks and scissor are set from the replay's state (what is on the driver now) and
+     * go back to it; the clear values are the game's ({@link SteinGlBindings}), which only the game
+     * and this clear change.
      */
     private static void replayClear(
             int mask,
@@ -443,27 +500,22 @@ final class SteinGlReplay {
             int sy,
             int sw,
             int sh) {
-        int nowFbo = SteinGlBindings.drawFbo();
+        SteinGlCommands t = tracked();
+        int nowFbo = t.drawFbo;
         if (fbo != nowFbo) {
             GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, fbo);
         }
-        boolean[] want = {(cm & 1) != 0, (cm & 2) != 0, (cm & 4) != 0, (cm & 8) != 0};
-        boolean[] game = {
-            SteinGlGame.colorMask(0),
-            SteinGlGame.colorMask(1),
-            SteinGlGame.colorMask(2),
-            SteinGlGame.colorMask(3)
-        };
-        boolean maskDiff =
-                want[0] != game[0]
-                        || want[1] != game[1]
-                        || want[2] != game[2]
-                        || want[3] != game[3];
+        boolean[] now = t.mask;
+        boolean w0 = (cm & 1) != 0;
+        boolean w1 = (cm & 2) != 0;
+        boolean w2 = (cm & 4) != 0;
+        boolean w3 = (cm & 8) != 0;
+        boolean maskDiff = w0 != now[0] || w1 != now[1] || w2 != now[2] || w3 != now[3];
         if (maskDiff) {
-            GL11.glColorMask(want[0], want[1], want[2], want[3]);
+            GL11.glColorMask(w0, w1, w2, w3);
         }
-        boolean gameDm = SteinGlGame.depthMask();
-        if (dm != gameDm) {
+        boolean nowDm = t.depthWrite;
+        if (dm != nowDm) {
             GL11.glDepthMask(dm);
         }
         float[] cc = SteinGlBindings.clearColor();
@@ -475,29 +527,20 @@ final class SteinGlReplay {
         if (cd != depth) {
             GL11.glClearDepth(depth);
         }
-        boolean scNow = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
+        // the scissor goes through the replay's state, and back to it (a clear inside a pass
+        // must not change the pass's scissor)
+        boolean scWas = t.scissorOn;
         int[] box = SCRATCH4;
         if (sc) {
-            GL11.glGetIntegerv(GL11.GL_SCISSOR_BOX, box);
-            GL11.glScissor(sx, sy, sw, sh);
+            System.arraycopy(
+                    t.scissorBoxSaved ? t.scissorBox : SteinGlBindings.scissorBox(), 0, box, 0, 4);
+            SteinGlPassFixed.scissorBox(t, sx, sy, sw, sh);
         }
-        if (sc != scNow) {
-            if (sc) {
-                GL11.glEnable(GL11.GL_SCISSOR_TEST);
-            } else {
-                GL11.glDisable(GL11.GL_SCISSOR_TEST);
-            }
-        }
+        SteinGlPassFixed.scissorTest(t, sc);
         GL11.glClear(mask);
-        if (sc != scNow) {
-            if (scNow) {
-                GL11.glEnable(GL11.GL_SCISSOR_TEST);
-            } else {
-                GL11.glDisable(GL11.GL_SCISSOR_TEST);
-            }
-        }
+        SteinGlPassFixed.scissorTest(t, scWas);
         if (sc) {
-            GL11.glScissor(box[0], box[1], box[2], box[3]);
+            SteinGlPassFixed.scissorBox(t, box[0], box[1], box[2], box[3]);
         }
         if (cd != depth) {
             GL11.glClearDepth(cd);
@@ -505,11 +548,11 @@ final class SteinGlReplay {
         if (colorDiff) {
             GL11.glClearColor(cc[0], cc[1], cc[2], cc[3]);
         }
-        if (dm != gameDm) {
-            GL11.glDepthMask(gameDm);
+        if (dm != nowDm) {
+            GL11.glDepthMask(nowDm);
         }
         if (maskDiff) {
-            GL11.glColorMask(game[0], game[1], game[2], game[3]);
+            GL11.glColorMask(now[0], now[1], now[2], now[3]);
         }
         if (fbo != nowFbo) {
             GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, nowFbo);

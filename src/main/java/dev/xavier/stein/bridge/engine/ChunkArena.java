@@ -8,6 +8,7 @@
 
 package dev.xavier.stein.bridge.engine;
 
+import dev.xavier.stein.bridge.bench.BenchCounters;
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.gfx.SteinGfxOptions;
 import dev.xavier.stein.gfx.SteinTerrain;
@@ -429,11 +430,26 @@ public final class ChunkArena {
         return active() || OpenGlHelper.useVbo();
     }
 
+    /** The layer of the upload under way ({@link #uploadBuffer}); -1: unknown. */
+    private static int uploadLayer = -1;
+
+    /**
+     * In place of renderChunk.getVertexBufferByLayer(layer) in ChunkRenderDispatcher.uploadChunk,
+     * right before uploadVertexBuffer (game thread): notes the layer for {@link #upload}.
+     */
+    public static Object uploadBuffer(Object chunk, int layer) {
+        uploadLayer = layer;
+        return ((RenderChunk) chunk).getVertexBufferByLayer(layer);
+    }
+
     /**
      * In place of VertexBufferUploader.draw(worldRenderer) in uploadVertexBuffer: the geometry goes
      * to the chunk's region, relative to its origin.
      */
     public static void upload(Object uploaderObj, Object rendererObj) {
+        BenchCounters.chunkUpload();
+        int layer = uploadLayer;
+        uploadLayer = -1;
         VertexBufferUploader uploader = (VertexBufferUploader) uploaderObj;
         WorldRenderer renderer = (WorldRenderer) rendererObj;
         if (!active()) {
@@ -467,7 +483,8 @@ public final class ChunkArena {
         int cy = (int) Math.round(-renderer.yOffset);
         int cz = (int) Math.round(-renderer.zOffset);
         if (state == MODE_STEIN_GFX) {
-            SB_REGION.set(vb, SteinTerrain.upload(MemoryUtil.memAddress(data), count, cx, cy, cz));
+            SB_REGION.set(
+                    vb, SteinTerrain.upload(MemoryUtil.memAddress(data), count, cx, cy, cz, layer));
             SB_COUNT.set(vb, count);
             return;
         }

@@ -8,6 +8,7 @@
 
 package dev.xavier.stein.gfx;
 
+import dev.xavier.stein.bridge.bench.BenchCounters;
 import dev.xavier.stein.bridge.core.Log;
 
 import java.nio.ByteBuffer;
@@ -40,7 +41,16 @@ public abstract class SteinBuffer {
         INDEX,
         UNIFORM,
         STORAGE,
-        INDIRECT
+        INDIRECT,
+
+        /**
+         * {@link Memory#UPLOAD} that the GPU writes too (a compute shader fills part of it). The
+         * backend may then keep what the GPU reads in device memory: {@link #address} stays the
+         * CPU's side, and what the CPU wrote reaches the GPU only at {@link #commit} (or {@link
+         * #commitRing}), which every writer already calls before the draw that reads the range.
+         * Ranges written by the GPU must not be read back through {@link #address}.
+         */
+        GPU_WRITE
     }
 
     public enum Memory {
@@ -271,6 +281,7 @@ public abstract class SteinBuffer {
                 long t0 = System.nanoTime();
                 f.waitFor(FENCE_WAIT_NANOS);
                 waited(name, System.nanoTime() - t0);
+                BenchCounters.ringWait(System.nanoTime() - t0);
             }
             f.destroy();
             fences[first] = null;

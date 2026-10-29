@@ -98,6 +98,15 @@ final class SteinTerrainLayers {
          */
         ByteBuffer commandBytes = MemoryUtil.memAlloc(256 * COMMAND_BYTES);
 
+        /**
+         * Some chunk has faces without the alpha test ({@link SteinOpaqueCutout}): {@link
+         * #opaqueCommandBytes} holds them, one command per chunk with the same base instance, and
+         * {@link #commandBytes} only the rest of each chunk.
+         */
+        boolean split;
+
+        ByteBuffer opaqueCommandBytes = MemoryUtil.memAlloc(256 * COMMAND_BYTES);
+
         ByteBuffer originBytes = MemoryUtil.memAlloc(256 * ORIGIN_BYTES);
 
         /** The camera block of the kept origins. */
@@ -112,11 +121,17 @@ final class SteinTerrainLayers {
 
         SteinPipeline pipe;
 
+        /** The pipeline of the faces without the alpha test, for {@link #opaquePipeKey}. */
+        int opaquePipeKey;
+
+        SteinPipeline opaquePipe;
+
         void ensure(int entries) {
             if (order.length < entries) {
                 int c = Math.max(entries, order.length * 2);
                 order = new SteinTerrainSlice[c];
                 commandBytes = MemoryUtil.memRealloc(commandBytes, c * COMMAND_BYTES);
+                opaqueCommandBytes = MemoryUtil.memRealloc(opaqueCommandBytes, c * COMMAND_BYTES);
                 originBytes = MemoryUtil.memRealloc(originBytes, c * ORIGIN_BYTES);
             }
             if (handles.length < entries) {
@@ -301,18 +316,19 @@ final class SteinTerrainLayers {
         Arrays.fill(gathered, 0, count, null);
         d.runs = 0;
         long c = MemoryUtil.memAddress(d.commandBytes);
+        long oc = MemoryUtil.memAddress(d.opaqueCommandBytes);
+        boolean split = false;
         for (int i = 0; i < count; i++) {
             SteinTerrainSlice s = order[i];
             if (i > 0 && s.region != order[i - 1].region) {
                 d.addRun(order[i - 1].region, i);
             }
-            long q = c + (long) i * COMMAND_BYTES;
-            MemoryUtil.memPutInt(q, s.count / 4 * 6);
-            MemoryUtil.memPutInt(q + 4, 1);
-            MemoryUtil.memPutInt(q + 8, 0);
-            MemoryUtil.memPutInt(q + 12, s.first);
-            MemoryUtil.memPutInt(q + 16, i);
+            // the faces without the alpha test lead the range; the command covers the rest
+            command(c + (long) i * COMMAND_BYTES, s.count - s.opaque, s.first + s.opaque, i);
+            command(oc + (long) i * COMMAND_BYTES, s.opaque, s.first, i);
+            split |= s.opaque > 0;
         }
+        d.split = split;
         if (count > 0) {
             d.addRun(order[count - 1].region, count);
         }
@@ -328,6 +344,17 @@ final class SteinTerrainLayers {
         d.count = count;
         d.missing = n - count;
         d.originValid = false;
+    }
+
+    /**
+     * An indexed indirect command: {@code vertices} from {@code first}, base instance {@code i}.
+     */
+    private static void command(long q, int vertices, int first, int i) {
+        MemoryUtil.memPutInt(q, vertices / 4 * 6);
+        MemoryUtil.memPutInt(q + 4, 1);
+        MemoryUtil.memPutInt(q + 8, 0);
+        MemoryUtil.memPutInt(q + 12, first);
+        MemoryUtil.memPutInt(q + 16, i);
     }
 
     /** Each chunk's origin minus the camera block (integers: exact in float). */
@@ -364,6 +391,7 @@ final class SteinTerrainLayers {
                         && d.count == f.count
                         && d.runs == f.runs
                         && d.blend == blend
+                        && d.split == f.split
                         && d.missing == f.missing;
         for (int i = 0; same && i < f.handleCount; i++) {
             same = d.handles[i] == f.handles[i];
@@ -377,8 +405,12 @@ final class SteinTerrainLayers {
         if (same) {
             long a = MemoryUtil.memAddress(d.commandBytes);
             long b = MemoryUtil.memAddress(f.commandBytes);
+            long oa = MemoryUtil.memAddress(d.opaqueCommandBytes);
+            long ob = MemoryUtil.memAddress(f.opaqueCommandBytes);
             for (long i = 0, bytes = (long) f.count * COMMAND_BYTES; same && i < bytes; i += 4) {
-                same = MemoryUtil.memGetInt(a + i) == MemoryUtil.memGetInt(b + i);
+                same =
+                        MemoryUtil.memGetInt(a + i) == MemoryUtil.memGetInt(b + i)
+                                && MemoryUtil.memGetInt(oa + i) == MemoryUtil.memGetInt(ob + i);
             }
         }
         cacheChecks++;

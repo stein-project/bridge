@@ -59,6 +59,11 @@ public final class SteinWorldLight {
         darkness = dark;
     }
 
+    /** Whether the moonlight or the darkness is on. */
+    static boolean enabled() {
+        return moonlight || darkness;
+    }
+
     /** A frame without a world, or one where none of this acts. */
     static void none() {
         DIRECT[0] = DIRECT[1] = DIRECT[2] = 0f;

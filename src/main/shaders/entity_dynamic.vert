@@ -12,6 +12,7 @@
 // bytes and a marker in the normal's w. With the marker the vertex belongs to the name's background: no texture and with the byte color,
 // as the background Tessellator would give. No per-vertex lightmap (neither the text nor the background carries one). Without TEXT the shader is
 // the usual one, line by line.
+#include "common/clip_depth.glsl"
 #include "common/entity_frame.glsl"
 #include "common/entity_light.glsl"
 layout(location = 0) in vec3 aPos;
@@ -41,12 +42,16 @@ layout(location = 2) out vec2 vLight;
 layout(location = 3) out float vFogDist;
 layout(location = 4) flat out vec4 vOverlay;
 layout(location = 5) flat out vec2 vFlags;
+#ifdef LENS
 layout(location = 6) out vec3 vEye;
+#endif
 void main() {
     vec4 p = vec4(aPos, 1.0);
     vec3 eye = vec3(dot(iRow0, p), dot(iRow1, p), dot(iRow2, p));
-    gl_Position = projection * vec4(eye, 1.0);
+    gl_Position = clipDepth(projection * vec4(eye, 1.0));
+#ifdef LENS
     vEye = eye;
+#endif
     vec3 st = vec3(aUv, 1.0);
     vUv = vec2(dot(iTex0.xyz, st), dot(iTex1.xyz, st));
     vOverlay = (int(iLight.z) & 64) != 0 ? iOverlay : vec4(0.0);
@@ -58,9 +63,18 @@ void main() {
         flags |= 32;
     }
     vec3 aNormal = aNormalMark.xyz;
+#ifdef LENS
+    // the instance colour also tints the vertex colours: past white for what glows (SteinGlow)
     vec4 c = (flags & 8) != 0 ? (background ? aColorByte : aColor) * iColor : iColor;
 #else
+    vec4 c = (flags & 8) != 0 ? (background ? aColorByte : aColor) : iColor;
+#endif
+#else
+#ifdef LENS
     vec4 c = (flags & 8) != 0 ? aColor * iColor : iColor;
+#else
+    vec4 c = (flags & 8) != 0 ? aColor : iColor;
+#endif
 #endif
     if ((flags & 1) != 0) {
         vec3 n0 = (flags & 512) != 0 ? iOverlay.xyz : aNormal;

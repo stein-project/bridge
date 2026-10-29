@@ -48,9 +48,23 @@ final class SteinTerrainPipelines {
     private static SteinShader vertex;
     private static SteinShader fragment;
     private static SteinShader fragmentAlpha;
+    private static SteinShader vertexInvariant;
+    private static SteinShader fragmentDepth;
+
+    // the LENS variants (SteinLensLight): the same pixel with the Lens's light
+    private static SteinShader vertexLens;
+    private static SteinShader fragmentLens;
+    private static SteinShader fragmentAlphaLens;
+    private static SteinShader vertexInvariantLens;
     private static SteinVertexLayout layout;
     private static SteinPipelineCache pipelines;
     private static final Map<Integer, SteinPipeline> byKey = new HashMap<>();
+    private static final Map<Integer, SteinPipeline> prepassByKey = new HashMap<>();
+    private static final Map<Integer, SteinPipeline> afterPrepassByKey = new HashMap<>();
+    private static final Map<Integer, SteinPipeline> opaqueByKey = new HashMap<>();
+    private static final Map<Integer, SteinPipeline> lensByKey = new HashMap<>();
+    private static final Map<Integer, SteinPipeline> lensAfterPrepassByKey = new HashMap<>();
+    private static final Map<Integer, SteinPipeline> lensOpaqueByKey = new HashMap<>();
 
     /** The terrain's vertex layout (the shadow map draws the same geometry). */
     static SteinVertexLayout layout() {
@@ -64,6 +78,15 @@ final class SteinTerrainPipelines {
         vertex = SteinShader.load(SteinShader.Stage.VERTEX, "terrain.vert");
         fragment = SteinShader.load(SteinShader.Stage.FRAGMENT, "terrain.frag");
         fragmentAlpha = SteinShader.load(SteinShader.Stage.FRAGMENT, "terrain_alpha.frag");
+        vertexLens = SteinShader.load(SteinShader.Stage.VERTEX, "terrain_lens.vert");
+        fragmentLens = SteinShader.load(SteinShader.Stage.FRAGMENT, "terrain_lens.frag");
+        fragmentAlphaLens = SteinShader.load(SteinShader.Stage.FRAGMENT, "terrain_alpha_lens.frag");
+        if (SteinGfxOptions.TERRAIN_CUTOUT_PREPASS) {
+            vertexInvariant = SteinShader.load(SteinShader.Stage.VERTEX, "terrain_inv.vert");
+            fragmentDepth = SteinShader.load(SteinShader.Stage.FRAGMENT, "terrain_depth.frag");
+            vertexInvariantLens =
+                    SteinShader.load(SteinShader.Stage.VERTEX, "terrain_inv_lens.vert");
+        }
         layout =
                 SteinVertexLayout.builder()
                         .binding(0, VERTEX, false)
@@ -121,24 +144,38 @@ final class SteinTerrainPipelines {
                 | (SteinGameState.cullMode() != GL11.GL_FRONT ? BACK_BIT : 0);
     }
 
-    static SteinPipeline pipeline(int key) {
-        SteinPipeline p = byKey.get(key);
+    /** The textures the LENS variants read besides the game's (slots 2 to 6, SteinTerrain). */
+    private static void lensTextures(SteinPipeline.Builder b) {
+        b.texture("shadowMap", 2)
+                .texture("casterMap", 3)
+                .texture("glowMask", 4)
+                .texture("shadowPrevMap", 5)
+                .texture("cloudMap", 6);
+    }
+
+    /** The pipeline for {@code key}, in the LENS variant when {@code lens}. */
+    static SteinPipeline pipeline(int key, boolean lens) {
+        Map<Integer, SteinPipeline> cache = lens ? lensByKey : byKey;
+        SteinPipeline p = cache.get(key);
         if (p != null) {
             return p;
         }
+        boolean alpha = (key & ALPHA_BIT) != 0;
         SteinPipeline.Builder b =
-                SteinPipeline.builder("terrain " + Integer.toHexString(key))
-                        .vertex(vertex)
-                        .fragment((key & ALPHA_BIT) != 0 ? fragmentAlpha : fragment)
+                SteinPipeline.builder(
+                                (lens ? "terrain lens " : "terrain ") + Integer.toHexString(key))
+                        .vertex(lens ? vertexLens : vertex)
+                        .fragment(
+                                lens
+                                        ? (alpha ? fragmentAlphaLens : fragmentLens)
+                                        : (alpha ? fragmentAlpha : fragment))
                         .layout(layout)
                         .texture("tex", 0)
                         .texture("lightmap", 1)
-                        .texture("shadowMap", 2)
-                        .texture("casterMap", 3)
-                        .texture("glowMask", 4)
-                        .texture("shadowPrevMap", 5)
-                        .texture("cloudMap", 6)
                         .uniforms("Frame", 0);
+        if (lens) {
+            lensTextures(b);
+        }
         if ((key & BLEND_BIT) != 0) {
             SteinPipeline.Factor[] f = SteinPipeline.Factor.values();
             b.blend(
@@ -157,8 +194,129 @@ final class SteinTerrainPipelines {
                                 ? SteinPipeline.Cull.BACK
                                 : SteinPipeline.Cull.FRONT);
         p = pipelines.get(b.build());
-        byKey.put(key, p);
+        cache.put(key, p);
         return p;
+    }
+
+    /**
+     * {@code key} without the alpha test: the state of the cutout faces whose texture is opaque
+     * ({@link SteinOpaqueCutout}); the same shader without its discard.
+     */
+    static int withoutAlpha(int key) {
+        return key & ~ALPHA_BIT;
+    }
+
+    /**
+     * Whether a layer drawn with {@code key} may go out as a depth pre-pass plus a colour pass
+     * ({@code terrainCutoutPrepass}): alpha test, no blending, depth test LEQUAL with writes. With
+     * LEQUAL the pre-pass leaves the same depth the layer would; the colour pass with EQUAL and the
+     * same discard then keeps, per pixel, the same last fragment at the nearest depth (two coplanar
+     * quads, like the grass side and its overlay, still overwrite in draw order). LESS would keep
+     * the first one instead, so it is left out.
+     */
+    static boolean prepassEligible(int key) {
+        return fragmentDepth != null
+                && (key & ALPHA_BIT) != 0
+                && (key & BLEND_BIT) == 0
+                && (key & DEPTH_TEST_BIT) != 0
+                && (key & MASK_BIT) != 0
+                && (key >>> FUNC_SHIFT & 7) == 3;
+    }
+
+    /** The pre-pass of {@code key}: depth only, with the alpha test (and its invariant vertex). */
+    static SteinPipeline prepass(int key) {
+        SteinPipeline p = prepassByKey.get(key);
+        if (p == null) {
+            p =
+                    variant(
+                            key,
+                            "terrain depth ",
+                            fragmentDepth,
+                            false,
+                            false,
+                            true,
+                            SteinPipeline.Depth.LEQUAL);
+            prepassByKey.put(key, p);
+        }
+        return p;
+    }
+
+    /** The colour pass after {@link #prepass}: same discard, depth EQUAL without writes. */
+    static SteinPipeline afterPrepass(int key, boolean lens) {
+        Map<Integer, SteinPipeline> cache = lens ? lensAfterPrepassByKey : afterPrepassByKey;
+        SteinPipeline p = cache.get(key);
+        if (p == null) {
+            p =
+                    variant(
+                            key,
+                            lens ? "terrain lens colour " : "terrain colour ",
+                            lens ? fragmentAlphaLens : fragmentAlpha,
+                            lens,
+                            true,
+                            false,
+                            SteinPipeline.Depth.EQUAL);
+            cache.put(key, p);
+        }
+        return p;
+    }
+
+    /**
+     * The faces without the alpha test ({@link SteinOpaqueCutout}) of a layer drawn with {@code
+     * key}: the state without the alpha test; on a layer with the pre-pass, with the pre-pass's
+     * invariant vertex, so that a face and the cutout face in the same plane (the grass side and
+     * its overlay) keep exactly the same depth.
+     */
+    static SteinPipeline opaqueFaces(int key, boolean lens) {
+        if (!prepassEligible(key)) {
+            return pipeline(withoutAlpha(key), lens);
+        }
+        Map<Integer, SteinPipeline> cache = lens ? lensOpaqueByKey : opaqueByKey;
+        SteinPipeline p = cache.get(key);
+        if (p == null) {
+            p =
+                    variant(
+                            key,
+                            lens ? "terrain lens opaque " : "terrain opaque ",
+                            lens ? fragmentLens : fragment,
+                            lens,
+                            true,
+                            true,
+                            SteinPipeline.Depth.LEQUAL);
+            cache.put(key, p);
+        }
+        return p;
+    }
+
+    private static SteinPipeline variant(
+            int key,
+            String name,
+            SteinShader frag,
+            boolean lens,
+            boolean color,
+            boolean write,
+            SteinPipeline.Depth depth) {
+        SteinPipeline.Builder b =
+                SteinPipeline.builder(name + Integer.toHexString(key))
+                        .vertex(lens ? vertexInvariantLens : vertexInvariant)
+                        .fragment(frag)
+                        .layout(layout)
+                        .texture("tex", 0)
+                        .texture("lightmap", 1)
+                        .uniforms("Frame", 0)
+                        .depth(depth, write)
+                        .cull(
+                                (key & CULL_BIT) == 0
+                                        ? SteinPipeline.Cull.NONE
+                                        : (key & BACK_BIT) != 0
+                                                ? SteinPipeline.Cull.BACK
+                                                : SteinPipeline.Cull.FRONT);
+        if (!color) {
+            b.colorWrite(false);
+        }
+        if (lens) {
+            lensTextures(b);
+        }
+        return pipelines.get(b.build());
     }
 
     /** OpenGL blend factor for the index in {@link SteinPipeline.Factor}. */

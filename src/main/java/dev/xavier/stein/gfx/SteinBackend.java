@@ -23,7 +23,7 @@ import java.util.Locale;
 import java.util.Properties;
 
 /**
- * The graphics API Stein GFX draws with: OpenGL (the default) or Vulkan. The player picks it in the
+ * The graphics API Stein GFX draws with: Vulkan (the default) or OpenGL. The player picks it in the
  * Stein Client, which writes it to {@code config/stein-graphics.properties} before starting the
  * game (the window is created for one API, so it is chosen before the game opens; the video options
  * only show it). {@code -Dsteinbridge.gfx.api=...} overrides the file for the session (the test
@@ -31,7 +31,8 @@ import java.util.Properties;
  *
  * <p>What was asked for and what is running can differ: when Vulkan does not start (no driver, no
  * GPU with Vulkan 1.2, the window refuses a surface) the game falls back to OpenGL and {@link
- * #fallback()} says why.
+ * #fallback()} says why. Without a saved choice (a first start, or a launcher that writes none) it
+ * is Vulkan: OpenGL only where Vulkan cannot run.
  *
  * <p>Pipeline: both — read before the window exists.
  */
@@ -61,6 +62,13 @@ public enum SteinBackend {
      */
     private static final String CRASHED = "vulkanCrashed";
 
+    /**
+     * Written when Vulkan, asked for, cannot run on this machine (the {@link Fallback}'s name),
+     * with OpenGL saved as the choice: the Stein Client reads it, switches to OpenGL and tells the
+     * player, and the next starts do not try Vulkan again.
+     */
+    private static final String UNSUPPORTED = "vulkanUnsupported";
+
     /** A Vulkan start counts as good after this many frames over {@link #HEALTHY_NANOS}. */
     private static final int HEALTHY_FRAMES = 60;
 
@@ -76,7 +84,9 @@ public enum SteinBackend {
         /** The window system refused a window without OpenGL. */
         NO_WINDOW,
         /** No GPU with what Stein needs (Vulkan 1.2, dynamic rendering) that presents to it. */
-        NO_DEVICE
+        NO_DEVICE,
+        /** A GPU whose driver is too old for Stein's Vulkan (no VK_EXT_depth_clip_control). */
+        OLD_DRIVER
     }
 
     private static SteinBackend running = OPENGL;
@@ -86,18 +96,50 @@ public enum SteinBackend {
     private static int presented;
     private static long firstPresent;
 
+    /** This start's decision, once {@link #requested()} has made it. */
+    private static volatile SteinBackend decided;
+
     /**
-     * The API asked for at this start: the option, else the saved choice, else OpenGL. A saved
+     * The API asked for at this start: the option, else the saved choice, else Vulkan. A saved
      * Vulkan whose last start died before its first seconds goes back to OpenGL, saved too (the
      * video options say why), so a driver that crashes cannot keep the game from opening.
+     *
+     * <p>Decided once per process: Display asks before the window exists, and every later call
+     * returns that decision without reading or writing the file. The mark is this start's own once
+     * {@link #vulkanStarting()} has run, so asking again then must not take it for a crash (the
+     * benchmark reads the choice seconds after the start, while the mark is still there).
      */
-    public static SteinBackend requested() {
+    public static synchronized SteinBackend requested() {
+        SteinBackend d = decided;
+        if (d == null) {
+            d = decide();
+            decided = d;
+        }
+        return d;
+    }
+
+    /**
+     * The API asked for, without deciding anything: this start's decision once made, else what the
+     * option and the file say now. Never writes the file.
+     */
+    public static SteinBackend peekRequested() {
+        SteinBackend d = decided;
+        if (d != null) {
+            return d;
+        }
         if (FORCED != null) {
-            return parse(FORCED, OPENGL);
+            return parse(FORCED, VULKAN);
+        }
+        return parse(load().getProperty(KEY), VULKAN);
+    }
+
+    private static SteinBackend decide() {
+        if (FORCED != null) {
+            return parse(FORCED, VULKAN);
         }
         Properties p = load();
-        SteinBackend api = parse(p.getProperty(KEY), OPENGL);
-        if (api == VULKAN && Boolean.parseBoolean(p.getProperty(STARTING))) {
+        SteinBackend api = parse(p.getProperty(KEY), VULKAN);
+        if (api == VULKAN && !marked && Boolean.parseBoolean(p.getProperty(STARTING))) {
             Log.warn("gfx", "the last start with Vulkan did not get through: back to OpenGL");
             crashedLastTime = true;
             p.setProperty(KEY, OPENGL.key);
@@ -139,6 +181,14 @@ public enum SteinBackend {
             p.remove(STARTING);
             store(p);
         }
+    }
+
+    /**
+     * The game is closing normally (Display.destroy, from the game's own shutdown): a start closed
+     * within its first seconds did not die on the way, so its mark goes.
+     */
+    public static void closing() {
+        vulkanFailed();
     }
 
     /** The Vulkan device could not be created: this start is not a crash. */
@@ -196,6 +246,12 @@ public enum SteinBackend {
     public static void fellBack(Fallback why, String detail) {
         fallback = why;
         Log.warn("gfx", "Vulkan was requested, running OpenGL: " + detail);
+        if (FORCED == null) {
+            Properties p = load();
+            p.setProperty(KEY, OPENGL.key);
+            p.setProperty(UNSUPPORTED, why.name().toLowerCase(Locale.ROOT));
+            store(p);
+        }
     }
 
     /** Set by Display once the window exists. */

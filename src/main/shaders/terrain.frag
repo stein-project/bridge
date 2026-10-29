@@ -5,13 +5,17 @@
 //
 // Copyright (c) 2026 Breno Xavier
 // The terrain pixel. ALPHA_TEST: the variant with discard (only on the cutout layers: discard turns off the GPU's
-// early depth test).
+// early depth test). DEPTH_ONLY: the cutout depth pre-pass (SteinTerrain): only the alpha test, no colour.
+// LENS: the variant with the Lens's light (sun shadows, glow, dynamic lights, texture filters); without it the pixel is
+// the game's, at the game's cost (SteinLensLight picks the variant).
 #include "common/terrain_frame.glsl"
 #include "common/fog.glsl"
+#ifdef LENS
 #include "common/dynamic_light.glsl"
 #include "common/shadow.glsl"
 #include "common/world_light.glsl"
 #include "common/glow.glsl"
+#endif
 layout(set = 0, binding = 1) uniform sampler2D tex;
 layout(set = 0, binding = 2) uniform sampler2D lightmap;
 layout(location = 0) in vec4 vColor;
@@ -19,8 +23,12 @@ layout(location = 1) in vec2 vUv;
 layout(location = 2) in vec2 vLight;
 layout(location = 3) in float vFogDist;
 layout(location = 4) in float vFade;
+#ifdef LENS
 layout(location = 5) in vec3 vEye;
+#endif
 layout(location = 0) out vec4 color;
+
+#ifdef LENS
 
 // The texture's own cell of the atlas around uv, as the range a tap may take (half a texel in from its sides): with
 // mipmaps the game places every texture on a grid of 2^levels pixels, so a tap kept inside never reads the
@@ -90,12 +98,31 @@ vec4 anisotropic(vec2 uv, float taps) {
     vec4 centre = texture(tex, uv);
     return vec4(sum.a > 0.0 ? sum.rgb / sum.a : centre.rgb, centre.a);
 }
+#endif
 
 void main() {
+#ifdef DEPTH_ONLY
+    // the alpha of the full pixel, as below: the colour's alpha times the texture's (the filters below keep the
+    // centre tap's alpha, so both passes discard the same pixels)
+    float a = vColor.a;
+    if (params.w > 0.5) {
+        a *= texture(tex, vUv).a;
+    }
+    if (a <= params.x) {
+        discard;
+    }
+    color = vec4(0.0);
+#else
+#ifdef LENS
     float shadow = sunShadow(vEye, true);   // (derivatives: before any discard)
+#endif
     vec4 c = vColor;
     if (params.w > 0.5) {
+#ifdef LENS
         c *= anim.w > 1.5 ? anisotropic(vUv, anim.w) : anim.z > 0.5 ? supersampled(vUv) : texture(tex, vUv);
+#else
+        c *= texture(tex, vUv);
+#endif
     }
 #ifdef ALPHA_TEST
     if (c.a <= params.x) {
@@ -103,6 +130,7 @@ void main() {
     }
 #endif
     if (params.y > 0.5) {
+#ifdef LENS
         vec2 light = vec2(dynamicBlockLight(vEye, vLight.x), vLight.y);
         vec3 full = texture(lightmap, (light + 8.0) / 256.0).rgb;
         vec3 block = texture(lightmap, vec2(light.x + 8.0, 8.0) / 256.0).rgb;
@@ -111,6 +139,9 @@ void main() {
         if (lightFlags.w > 0.0) {
             c.rgb = glowing(c.rgb, albedo, vUv);
         }
+#else
+        c.rgb *= texture(lightmap, (vLight + 8.0) / 256.0).rgb;
+#endif
     }
     if (params.z > 0.5) {
         c.rgb = applyFog(c.rgb, fogColor.rgb, fog, vFogDist);
@@ -119,4 +150,5 @@ void main() {
         c.rgb = mix(fogColor.rgb, c.rgb, vFade);
     }
     color = c;
+#endif
 }

@@ -22,9 +22,17 @@ public final class Main {
     /** Minimum version: the bridge (LWJGL 3, FFM, the engine) is written for Java 25. */
     static final int REQUIRED = 25;
 
+    /**
+     * The game's arguments as this process got them: the benchmark reopens the game with them in
+     * another graphics mode. Kept here, not in a system property, because they hold the session's
+     * access token and the benchmark's report lists the Stein properties.
+     */
+    public static volatile String[] arguments = new String[0];
+
     private Main() {}
 
     public static void main(String[] args) throws Throwable {
+        arguments = args.clone();
         String spec = System.getProperty("java.specification.version", "0");
         int feature = feature(spec);
         if (feature < REQUIRED) {

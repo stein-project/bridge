@@ -17,6 +17,12 @@ final class SteinTerrainSlice {
     final SteinTerrainRegion region;
     final int first;
     final int count;
+
+    /**
+     * The leading vertices that draw without the alpha test ({@link SteinOpaqueCutout}; 0: none).
+     */
+    final int opaque;
+
     final int x;
     final int y;
     final int z;
@@ -33,10 +39,12 @@ final class SteinTerrainSlice {
     /** Seen in the translucent layer: it casts no shadow. */
     boolean translucent;
 
-    SteinTerrainSlice(SteinTerrainRegion region, int first, int count, int x, int y, int z) {
+    SteinTerrainSlice(
+            SteinTerrainRegion region, int first, int count, int opaque, int x, int y, int z) {
         this.region = region;
         this.first = first;
         this.count = count;
+        this.opaque = opaque;
         this.x = x;
         this.y = y;
         this.z = z;

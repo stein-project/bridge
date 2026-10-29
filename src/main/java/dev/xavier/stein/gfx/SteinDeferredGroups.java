@@ -49,6 +49,12 @@ final class SteinDeferredGroups {
         final int offset;
 
         SteinPipeline pipeline;
+
+        /**
+         * The LENS variant of {@link #pipeline} (SteinLensLight), made the first time it is used.
+         */
+        SteinPipeline lensPipeline;
+
         SteinTexture gameTexture;
         int[] cmds = new int[3 * 256];
 
@@ -66,6 +72,20 @@ final class SteinDeferredGroups {
          * SteinDeferredFrame#writeCommands}); -1 = did not fit.
          */
         long cmdAt;
+
+        /**
+         * In this flush's {@link #order}: set on entering it, even with no command yet ({@link
+         * #enlist}), so a group never enters twice.
+         */
+        boolean listed;
+
+        /**
+         * This flush's batched commands ({@link SteinEntityBatch}): where they are in the command
+         * ring and how many; 0 = drawn command by command.
+         */
+        long batchAt;
+
+        int batchN;
 
         Group(long key) {
             this.key = key;
@@ -123,11 +143,27 @@ final class SteinDeferredGroups {
             // opened, within the same pass.
             openSegment(g);
         }
-        if (g.n == 0) {
+        if (!g.listed) {
             order.add(g);
+            g.listed = true;
         }
         last = g;
         return g;
+    }
+
+    /**
+     * Puts the group of {@code key} in this flush's order now, still empty, without becoming the
+     * current group: the groups without blending draw in the order they entered, so a group
+     * enlisted first draws first ({@link SteinPlayerPoseOrder}: the armor before the body it
+     * covers, so the GPU's early depth test rejects the body's hidden pixels). Outside strict order
+     * only (there, the segments set the order).
+     */
+    static void enlist(long key) {
+        Group g = (Group) groupFor(key);
+        if (!g.listed) {
+            order.add(g);
+            g.listed = true;
+        }
     }
 
     // ---- strict order in segments (HUD, screens, sky, hand...) ----

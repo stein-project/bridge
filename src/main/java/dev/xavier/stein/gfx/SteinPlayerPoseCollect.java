@@ -146,6 +146,9 @@ final class SteinPlayerPoseCollect {
     private static int enchanted;
     private static boolean glint;
 
+    /** The glint's two passes go out as one ({@link SteinGlintMerge}): the plan has only pass 0. */
+    private static boolean glintMerged;
+
     private static int held;
     private static SteinHeldItem.Entry heldEntry;
     private static int itemFlags;
@@ -608,6 +611,7 @@ final class SteinPlayerPoseCollect {
     /** The enchantment glint of the armor: two passes with the rotating texture matrix. */
     private static boolean addGlint(Object render, Object e, float pt) {
         glint = enchanted != 0 && !Visuals.glintSkipped();
+        glintMerged = false;
         if (glint) {
             // The glint (ArmorGlint / renderGlint): glint texture, no light, fixed color, blend
             // SRC_COLOR + ONE, depth EQUAL without writing; two passes with the texture matrix
@@ -655,6 +659,15 @@ final class SteinPlayerPoseCollect {
                         armorHurt,
                         t);
                 jKey[s0 + ST_GLINT + i] = gkey;
+            }
+            // t holds pass 1's matrix: it goes in pass 0's colour slot (the check modes compare
+            // with the game's two passes, so they keep them)
+            if (SteinGlintMerge.ON
+                    && !CHECK
+                    && SteinGlintMerge.usable(gkey)
+                    && SteinGlintMerge.pack(t, jState, (s0 + ST_GLINT) * REST)) {
+                jKey[s0 + ST_GLINT] = gkey | SteinGlintMerge.KEY_GLINT2;
+                glintMerged = true;
             }
             lastR = gr;
             lastG = gg;
@@ -739,7 +752,7 @@ final class SteinPlayerPoseCollect {
             }
         }
         if (glint) {
-            for (int i = 0; i < 2; i++) {
+            for (int i = 0, passes = glintMerged ? 1 : 2; i < passes; i++) {
                 for (int s = 0; s < 4; s++) {
                     if ((enchanted & 1 << s) != 0) {
                         int kind = s == 2 ? M_LEGS : M_ARMOR;

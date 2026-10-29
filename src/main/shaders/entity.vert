@@ -5,6 +5,9 @@
 //
 // Copyright (c) 2026 Breno Xavier
 // Recorded model parts (SteinEntityDeferred): the part's fixed geometry + per-instance data.
+// GLINT2: both passes of the players' armor glint in one draw (SteinGlintMerge): the colour slot carries the second
+// pass's texture matrix, and the colour is the glint's own (always the same, SteinPlayerPoseCollect.addGlint).
+#include "common/clip_depth.glsl"
 #include "common/entity_frame.glsl"
 #include "common/entity_light.glsl"
 layout(location = 0) in vec3 aPos;
@@ -24,16 +27,32 @@ layout(location = 2) out vec2 vLight;
 layout(location = 3) out float vFogDist;
 layout(location = 4) flat out vec4 vOverlay;
 layout(location = 5) flat out vec2 vFlags;
-layout(location = 6) out vec3 vEye;
+#ifdef LENS
+layout(location = 7) out vec3 vEye;
+#endif
+#ifdef GLINT2
+layout(location = 6) out vec3 vUv2;
+// 0.5F * 0.76F, 0.25F * 0.76F, 0.8F * 0.76F (SteinPlayerPose.GLINT_BRIGHTNESS): these decimals round to the same
+// floats (0x3ec28f5c, 0x3e428f5c, 0x3f1ba5e3)
+const vec4 GLINT_COLOR = vec4(0.38, 0.19, 0.608, 1.0);
+#endif
 void main() {
     vec4 p = vec4(aPos, 1.0);
     vec3 eye = vec3(dot(iRow0, p), dot(iRow1, p), dot(iRow2, p));
-    gl_Position = projection * vec4(eye, 1.0);
+    gl_Position = clipDepth(projection * vec4(eye, 1.0));
+#ifdef LENS
     vEye = eye;
+#endif
     vec3 st = vec3(aUv, 1.0);
     vUv = vec3(dot(iTex0.xyz, st), dot(iTex1.xyz, st), iTex0.w);
     int flags = int(iLight.z);
+#ifdef GLINT2
+    // the second pass's rows: s = (t0, t4, t12), t = (t1, t5, t13) = (-t4, t0, t13) (a scaled rotation, checked on the CPU)
+    vUv2 = vec3(dot(iColor.xyz, st), dot(vec3(-iColor.y, iColor.x, iColor.w), st), iTex0.w);
+    vec4 c = GLINT_COLOR;
+#else
     vec4 c = iColor;
+#endif
     if ((flags & 1) != 0) {
         c = vec4(lit(aNormal, flags, iRow0, iRow1, iRow2, c.rgb), c.a);
     }

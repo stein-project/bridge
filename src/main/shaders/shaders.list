@@ -9,13 +9,29 @@
 entity.vert         vert     entity.vert
 entity.frag         frag     entity.frag
 entity_gametex.frag frag     entity.frag           GAME_TEX
+entity_glint.vert   vert     entity.vert           GLINT2
+entity_glint.frag   frag     entity.frag           GLINT2
 entity_dynamic.vert vert     entity_dynamic.vert
 entity_dynamic.frag frag     entity_dynamic.frag
 entity_text.vert    vert     entity_dynamic.vert   TEXT
 terrain.vert        vert     terrain.vert
 terrain.frag        frag     terrain.frag
 terrain_alpha.frag  frag     terrain.frag          ALPHA_TEST
+terrain_inv.vert    vert     terrain.vert          INVARIANT
+terrain_depth.frag  frag     terrain.frag          DEPTH_ONLY
+# the LENS variants (SteinLensLight): the Lens's light; the ones above are the game's pixel at the game's cost
+entity_lens.vert          vert     entity.vert           LENS
+entity_lens.frag          frag     entity.frag           LENS
+entity_gametex_lens.frag  frag     entity.frag           GAME_TEX LENS
+entity_dynamic_lens.vert  vert     entity_dynamic.vert   LENS
+entity_dynamic_lens.frag  frag     entity_dynamic.frag   LENS
+entity_text_lens.vert     vert     entity_dynamic.vert   TEXT LENS
+terrain_lens.vert         vert     terrain.vert          LENS
+terrain_lens.frag         frag     terrain.frag          LENS
+terrain_alpha_lens.frag   frag     terrain.frag          ALPHA_TEST LENS
+terrain_inv_lens.vert     vert     terrain.vert          INVARIANT LENS
 pose.comp           comp     pose.comp
+gather.comp         comp     gather.comp
 selftest.vert       vert     selftest.vert
 selftest.frag       frag     selftest.frag
 selftest.comp       comp     selftest.comp

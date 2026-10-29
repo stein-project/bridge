@@ -37,6 +37,7 @@ import static org.lwjgl.vulkan.VK10.vkCmdSetScissor;
 import static org.lwjgl.vulkan.VK10.vkCmdSetViewport;
 import static org.lwjgl.vulkan.VK10.vkUpdateDescriptorSets;
 
+import dev.xavier.stein.bridge.bench.BenchCounters;
 import dev.xavier.stein.gfx.SteinBuffer;
 import dev.xavier.stein.gfx.SteinCommands;
 import dev.xavier.stein.gfx.SteinGlTrack;
@@ -61,6 +62,7 @@ import org.lwjgl.vulkan.VkRenderingInfo;
 import org.lwjgl.vulkan.VkViewport;
 import org.lwjgl.vulkan.VkWriteDescriptorSet;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -81,11 +83,17 @@ final class SteinVkCommands extends SteinCommands {
     private static final int MAX_BINDINGS = 16;
     private static final int MAX_SLOTS = 32;
 
+    /** Black, for a clearing pass without a clear colour (read only). */
+    private static final float[] NO_CLEAR_COLOR = new float[4];
+
     private final SteinVkDevice device;
-    private final SteinRenderPass pass;
-    private final SteinVkRenderTarget target;
-    private final SteinVkRenderTarget.Formats formats;
-    private boolean ended;
+
+    // The pass this object records now: the device reuses two of these objects (see open), so
+    // these are set on every open instead of being final.
+    private SteinRenderPass pass;
+    private SteinVkRenderTarget target;
+    private SteinVkRenderTarget.Formats formats;
+    private boolean ended = true;
 
     /**
      * The command buffer in which the state below was already emitted (another = emit everything
@@ -100,6 +108,19 @@ final class SteinVkCommands extends SteinCommands {
     private long boundGraphics = VK_NULL_HANDLE;
     private long boundCompute = VK_NULL_HANDLE;
     private boolean descDirty = true;
+
+    /**
+     * The graphics set 0 last written in {@link #cb}: its layout class ({@link
+     * SteinVkPipeline#layoutClass}; 0 = none) and values, three per binding (see {@link
+     * #resolveBinding}).
+     */
+    private int writtenClass;
+
+    private int writtenCount;
+    private long[] descWritten = new long[24];
+
+    /** Scratch: the values about to be written. */
+    private long[] descNow = new long[24];
 
     private final long[] vbBuffer = new long[MAX_BINDINGS];
     private final long[] vbOffset = new long[MAX_BINDINGS];
@@ -131,8 +152,10 @@ final class SteinVkCommands extends SteinCommands {
 
     private final int[] viewport = new int[4];
 
-    /** null = the whole target. */
-    private int[] scissor;
+    /** The scissor rectangle, valid only with {@link #scissorOn} (off = the whole target). */
+    private final int[] scissor = new int[4];
+
+    private boolean scissorOn;
 
     private boolean biasOn;
     private float biasFactor;
@@ -143,13 +166,28 @@ final class SteinVkCommands extends SteinCommands {
     /** This pass's slot in the GPU timer (gpuPassTiming), or -1. */
     private int gpuSlot = -1;
 
-    SteinVkCommands(SteinVkDevice device, SteinRenderPass pass) {
+    /** An idle pass object of {@code device}: {@link #open} makes it record a pass. */
+    SteinVkCommands(SteinVkDevice device) {
         this.device = device;
-        this.pass = pass;
+    }
+
+    /**
+     * Starts recording {@code pass} in this object, forgetting the previous pass's state. The
+     * device keeps two of these objects and opens the one that is not the render owner: passes
+     * never nest, and an ended pass is only reachable through the device as the owner of the render
+     * it left open, so the other object is free. Reusing them takes the dozen slot arrays (about
+     * 2.5 KB) and the object itself off every pass — tens of passes per frame.
+     */
+    void open(SteinRenderPass pass) {
+        // validated before anything changes, as the constructor used to: a refused pass leaves
+        // this object as it was
         if (!(pass.target instanceof SteinVkRenderTarget t)) {
             throw new IllegalArgumentException(
                     "vulkan: target from another backend in pass '" + pass.name + "'");
         }
+        BenchCounters.pass();
+        reset();
+        this.pass = pass;
         this.target = t;
         this.formats = t.formats();
         if (pass.viewport != null) {
@@ -160,6 +198,8 @@ final class SteinVkCommands extends SteinCommands {
             // game's first glViewport, the whole target: OpenGL's default)
             System.arraycopy(SteinGlTrack.viewport(), 0, viewport, 0, 4);
         } else {
+            viewport[0] = 0;
+            viewport[1] = 0;
             viewport[2] = t.width();
             viewport[3] = t.height();
         }
@@ -183,6 +223,46 @@ final class SteinVkCommands extends SteinCommands {
             // clears now, like OpenGL: a copy or read before the first draw sees the cleared target
             ensureRendering(current());
         }
+    }
+
+    /**
+     * Every field back to what a newly created pass had: nothing bound, nothing emitted, the render
+     * closed. Only called on an object that is neither open nor the render owner.
+     */
+    private void reset() {
+        ended = false;
+        cb = null;
+        rendering = false;
+        begunOnce = false;
+        pipeline = null;
+        boundGraphics = VK_NULL_HANDLE;
+        boundCompute = VK_NULL_HANDLE;
+        writtenClass = 0;
+        descDirty = true;
+        Arrays.fill(vbBuffer, VK_NULL_HANDLE);
+        Arrays.fill(vbOffset, 0L);
+        vbDirty = 0;
+        indexBuffer = VK_NULL_HANDLE;
+        indexType = VK_INDEX_TYPE_UINT32;
+        indexDirty = false;
+        Arrays.fill(textures, null);
+        gameSlots = 0L;
+        Arrays.fill(gameSampler, null);
+        Arrays.fill(gameBacking, null);
+        Arrays.fill(samplers, null);
+        Arrays.fill(uniforms, null);
+        Arrays.fill(uniformOffset, 0L);
+        Arrays.fill(uniformSize, 0L);
+        Arrays.fill(storage, null);
+        Arrays.fill(storageOffset, 0L);
+        Arrays.fill(storageSize, 0L);
+        Arrays.fill(viewport, 0);
+        scissorOn = false;
+        biasOn = false;
+        biasFactor = 0f;
+        biasUnits = 0f;
+        dynDirty = true;
+        gpuSlot = -1;
     }
 
     String name() {
@@ -232,7 +312,7 @@ final class SteinVkCommands extends SteinCommands {
                     first && pass.depthLoad != SteinRenderPass.Load.KEEP);
         }
         try (MemoryStack stack = MemoryStack.stackPush()) {
-            float[] clear = pass.clearColor != null ? pass.clearColor : new float[4];
+            float[] clear = pass.clearColor != null ? pass.clearColor : NO_CLEAR_COLOR;
             VkRenderingAttachmentInfo.Buffer ca =
                     colors.length == 0
                             ? null
@@ -329,6 +409,7 @@ final class SteinVkCommands extends SteinCommands {
             cb = c;
             boundGraphics = VK_NULL_HANDLE;
             boundCompute = VK_NULL_HANDLE;
+            writtenClass = 0;
             descDirty = true;
             dynDirty = true;
             vbDirty = -1;
@@ -428,8 +509,24 @@ final class SteinVkCommands extends SteinCommands {
         if (p.setLayout() == VK_NULL_HANDLE || bindings.isEmpty()) {
             return;
         }
+        int n = bindings.size();
+        if (descNow.length < n * 3) {
+            descNow = new long[n * 3];
+            descWritten = new long[n * 3];
+            writtenClass = 0;
+        }
+        long[] now = descNow;
+        for (int i = 0; i < n; i++) {
+            resolveBinding(bindings.get(i), now, i * 3);
+        }
+        boolean graphics = bindPoint == VK_PIPELINE_BIND_POINT_GRAPHICS;
+        if (graphics && writtenClass == p.layoutClass() && sameAsWritten(n)) {
+            // The set 0 bound for the last (compatible) graphics pipeline already holds exactly
+            // these resources, and a pipeline switch keeps it: nothing to write (the entity groups
+            // switch pipelines over the same texture array and Frame block).
+            return;
+        }
         try (MemoryStack stack = MemoryStack.stackPush()) {
-            int n = bindings.size();
             VkWriteDescriptorSet.Buffer w = VkWriteDescriptorSet.calloc(n, stack);
             for (int i = 0; i < n; i++) {
                 SteinVkPipeline.Binding b = bindings.get(i);
@@ -438,69 +535,17 @@ final class SteinVkCommands extends SteinCommands {
                         .dstBinding(b.binding())
                         .dstArrayElement(0)
                         .descriptorType(SteinVkPipeline.descriptorType(b.kind()));
-                int slot = b.slot();
+                int k = i * 3;
                 if (b.kind() == SteinShader.Resource.Kind.TEXTURE) {
-                    SteinTexture bound = slot >= 0 ? textures[slot] : null;
-                    SteinVkSampler smp = slot >= 0 ? samplers[slot] : null;
-                    if (bound instanceof SteinGameTexture g) {
-                        gameSlots |= 1L << slot;
-                        gameSampler[slot] = g.sampler();
-                        gameBacking[slot] = g.backing();
-                        if (smp == null) {
-                            smp = (SteinVkSampler) g.sampler(); // the game's texture parameters
-                        }
-                    } else if (slot >= 0) {
-                        gameSlots &= ~(1L << slot);
-                    }
-                    SteinVkTexture t = bound == null ? null : SteinVkDevice.resolve(bound);
-                    SteinVkCommands owner = device.renderOwner();
-                    if (t != null && owner != null && owner.drawsInto(t)) {
-                        if (owner == this) {
-                            throw new IllegalStateException(
-                                    "pass '"
-                                            + pass.name
-                                            + "' samples its own target ('"
-                                            + t.desc().name
-                                            + "')");
-                        }
-                        // another pass left its render open on this texture: close it, the texture
-                        // rests
-                        owner.suspend();
-                    }
-                    if (t == null) {
-                        t = device.defaults.emptyTexture(b.arrayed());
-                    } else if (isAttachment(t)) {
-                        throw new IllegalStateException(
-                                "pass '"
-                                        + pass.name
-                                        + "' samples its own target ('"
-                                        + t.desc().name
-                                        + "')");
-                    }
-                    if (smp == null) {
-                        smp = device.defaults.defaultSampler(t);
-                    }
                     VkDescriptorImageInfo.Buffer ii = VkDescriptorImageInfo.calloc(1, stack);
                     ii.get(0)
-                            .sampler(smp.handle())
-                            .imageView(t.view())
+                            .sampler(now[k + 1])
+                            .imageView(now[k])
                             .imageLayout(SteinVkTexture.REST);
                     d.pImageInfo(ii);
                 } else {
-                    boolean u = b.kind() == SteinShader.Resource.Kind.UNIFORM;
-                    SteinBuffer buf = slot < 0 ? null : u ? uniforms[slot] : storage[slot];
                     VkDescriptorBufferInfo.Buffer bi = VkDescriptorBufferInfo.calloc(1, stack);
-                    if (buf == null) {
-                        bi.get(0)
-                                .buffer(device.defaults.emptyBuffer().handle())
-                                .offset(0L)
-                                .range(SteinVkDefaults.EMPTY_BUFFER);
-                    } else {
-                        bi.get(0)
-                                .buffer(buf.handle())
-                                .offset(u ? uniformOffset[slot] : storageOffset[slot])
-                                .range(u ? uniformSize[slot] : storageSize[slot]);
-                    }
+                    bi.get(0).buffer(now[k]).offset(now[k + 1]).range(now[k + 2]);
                     d.pBufferInfo(bi);
                 }
                 d.descriptorCount(1);
@@ -516,6 +561,90 @@ final class SteinVkCommands extends SteinCommands {
                 vkCmdBindDescriptorSets(c, bindPoint, p.layout(), 0, stack.longs(set), null);
             }
         }
+        if (graphics) {
+            System.arraycopy(now, 0, descWritten, 0, n * 3);
+            writtenCount = n;
+            writtenClass = p.layoutClass();
+        }
+    }
+
+    /**
+     * The descriptor values of binding {@code b} into {@code out[at..at+2]}: a texture's view and
+     * sampler (and 0), or a buffer, its offset and range. The slot's resource, or an empty one
+     * (black texture, zero buffer) where there is none, like texture 0 in OpenGL: no descriptor is
+     * left unwritten.
+     */
+    private void resolveBinding(SteinVkPipeline.Binding b, long[] out, int at) {
+        int slot = b.slot();
+        if (b.kind() != SteinShader.Resource.Kind.TEXTURE) {
+            boolean u = b.kind() == SteinShader.Resource.Kind.UNIFORM;
+            SteinBuffer buf = slot < 0 ? null : u ? uniforms[slot] : storage[slot];
+            if (buf == null) {
+                out[at] = device.defaults.emptyBuffer().handle();
+                out[at + 1] = 0L;
+                out[at + 2] = SteinVkDefaults.EMPTY_BUFFER;
+            } else {
+                out[at] = buf.handle();
+                out[at + 1] = u ? uniformOffset[slot] : storageOffset[slot];
+                out[at + 2] = u ? uniformSize[slot] : storageSize[slot];
+            }
+            return;
+        }
+        SteinTexture bound = slot >= 0 ? textures[slot] : null;
+        SteinVkSampler smp = slot >= 0 ? samplers[slot] : null;
+        if (bound instanceof SteinGameTexture g) {
+            gameSlots |= 1L << slot;
+            gameSampler[slot] = g.sampler();
+            gameBacking[slot] = g.backing();
+            if (smp == null) {
+                smp = (SteinVkSampler) g.sampler(); // the game's texture parameters
+            }
+        } else if (slot >= 0) {
+            gameSlots &= ~(1L << slot);
+        }
+        SteinVkTexture t = bound == null ? null : SteinVkDevice.resolve(bound);
+        SteinVkCommands owner = device.renderOwner();
+        if (t != null && owner != null && owner.drawsInto(t)) {
+            if (owner == this) {
+                throw new IllegalStateException(
+                        "pass '"
+                                + pass.name
+                                + "' samples its own target ('"
+                                + t.desc().name
+                                + "')");
+            }
+            // another pass left its render open on this texture: close it, the texture rests
+            owner.suspend();
+        }
+        if (t == null) {
+            t = device.defaults.emptyTexture(b.arrayed());
+        } else if (isAttachment(t)) {
+            throw new IllegalStateException(
+                    "pass '" + pass.name + "' samples its own target ('" + t.desc().name + "')");
+        }
+        if (smp == null) {
+            smp = device.defaults.defaultSampler(t);
+        }
+        // sampled in this submission: later uploads to it can no longer go early
+        t.noteUse();
+        out[at] = t.view();
+        out[at + 1] = smp.handle();
+        out[at + 2] = 0L;
+    }
+
+    /** The values in {@link #descNow} are the ones last written, binding for binding. */
+    private boolean sameAsWritten(int n) {
+        if (writtenCount != n) {
+            return false;
+        }
+        long[] a = descNow;
+        long[] b = descWritten;
+        for (int i = 0, m = n * 3; i < m; i++) {
+            if (a[i] != b[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
@@ -563,7 +692,11 @@ final class SteinVkCommands extends SteinCommands {
     @Override
     public void setScissor(int[] rect) {
         check();
-        scissor = rect == null ? null : rect.clone();
+        // copied, not kept: the caller may reuse its array (SteinGlTrack, SteinGlReplay)
+        scissorOn = rect != null;
+        if (rect != null) {
+            System.arraycopy(rect, 0, scissor, 0, 4);
+        }
         dynDirty = true;
     }
 
@@ -588,7 +721,7 @@ final class SteinVkCommands extends SteinCommands {
         int sy = 0;
         int sw = target.width();
         int sh = target.height();
-        if (scissor != null) {
+        if (scissorOn) {
             sx = Math.max(0, scissor[0]);
             sy = Math.max(0, scissor[1]);
             sw = Math.max(0, scissor[2] - (sx - scissor[0]));
@@ -683,6 +816,7 @@ final class SteinVkCommands extends SteinCommands {
         }
         VkCommandBuffer c = prepareDraw();
         if (c != null) {
+            BenchCounters.draw();
             vkCmdDraw(c, vertexCount, instanceCount, firstVertex, firstInstance);
         }
     }
@@ -699,6 +833,7 @@ final class SteinVkCommands extends SteinCommands {
         }
         VkCommandBuffer c = prepareDraw();
         if (c != null) {
+            BenchCounters.draw();
             vkCmdDrawIndexed(c, indexCount, instanceCount, firstIndex, baseVertex, firstInstance);
         }
     }
@@ -710,6 +845,7 @@ final class SteinVkCommands extends SteinCommands {
         }
         VkCommandBuffer c = prepareDraw();
         if (c != null) {
+            BenchCounters.draw();
             indirect(c, buffer.handle(), offset, count, 16, false);
         }
     }
@@ -725,6 +861,7 @@ final class SteinVkCommands extends SteinCommands {
         }
         VkCommandBuffer c = prepareDraw();
         if (c != null) {
+            BenchCounters.draw();
             indirect(c, buffer.handle(), offset, count, 20, true);
         }
     }

@@ -41,6 +41,14 @@ final class SteinDeferredResources {
     static SteinBuffer dynVertices;
     static SteinShader dynVertex;
     static SteinShader dynFragment;
+
+    // the LENS variants (SteinLensLight), loaded the first time the Lens's light is on
+    private static SteinShader vertexLens;
+    private static SteinShader fragmentLens;
+    private static SteinShader fragmentGameTexLens;
+    private static SteinShader dynVertexLens;
+    private static SteinShader dynFragmentLens;
+    private static SteinShader textVertexLens;
     static SteinVertexLayout dynLayout;
     static SteinPipelineCache pipelines;
     static SteinSampler pixel;
@@ -102,7 +110,8 @@ final class SteinDeferredResources {
                                             SteinBuffer.Usage.VERTEX))
                             .ring(REGIONS);
         }
-        // STORAGE: the on-GPU pose (SteinPoseGpu) writes the players' instances here
+        // STORAGE, GPU_WRITE: the on-GPU pose (SteinPoseGpu) writes the players' instances and
+        // their commands here (on OpenGL they then live in device memory; see SteinGlBuffer)
         instances =
                 dev.createBuffer(
                                 new SteinBuffer.Desc(
@@ -110,7 +119,8 @@ final class SteinDeferredResources {
                                         (long) RING_PARTS * INSTANCE_BYTES * REGIONS,
                                         SteinBuffer.Memory.UPLOAD,
                                         SteinBuffer.Usage.VERTEX,
-                                        SteinBuffer.Usage.STORAGE))
+                                        SteinBuffer.Usage.STORAGE,
+                                        SteinBuffer.Usage.GPU_WRITE))
                         .ring(REGIONS);
         commands =
                 dev.createBuffer(
@@ -118,7 +128,8 @@ final class SteinDeferredResources {
                                         "entities: commands",
                                         (long) RING_PARTS * COMMAND_BYTES * REGIONS,
                                         SteinBuffer.Memory.UPLOAD,
-                                        SteinBuffer.Usage.INDIRECT))
+                                        SteinBuffer.Usage.INDIRECT,
+                                        SteinBuffer.Usage.GPU_WRITE))
                         .ring(REGIONS);
         frame =
                 dev.createBuffer(
@@ -207,24 +218,74 @@ final class SteinDeferredResources {
     }
 
     static SteinPipeline pipeline(long full) {
+        return pipeline(full, false);
+    }
+
+    /** The group's pipeline in the LENS variant (made once per group). */
+    static SteinPipeline lensPipeline(SteinDeferredGroups.Group g) {
+        if (g.lensPipeline == null) {
+            g.lensPipeline = pipeline(g.key, true);
+        }
+        return g.lensPipeline;
+    }
+
+    private static void loadLens() {
+        if (vertexLens != null) {
+            return;
+        }
+        vertexLens = SteinShader.load(SteinShader.Stage.VERTEX, "entity_lens.vert");
+        fragmentLens = SteinShader.load(SteinShader.Stage.FRAGMENT, "entity_lens.frag");
+        fragmentGameTexLens =
+                SteinShader.load(SteinShader.Stage.FRAGMENT, "entity_gametex_lens.frag");
+        dynVertexLens = SteinShader.load(SteinShader.Stage.VERTEX, "entity_dynamic_lens.vert");
+        dynFragmentLens = SteinShader.load(SteinShader.Stage.FRAGMENT, "entity_dynamic_lens.frag");
+        textVertexLens = SteinShader.load(SteinShader.Stage.VERTEX, "entity_text_lens.vert");
+    }
+
+    private static SteinPipeline pipeline(long full, boolean lens) {
         int key = (int) full;
         boolean dyn = (full & KEY_DYNAMIC) != 0;
         boolean gameTex = (full & KEY_GAMETEX) != 0;
         boolean text = (full & KEY_TEXT) != 0;
+        boolean glint2 = (full & SteinGlintMerge.KEY_GLINT2) != 0;
+        // the merged glint is unlit: it has no LENS variant
+        lens &= !glint2;
+        if (lens) {
+            loadLens();
+        }
         SteinPipeline.Builder b =
                 SteinPipeline.builder(
-                                (text ? "entities text " : dyn ? "entities dynamic " : "entities ")
+                                (lens ? "lens " : "")
+                                        + (text
+                                                ? "entities text "
+                                                : dyn ? "entities dynamic " : "entities ")
                                         + Integer.toHexString(key & 0x7FFFFFF0))
-                        .vertex(text ? SteinTextGpu.vertexShader() : dyn ? dynVertex : vertex)
-                        .fragment(dyn ? dynFragment : gameTex ? fragmentGameTex : fragment)
+                        .vertex(
+                                text
+                                        ? (lens ? textVertexLens : SteinTextGpu.vertexShader())
+                                        : dyn
+                                                ? (lens ? dynVertexLens : dynVertex)
+                                                : glint2
+                                                        ? SteinGlintMerge.vertex()
+                                                        : lens ? vertexLens : vertex)
+                        .fragment(
+                                dyn
+                                        ? (lens ? dynFragmentLens : dynFragment)
+                                        : gameTex
+                                                ? (lens ? fragmentGameTexLens : fragmentGameTex)
+                                                : glint2
+                                                        ? SteinGlintMerge.frag()
+                                                        : lens ? fragmentLens : fragment)
                         .layout(text ? SteinTextGpu.layout() : dyn ? dynLayout : layout)
                         .texture("tex", 0)
                         .texture("lightmap", 1)
-                        .texture("shadowMap", 2)
-                        .texture("casterMap", 3)
-                        .texture("shadowPrevMap", 5)
-                        .texture("cloudMap", 6)
                         .uniforms("Frame", 0);
+        if (lens) {
+            b.texture("shadowMap", 2)
+                    .texture("casterMap", 3)
+                    .texture("shadowPrevMap", 5)
+                    .texture("cloudMap", 6);
+        }
         if ((full & KEY_NOALPHA) != 0) {
             b.alphaWrite(false);
         }

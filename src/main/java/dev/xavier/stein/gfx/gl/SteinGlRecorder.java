@@ -44,21 +44,25 @@ final class SteinGlRecorder extends SteinCommands {
     // of it ----
     private SteinPipeline boundPipeline;
     private boolean pipelineSet;
-    private final int[] vertexBufferHandle = new int[MAX_BINDINGS];
-    private final long[] vertexBufferOffset = new long[MAX_BINDINGS];
     private int vertexBindingMask;
     private int indexHandle;
     private boolean indexUint16;
     private boolean indexSet;
-    private final int[] texId = new int[MAX_UNITS];
-    private final int[] texArrayId = new int[MAX_UNITS];
-    private final int[] texSampler = new int[MAX_UNITS];
     private long texture2dMask;
     private long texArraySet;
-    private final int[] bufHandle = new int[BUFFER_RANGES];
-    private final long[] bufOffset = new long[BUFFER_RANGES];
-    private final long[] bufSize = new long[BUFFER_RANGES];
-    private final boolean[] bufSet = new boolean[BUFFER_RANGES];
+
+    /** Which buffer ranges are set: uniform points (0..63), storage points (64..127). */
+    private long bufSetLow;
+
+    private long bufSetHigh;
+
+    /**
+     * The bound values, read only where a mask above says they are set; borrowed from {@link
+     * #spare} for the life of the pass (one pass is open at a time, and each pass used to allocate
+     * these arrays: a good part of the render thread's garbage).
+     */
+    private Bound bound;
+
     private final int[] viewport = new int[4];
     private boolean viewportSet;
     private boolean scissorSet;
@@ -72,10 +76,28 @@ final class SteinGlRecorder extends SteinCommands {
     /** The line width of the opening recording (the continuation uses the same one). */
     float lineWidth;
 
+    /** The arrays of what a pass binds, reused from one pass to the next. */
+    private static final class Bound {
+        final int[] vertexBufferHandle = new int[MAX_BINDINGS];
+        final long[] vertexBufferOffset = new long[MAX_BINDINGS];
+        final int[] texId = new int[MAX_UNITS];
+        final int[] texArrayId = new int[MAX_UNITS];
+        final int[] texSampler = new int[MAX_UNITS];
+        final int[] bufHandle = new int[BUFFER_RANGES];
+        final long[] bufOffset = new long[BUFFER_RANGES];
+        final long[] bufSize = new long[BUFFER_RANGES];
+    }
+
+    /** The arrays free for the next pass (null while a pass has them). Game thread only. */
+    private static Bound spare = new Bound();
+
     SteinGlRecorder(SteinGlDevice device, SteinRenderPass pass) {
         SteinGlGame.flushEngine(); // the engine's batch goes out first, as in the immediate pass
         this.caps = device.caps();
         this.pass = pass;
+        Bound b = spare;
+        spare = null;
+        bound = b != null ? b : new Bound();
         SteinGlFrame.beginPass(this, pass);
     }
 
@@ -117,28 +139,29 @@ final class SteinGlRecorder extends SteinCommands {
         if (indexSet) {
             SteinGlFrame.index(indexHandle, indexUint16);
         }
+        Bound b = bound;
         for (int i = 0; i < MAX_BINDINGS; i++) {
             if ((vertexBindingMask & 1 << i) != 0) {
-                SteinGlFrame.vertex(i, vertexBufferHandle[i], vertexBufferOffset[i]);
+                SteinGlFrame.vertex(i, b.vertexBufferHandle[i], b.vertexBufferOffset[i]);
             }
         }
         for (int s = 0; s < MAX_UNITS; s++) {
             long bit = 1L << s;
             if ((texture2dMask & bit) != 0) {
-                SteinGlFrame.texture(s, texId[s], false, texSampler[s]);
+                SteinGlFrame.texture(s, b.texId[s], false, b.texSampler[s]);
             }
             if ((texArraySet & bit) != 0) {
-                SteinGlFrame.texture(s, texArrayId[s], true, texSampler[s]);
+                SteinGlFrame.texture(s, b.texArrayId[s], true, b.texSampler[s]);
             }
         }
         for (int k = 0; k < BUFFER_RANGES; k++) {
-            if (bufSet[k]) {
+            if (bufSet(k)) {
                 SteinGlFrame.uniforms(
                         k >= BUFFER_POINTS,
                         k % BUFFER_POINTS,
-                        bufHandle[k],
-                        bufOffset[k],
-                        bufSize[k]);
+                        b.bufHandle[k],
+                        b.bufOffset[k],
+                        b.bufSize[k]);
             }
         }
         if (pipelineSet) {
@@ -151,10 +174,19 @@ final class SteinGlRecorder extends SteinCommands {
             throw new IllegalArgumentException("buffer point out of range: " + slot);
         }
         int k = storage ? BUFFER_POINTS + slot : slot;
-        bufHandle[k] = h;
-        bufOffset[k] = offset;
-        bufSize[k] = size;
-        bufSet[k] = true;
+        Bound b = bound;
+        b.bufHandle[k] = h;
+        b.bufOffset[k] = offset;
+        b.bufSize[k] = size;
+        if (k < 64) {
+            bufSetLow |= 1L << k;
+        } else {
+            bufSetHigh |= 1L << (k - 64);
+        }
+    }
+
+    private boolean bufSet(int k) {
+        return k < 64 ? (bufSetLow & 1L << k) != 0 : (bufSetHigh & 1L << (k - 64)) != 0;
     }
 
     private void check() {
@@ -175,10 +207,11 @@ final class SteinGlRecorder extends SteinCommands {
     public void bindVertexBuffer(int index, SteinBuffer buffer, long offset) {
         check();
         SteinGlPassRules.vertexBinding(index);
-        vertexBufferHandle[index] = buffer == null ? 0 : (int) buffer.handle();
-        vertexBufferOffset[index] = offset;
+        int h = buffer == null ? 0 : (int) buffer.handle();
+        bound.vertexBufferHandle[index] = h;
+        bound.vertexBufferOffset[index] = offset;
         vertexBindingMask |= 1 << index;
-        SteinGlFrame.vertex(index, vertexBufferHandle[index], offset);
+        SteinGlFrame.vertex(index, h, offset);
     }
 
     @Override
@@ -201,14 +234,15 @@ final class SteinGlRecorder extends SteinCommands {
         int s = sampler == null ? 0 : (int) sampler.handle();
         // The 2D and the array texture of one slot coexist (different targets): the continuation
         // rebinds both and the last sampler.
+        Bound b = bound;
         if (array) {
-            texArrayId[slot] = id;
+            b.texArrayId[slot] = id;
             texArraySet |= 1L << slot;
         } else {
-            texId[slot] = id;
+            b.texId[slot] = id;
             texture2dMask |= 1L << slot;
         }
-        texSampler[slot] = s;
+        b.texSampler[slot] = s;
         SteinGlFrame.texture(slot, id, array, s);
     }
 
@@ -306,6 +340,10 @@ final class SteinGlRecorder extends SteinCommands {
         }
         ended = true;
         SteinGlFrame.endPass(this);
+        // after end nothing reads the arrays (every call checks ended; only the open pass
+        // resumes): they go to the next pass
+        spare = bound;
+        bound = null;
     }
 
     /** Into the list, like the deferred entities' direct offset ({@link SteinGlCommands}). */

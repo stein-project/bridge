@@ -57,10 +57,11 @@ call in the fallback.
 | `SteinTerrain`, `SteinTerrainLayers`, `SteinTerrainPipelines`, `SteinTerrainRegion`, `SteinTerrainSlice`, `SteinChunkFade` | The world: chunk geometry in region buffers, one indirect draw per region and layer, fade-in |
 | `SteinSky` | Sky, recorded in strict order with fixed VBOs |
 | `SteinParticles` | Base drawing of a particle |
-| `SteinEntityDeferred`, `SteinDeferredFrame`, `SteinDeferredGroups`, `SteinDeferredKeys`, `SteinDeferredLights`, `SteinDeferredResources`, `SteinDeferredSessions`, `SteinDeferredStats`, `SteinInstanceWriter` | Deferred entities: the entity pass, HUD and screens recorded as data and drawn per state group |
+| `SteinEntityDeferred`, `SteinDeferredFrame`, `SteinDeferredGroups`, `SteinDeferredKeys`, `SteinDeferredLights`, `SteinDeferredResources`, `SteinDeferredSessions`, `SteinDeferredStats`, `SteinInstanceWriter`, `SteinParallelWrites` | Deferred entities: the entity pass, HUD and screens recorded as data and drawn per state group |
 | `SteinDeferredModel`, `SteinDeferredDynamic`, `SteinDeferredNames`, `SteinDeferredPose`, `SteinDeferredRetained`, `SteinDeferredText` | Recording of model parts, dynamic geometry, name tags, poses, retained tiles and resident text |
+| `SteinEntityBatch`, `SteinGlintMerge` | Opaque groups drawn as one instanced command per part (instances gathered in compute); the armor glint's two passes in one |
 | `SteinStaticGeometry`, `SteinCaptureFormat`, `SteinVertexConverter`, `SteinTexGen`, `SteinTextureArrays`, `SteinTextureFilters` | Tessellator capture support: fixed geometry on the GPU, vertex conversion, texgen on the CPU, texture arrays, filter bookkeeping |
-| `SteinPlayerPose`, `SteinPlayerPoseCollect`, `SteinPlayerPoseCompute`, `SteinPlayerPoseModels`, `SteinPlayerPoseGame`, `SteinPlayerPoseJobs`, `SteinPlayerPoseEndState`, `SteinPoseWorkers`, `SteinPoseGpu`, `SteinHeldItem` | Players' pose computed by us (CPU threads or GPU) and held items |
+| `SteinPlayerPose`, `SteinPlayerPoseCollect`, `SteinPlayerPoseCompute`, `SteinPlayerPoseModels`, `SteinPlayerPoseGame`, `SteinPlayerPoseJobs`, `SteinPlayerPoseEndState`, `SteinPoseWorkers`, `SteinPoseGpu`, `SteinPlayerPoseOrder`, `SteinHeldItem` | Players' pose computed by us (CPU threads or GPU) and held items |
 | `SteinTileRetain`, `SteinTileEntry`, `SteinTileKey`, `SteinTileState`, `SteinTileGame`, `SteinCameraCorrection` | Retained tile entities re-emitted without running their renderers |
 | `SteinNameLabels`, `SteinLabelContext`, `SteinLabelEmit`, `SteinLabelKinds`, `SteinLabelSlots`, `SteinLabelTail`, `SteinLabelTemplates`, `SteinLabelStats`, `SteinLabelCheck` | Name tags built directly, without the game's surrounding code |
 | `SteinTextCache`, `SteinTextRecorder`, `SteinTextReplay`, `SteinTextGpu`, `SteinTextBackgrounds`, `SteinOwnText` | Cached text (names, signs, the mods' HUD) and names on the GPU |
@@ -136,11 +137,13 @@ optimizations, and those classes are shared. What exists only there is a path in
 
 These have no Pipeline line because they do not change how anything is drawn: chunk building and
 search (`Chunk*` except `ChunkArena`), network and threads (`Net`, `NetAddress`, `PacketLog`,
-`Watchdog`, `ServerWatch`, `AsyncSkins`, `SoundGuard`, `ClientSettings`), game-logic caches
-(`ActiveChunks`, `BiomeLock`, `BlockMath`, `DataWatchers`, `EnchCache`, `EntityFlags`, `FontIndex`,
-`NameCache`, `SignText`, `ArmorTextures`, `CraftingInit`, `AngleTable`, `Particles`, `Rain`), state and
+`Watchdog`, `ServerWatch`, `TaskPost`, `AsyncSkins`, `SoundGuard`, `ClientSettings`), game-logic caches
+(`ActiveChunks`, `BiomeColors`, `BiomeLock`, `BlockMath`, `DataWatchers`, `Facings`, `IntCachePool`, `EnchCache`, `EntityFlags`, `FontIndex`,
+`NameCache`, `SignText`, `ArmorTextures`, `CraftingInit`, `AngleTable`, `Particles`, `Rain`), the game fix
+`PlayerUnload`, state and
 option plumbing (`EngineOptions`, `CheckReport`, `FrameTime`, `KeyBindings`, `Mat4`, `Obf`, `Sprint`,
-`TextHook`, `Visuals`, `OldAnimations`). `HudBatch` and `ArmorGlint` batch the game's own calls
+`TextHook`, `Visuals`, `OldAnimations`). The built-in benchmark (`bridge/bench`, [BENCHMARK.md](BENCHMARK.md)) only
+measures: its counters sit in both backends and the fixed pipeline, and do nothing without `-Dsteinbridge.bench`. `HudBatch` and `ArmorGlint` batch the game's own calls
 through the GlStateManager and the Tessellator, which both pipelines handle; `./gradlew verify` (in the Loader) only
 runs the `HudBatch` check in the fixed run.
 

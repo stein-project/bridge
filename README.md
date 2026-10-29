@@ -18,7 +18,10 @@ player's machine and runs it on a modern stack:
 - **Invisible optimizations**: everything that makes the game faster without changing what the player sees or does
   is on by default, and only after being measured A/B and compared pixel by pixel.
 
-Game logic and physics stay identical to vanilla. Stein Bridge works on any vanilla server.
+Game logic and physics stay identical to vanilla. Stein Bridge works on any vanilla server. The only exceptions are
+fixes for 1.8.9 bugs, in `patcher/redirects-mc.tsv`: for example, the integrated server no longer loses a player
+whose old chunk is unloaded in the same tick as a long teleport (`PlayerUnload`, off with
+`-Dsteinbridge.opt.vanillaPlayerUnload=true`).
 
 > Stein is not an official Minecraft product. It is not approved by or associated with Mojang or Microsoft.
 

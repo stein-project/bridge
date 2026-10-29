@@ -56,6 +56,8 @@ import static org.lwjgl.glfw.GLFW.glfwWindowHint;
 import static org.lwjgl.glfw.GLFW.glfwWindowShouldClose;
 import static org.lwjgl.system.MemoryUtil.NULL;
 
+import dev.xavier.stein.bridge.bench.Bench;
+import dev.xavier.stein.bridge.bench.BenchZones;
 import dev.xavier.stein.bridge.core.CoreOptions;
 import dev.xavier.stein.bridge.core.Input;
 import dev.xavier.stein.bridge.core.Log;
@@ -288,6 +290,8 @@ public final class Display {
     }
 
     public static void destroy() {
+        // the game's own shutdown: a Vulkan start closed in its first seconds is not a crash
+        SteinBackend.closing();
         if (!Win.isCreated()) {
             return;
         }
@@ -332,7 +336,11 @@ public final class Display {
         }
         // The game idle (out of focus, title screen, Esc menu): fewer frames, less load on the
         // processor and the graphics card.
+        BenchZones.begin(BenchZones.IDLE);
         IdleLimit.frame();
+        BenchZones.end(BenchZones.IDLE);
+        // The benchmark's row for this frame (only with -Dsteinbridge.bench).
+        Bench.frameEnd();
     }
 
     /** Everything the engine does after the game has drawn and before the buffer swap. */
@@ -340,11 +348,15 @@ public final class Display {
         // F3 frame time.
         FrameTime.tick();
         if (Win.vulkan) {
+            // in the submit zone like OpenGL's same work, so the two compare zone for zone
+            BenchZones.begin(BenchZones.SUBMIT);
             endOfVulkanFrame();
+            BenchZones.end(BenchZones.SUBMIT);
             return;
         }
         // Stein GFX recorded frame: the whole list goes to the driver here, before everything in
         // the swap (only with the renderer).
+        BenchZones.begin(BenchZones.SUBMIT);
         SteinGlFrame.endFrame();
         // Batched model parts go out before the swap; fence in the frame's region.
         ModelBatch.endFrame();
@@ -363,9 +375,12 @@ public final class Display {
         // Fences requested after the recorded frame was submitted (end of frame of the terrain and
         // the rings): together, before the swap.
         SteinGlFrame.flushFences();
+        BenchZones.end(BenchZones.SUBMIT);
         // Waits for the GPU to finish the previous frame before sending this one: at most one frame
         // in flight.
+        BenchZones.begin(BenchZones.AWAIT);
         awaitFrame();
+        BenchZones.end(BenchZones.AWAIT);
     }
 
     /**
@@ -403,16 +418,21 @@ public final class Display {
     /** Swaps the buffers and polls the events, timing both when {@link #TIME_SWAP} is on. */
     private static void swap() {
         long t0 = TIME_SWAP ? System.nanoTime() : 0L;
+        // with Vulkan the frame's submission is in the presentation
+        BenchZones.begin(BenchZones.SWAP);
         if (Win.vulkan) {
             SteinGameFramebuffers.present();
         } else {
             glfwSwapBuffers(Win.handle);
         }
+        BenchZones.end(BenchZones.SWAP);
         long t1 = TIME_SWAP ? System.nanoTime() : 0L;
         markFrame();
         Win.resized = false;
         polling = Win.vulkan;
+        BenchZones.begin(BenchZones.EVENTS);
         glfwPollEvents();
+        BenchZones.end(BenchZones.EVENTS);
         polling = false;
         Input.afterEvents();
         if (TIME_SWAP) {
@@ -480,6 +500,13 @@ public final class Display {
      * a granularity and would produce irregular frametime.
      */
     public static void sync(int fps) {
+        BenchZones.begin(BenchZones.LIMITER);
+        // the benchmark's title-menus part measures them without the game's 30 fps menu cap
+        limit(Bench.uncappedMenus() ? 0 : fps);
+        BenchZones.end(BenchZones.LIMITER);
+    }
+
+    private static void limit(int fps) {
         if (vsync && fps >= refreshRate()) {
             nextFrame = 0;
             return;
@@ -548,6 +575,10 @@ public final class Display {
     }
 
     // ---- configuration ----
+
+    public static String getTitle() {
+        return title;
+    }
 
     public static void setTitle(String t) {
         title = t == null ? "" : t;
