@@ -12,6 +12,7 @@ import dev.xavier.stein.bridge.bench.Bench;
 import dev.xavier.stein.bridge.bench.BenchZones;
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.bridge.engine.FrameTime;
+import dev.xavier.stein.bridge.engine.LoadingScreen;
 import dev.xavier.stein.gfx.SteinGfxSelfTest;
 
 import org.lwjgl.input.Keyboard;
@@ -94,6 +95,7 @@ public final class GameHooks {
 
     /** Before startGame (ave.am), in Minecraft.run. */
     public static void beforeStartGame() {
+        LoadingScreen.startupBegin();
         if (SINK != null) {
             try {
                 SINK.beforeStartGame();
@@ -105,6 +107,7 @@ public final class GameHooks {
 
     /** After startGame. */
     public static void afterStartGame() {
+        LoadingScreen.startupEnd();
         SteinGfxSelfTest.runIfRequested();
         if (SINK != null) {
             try {

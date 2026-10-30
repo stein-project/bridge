@@ -756,3 +756,11 @@ bht	sbZ	I	-	-	field
 bht	a	(Lbhq;)V	setCompiled	dev/xavier/stein/bridge/engine/TileChunks	static
 bht	h	()V	stopCompile	dev/xavier/stein/bridge/engine/TileChunks	static
 bht	sbTiles	Z	-	-	field
+
+# Stein's loading screen (engine/LoadingScreen, Stein GFX only): in place of the 1.8.9 splash in startGame; before each
+# resource listener (registered in startGame, and at every reload), a frame with the bar; and the fade at the end of a
+# load, inside the game's frame (before the framebuffer is unbound in the game loop).
+ave	a	(Lbmj;)V	splash	dev/xavier/stein/bridge/engine/LoadingScreen	static	ave.am()V
+bnj	a	(Lbni;)V	listener	dev/xavier/stein/bridge/engine/LoadingScreen	static	bnn.a(Lbnj;)V
+bnj	a	(Lbni;)V	listener	dev/xavier/stein/bridge/engine/LoadingScreen	static	bnn.c()V
+bfw	e	()V	fadeOut	dev/xavier/stein/bridge/engine/LoadingScreen	before	ave.av()V

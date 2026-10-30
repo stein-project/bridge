@@ -32,6 +32,13 @@ public final class EngineOptions {
      */
     public static final boolean IDLE_LIMIT_IN_BENCH = Opt.flag("steinbridge.diag.idleLimit");
 
+    /**
+     * {@code -Dsteinbridge.diag.loadingShot=true}: the loading screen saves its frame, through the
+     * game's own capture, to screenshots/loading.png when the opening's bar passes half (default:
+     * off).
+     */
+    public static final boolean LOADING_SHOT = Opt.flag("steinbridge.diag.loadingShot");
+
     // ---- chunks / terrain ----
 
     /**

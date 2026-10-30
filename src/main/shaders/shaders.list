@@ -26,3 +26,5 @@ selftest.frag       frag     selftest.frag
 selftest.comp       comp     selftest.comp
 blue.vert           vert     fullscreen_blue.vert
 blue.frag           frag     fullscreen_blue.frag
+post.vert             vert     post.vert
+loading.frag          frag     loading.frag
