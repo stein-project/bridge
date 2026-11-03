@@ -11,6 +11,7 @@ package dev.xavier.stein.bridge.hooks;
 import dev.xavier.stein.gfx.SteinGameState;
 
 import net.minecraft.client.entity.EntityPlayerSP;
+import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.client.renderer.entity.RendererLivingEntity;
 import net.minecraft.entity.DataWatcher;
@@ -28,6 +29,19 @@ import java.util.List;
  * <p>{@code GameHooks} forces this class to initialise from its own static initializer.
  */
 final class GameHooksEntity {
+
+    /**
+     * The alpha of a mod's ghost, in place of the 15% the game uses for an invisible teammate: a
+     * ghost exists to let whoever is fighting behind be seen, and 15% still covered too much.
+     */
+    private static final float GHOST_ALPHA = 0.08F;
+
+    /**
+     * The entity renderModel is drawing is a mod's ghost: written by {@link #ghostInvisible}, which
+     * the game asks first, and read by {@link #ghostColor} a few calls later in the same method.
+     * Entities are drawn on one thread, one at a time.
+     */
+    private static boolean drawingGhost;
 
     private GameHooksEntity() {}
 
@@ -142,7 +156,18 @@ final class GameHooksEntity {
      * ghost, with its own code.
      */
     static boolean ghostInvisible(Object entity) {
-        return ghost(entity) || ((Entity) entity).isInvisible();
+        boolean g = ghost(entity);
+        drawingGhost = g;
+        return g || ((Entity) entity).isInvisible();
+    }
+
+    /**
+     * In place of {@code GlStateManager.color(1, 1, 1, 0.15F)} in the same method, the only color
+     * it sets (on the translucent path): a mod's ghost comes out fainter ({@link #GHOST_ALPHA});
+     * the game's invisible teammate keeps its 15%.
+     */
+    static void ghostColor(float r, float g, float b, float a) {
+        GlStateManager.color(r, g, b, drawingGhost ? GHOST_ALPHA : a);
     }
 
     /**

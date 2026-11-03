@@ -491,6 +491,11 @@ public final class GameHooks {
         return GameHooksEntity.ghostInvisible(entity);
     }
 
+    /** See {@link GameHooksEntity#ghostColor}. */
+    public static void ghostColor(float r, float g, float b, float a) throws Throwable {
+        GameHooksEntity.ghostColor(r, g, b, a);
+    }
+
     /** See {@link GameHooksEntity#ghostInvisibleToPlayer}. */
     public static boolean ghostInvisibleToPlayer(Object entity, Object player) throws Throwable {
         return GameHooksEntity.ghostInvisibleToPlayer(entity, player);

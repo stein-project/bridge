@@ -205,6 +205,9 @@ wn	d	(Z)V	sprintOnHit	dev/xavier/stein/bridge/engine/Sprint	static	wn.f(Lpk;)V
 # isInvisibleToPlayer(player). That way the ghost is the game's own, with its code.
 pr	ax	()Z	ghostInvisible	dev/xavier/stein/bridge/hooks/GameHooks	static	bjl.a(Lpr;FFFFFF)V
 pr	f	(Lwn;)Z	ghostInvisibleToPlayer	dev/xavier/stein/bridge/hooks/GameHooks	static	bjl.a(Lpr;FFFFFF)V
+# The mod's ghost is fainter than the game's 15% (GameHooksEntity.ghostColor): the one color call in
+# renderModel, GlStateManager.color(1, 1, 1, 0.15F), only on the translucent path.
+bfl	c	(FFFF)V	ghostColor	dev/xavier/stein/bridge/hooks/GameHooks	static	bjl.a(Lpr;FFFFFF)V
 # And the layers (armor, held item, cape) do not come out on the ghost: the game draws them outside
 # invisibility — which is why an invisible player in armor becomes "walking armor" —, and a 15% silhouette
 # with solid armor on top would show nothing of what is behind it.
