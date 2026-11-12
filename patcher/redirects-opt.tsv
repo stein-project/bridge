@@ -353,6 +353,17 @@ pk	aQ	()Lew;	hover	dev/xavier/stein/bridge/engine/NameCache	static	pk.f_()Leu;
 pk	sbHover	Ljava/lang/Object;	-	-	field
 java/lang/String	toLowerCase	(Ljava/util/Locale;)Ljava/lang/String;	lower	dev/xavier/stein/bridge/engine/NameCache	static	avn.a(Ljava/lang/String;Z)V
 a	a	(Ljava/lang/String;)Ljava/lang/String;	stripFormatting	dev/xavier/stein/bridge/engine/NameCache		bjl.a(Lpr;FFF)V
+# ... and the name rotateCorpse compares with Dinnerbone/Grumm: the default entity name kept per class, until the
+# translations change (StringTranslate.replaceWith).
+pr	e_	()Ljava/lang/String;	rotateName	dev/xavier/stein/bridge/engine/NameCache	static	bjl.a(Lpr;FFF)V
+dj	a	(Ljava/util/Map;)V	languageChanged	dev/xavier/stein/bridge/engine/NameCache	after
+# Entity shadows (engine/ShadowCache): the block below, its light and its brightness answered once per block in each
+# renderEntities pass, instead of once per entity.
+adm	p	(Lcj;)Lalz;	state	dev/xavier/stein/bridge/engine/ShadowCache	static	biv.c(Lpk;DDDFF)V
+adm	l	(Lcj;)I	light	dev/xavier/stein/bridge/engine/ShadowCache	static	biv.c(Lpk;DDDFF)V
+adm	o	(Lcj;)F	brightness	dev/xavier/stein/bridge/engine/ShadowCache	static	biv.a(Lafh;DDDLcj;FFDDD)V
+bfr	a	(Lpk;Lbia;F)V	begin	dev/xavier/stein/bridge/engine/ShadowCache	before	bfk.a(IFJ)V
+bfr	a	(Lpk;Lbia;F)V	end	dev/xavier/stein/bridge/engine/ShadowCache	after	bfk.a(IFJ)V
 # New renderer, deferred entities (dev.xavier.stein.gfx.SteinEntityDeferred; only active with
 # -Dsteinbridge.gfx.deferredEntities=true): the entity pass around renderEntities,
 # framebuffer switch in the middle of it, names after the bodies.

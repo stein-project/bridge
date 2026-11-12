@@ -192,6 +192,8 @@ listed at the end.
 - `-Dsteinbridge.opt.vanillaLight=true`: computes entity light every frame (default: stored).
 - `-Dsteinbridge.opt.checkLight=true`: uses the stored light and checks it against the game's computation (default: off).
 - `-Dsteinbridge.opt.vanillaNames=true`: sends the cached names through the original path (default: cached).
+- `-Dsteinbridge.opt.vanillaShadows=true`: entity shadows ask the world for every block (default: once per block per entity pass).
+- `-Dsteinbridge.opt.checkShadows=true`: uses the shadow table and checks every hit against the world (default: off).
 - `-Dsteinbridge.opt.vanillaParticleRemoval=true`: removes particles with the game's removeAll (default: Stein's).
 - `-Dsteinbridge.opt.vanillaClientSettings=true`: writes options like the game does, with no deferral (default: deferred).
 - `-Dsteinbridge.opt.noServerWatch=true`: turns the singleplayer server watch off (default: on).

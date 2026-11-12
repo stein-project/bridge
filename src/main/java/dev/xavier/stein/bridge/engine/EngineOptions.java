@@ -492,6 +492,18 @@ public final class EngineOptions {
     static final boolean VANILLA_NAMES = Opt.flag("steinbridge.opt.vanillaNames");
 
     /**
+     * {@code -Dsteinbridge.opt.vanillaShadows=true}: entity shadows ask the world for every block
+     * (default: once per block per entity pass).
+     */
+    static final boolean VANILLA_SHADOWS = Opt.flag("steinbridge.opt.vanillaShadows");
+
+    /**
+     * {@code -Dsteinbridge.opt.checkShadows=true}: uses the shadow table and checks every hit
+     * against the world (default: off).
+     */
+    static final boolean CHECK_SHADOWS = Opt.flag("steinbridge.opt.checkShadows");
+
+    /**
      * {@code -Dsteinbridge.opt.vanillaParticleRemoval=true}: removes particles with the game's
      * removeAll (default: Stein's).
      */
