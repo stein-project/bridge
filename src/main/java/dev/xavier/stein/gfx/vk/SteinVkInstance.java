@@ -32,6 +32,7 @@ import dev.xavier.stein.bridge.core.Log;
 import org.lwjgl.PointerBuffer;
 import org.lwjgl.glfw.GLFWVulkan;
 import org.lwjgl.system.MemoryStack;
+import org.lwjgl.vulkan.EXTSwapchainColorspace;
 import org.lwjgl.vulkan.KHRPortabilityEnumeration;
 import org.lwjgl.vulkan.VK13;
 import org.lwjgl.vulkan.VkApplicationInfo;
@@ -57,6 +58,13 @@ final class SteinVkInstance {
 
     final VkInstance instance;
     final int apiVersion;
+
+    /**
+     * VK_EXT_swapchain_colorspace is on: the window may list colour spaces beyond sRGB (the HDR
+     * output, {@code SteinHdr}).
+     */
+    static boolean colorSpaces;
+
     private final long messenger;
     private final VkDebugUtilsMessengerCallbackEXT messengerCallback;
 
@@ -117,6 +125,18 @@ final class SteinVkInstance {
                                 KHRPortabilityEnumeration
                                         .VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME));
                 flags |= KHRPortabilityEnumeration.VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+            }
+            colorSpaces =
+                    window != 0L
+                            && instExt.contains(
+                                    EXTSwapchainColorspace
+                                            .VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME);
+            if (colorSpaces) {
+                // the window's other colour spaces (scRGB for HDR): only listed with it on
+                enable.put(
+                        stack.UTF8(
+                                EXTSwapchainColorspace
+                                        .VK_EXT_SWAPCHAIN_COLOR_SPACE_EXTENSION_NAME));
             }
             boolean debug = validation && instExt.contains(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
             if (debug) {

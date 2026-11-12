@@ -70,6 +70,7 @@ import org.lwjgl.glfw.GLFWVulkan;
 import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.EXTDepthClipControl;
+import org.lwjgl.vulkan.EXTHdrMetadata;
 import org.lwjgl.vulkan.KHRDynamicRendering;
 import org.lwjgl.vulkan.KHRPortabilitySubset;
 import org.lwjgl.vulkan.KHRPushDescriptor;
@@ -184,6 +185,9 @@ public final class SteinVkDevice extends SteinDevice {
     final boolean pushDescriptors;
     final boolean depthClipControl;
 
+    /** VK_EXT_hdr_metadata: the HDR swapchain tells the system the calibration's light levels. */
+    final boolean hdrMetadata;
+
     /** Logical operations on the colour (SteinPipeline.LogicOp): an optional feature. */
     final boolean logicOp;
 
@@ -294,6 +298,9 @@ public final class SteinVkDevice extends SteinDevice {
             boolean clipExt =
                     devExt.contains(EXTDepthClipControl.VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME)
                             && !SteinVkOptions.NO_DEPTH_CLIP_CONTROL;
+            hdrMetadata =
+                    surface != VK_NULL_HANDLE
+                            && devExt.contains(EXTHdrMetadata.VK_EXT_HDR_METADATA_EXTENSION_NAME);
 
             // ---- resources the GPU has ----
             VkPhysicalDeviceDepthClipControlFeaturesEXT clipQ =
@@ -359,7 +366,7 @@ public final class SteinVkDevice extends SteinDevice {
                             .depthClamp(has.depthClamp())
                             .logicOp(has.logicOp())
                             .wideLines(has.wideLines());
-            PointerBuffer dext = stack.mallocPointer(8);
+            PointerBuffer dext = stack.mallocPointer(9);
             if (!core13) {
                 dext.put(stack.UTF8(KHRDynamicRendering.VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME));
             }
@@ -371,6 +378,9 @@ public final class SteinVkDevice extends SteinDevice {
             }
             if (depthClipControl) {
                 dext.put(stack.UTF8(EXTDepthClipControl.VK_EXT_DEPTH_CLIP_CONTROL_EXTENSION_NAME));
+            }
+            if (hdrMetadata) {
+                dext.put(stack.UTF8(EXTHdrMetadata.VK_EXT_HDR_METADATA_EXTENSION_NAME));
             }
             if (devExt.contains(KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME)) {
                 dext.put(stack.UTF8(KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME));
@@ -509,6 +519,8 @@ public final class SteinVkDevice extends SteinDevice {
                         + pushDescriptors
                         + ", depth clip control "
                         + depthClipControl
+                        + ", HDR metadata "
+                        + hdrMetadata
                         + ", DEPTH24 "
                         + (depth24 == VK_FORMAT_D32_SFLOAT ? "as D32F" : "X8_D24"));
     }
@@ -692,6 +704,19 @@ public final class SteinVkDevice extends SteinDevice {
             renderOwner.suspend(); // the render left open by the last pass
         }
         return cmd();
+    }
+
+    /**
+     * {@code t} is about to be destroyed: a render left open on it ends now, while its image can
+     * still take the barrier that closes it (a null image reaches the driver otherwise).
+     */
+    void closeRenderOn(SteinVkTexture t) {
+        if (openPass != null && openPass.drawsInto(t)) {
+            openPass.suspend();
+        }
+        if (renderOwner != null && renderOwner.drawsInto(t)) {
+            renderOwner.suspend();
+        }
     }
 
     /** The dynamic state the command buffer holds, for {@code c}. */
@@ -952,6 +977,40 @@ public final class SteinVkDevice extends SteinDevice {
     @Override
     public SteinRenderTarget gameTarget() {
         return SteinGameFramebuffers.drawTarget();
+    }
+
+    /** Both targets hold our own textures here (the game's too): two texture copies. */
+    @Override
+    public boolean copyTarget(SteinRenderTarget src, SteinRenderTarget dst, boolean depth) {
+        int w = dst.width();
+        int h = dst.height();
+        SteinTexture from = src.color(0);
+        if (from != null && dst.color(0) != null) {
+            SteinVkTransfers.copyTexture(this, from, 0, dst.color(0), 0, w, h);
+        }
+        if (!depth) {
+            return true;
+        }
+        SteinTexture fromDepth = src.depth();
+        if (fromDepth == null
+                || dst.depth() == null
+                || fromDepth.desc().format != dst.depth().desc().format) {
+            return false;
+        }
+        SteinVkTransfers.copyTexture(this, fromDepth, 0, dst.depth(), 0, w, h);
+        return true;
+    }
+
+    @Override
+    public boolean swapImages(SteinTexture a, SteinTexture b) {
+        SteinVkTexture x = resolve(a);
+        SteinVkTexture y = resolve(b);
+        if (x == null || y == null || x == y || !x.sameImageShape(y)) {
+            return false;
+        }
+        outside(); // a render left open holds the image it was started on
+        x.swapImage(y);
+        return true;
     }
 
     // ---- work ----

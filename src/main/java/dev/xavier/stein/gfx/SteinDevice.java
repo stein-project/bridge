@@ -97,6 +97,24 @@ public abstract class SteinDevice {
     /** The target the game is drawing to now (its framebuffer or the screen). */
     public abstract SteinRenderTarget gameTarget();
 
+    /**
+     * Copies colour 0 of {@code src} into colour 0 of {@code dst} (converting the format; only when
+     * {@code dst} has a colour) and, with {@code depth}, the depth too (same depth format), from
+     * (0, 0) at {@code dst}'s size. Outside a pass. The post-processing reads the game's image
+     * through it: on OpenGL the game's target exposes no textures. Returns false when the depth
+     * could not be copied (the colour was).
+     */
+    public abstract boolean copyTarget(SteinRenderTarget src, SteinRenderTarget dst, boolean depth);
+
+    /**
+     * Makes {@code a} and {@code b} trade images, in place of a copy that would leave the other's
+     * contents unused: what each holds is then read through the other, at no cost for the GPU.
+     * Outside a pass. False when this backend or these textures cannot: nothing changed.
+     */
+    public boolean swapImages(SteinTexture a, SteinTexture b) {
+        return false;
+    }
+
     // ---- work ----
 
     /**

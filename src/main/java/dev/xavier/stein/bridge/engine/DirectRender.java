@@ -121,7 +121,19 @@ public final class DirectRender {
      * LoadingScreenRenderer.
      */
     public static boolean framebufferEnabled() {
-        return !direct && OpenGlHelper.isFramebufferEnabled();
+        return (!direct || scaled) && OpenGlHelper.isFramebufferEnabled();
+    }
+
+    /** The world is being drawn at another resolution (SteinRenderScale): it has a framebuffer. */
+    private static boolean scaled;
+
+    /**
+     * While the world is drawn at another resolution than the window's, the game's framebuffer
+     * works even in direct drawing: the world goes into one of the chosen size, the rest of the
+     * frame still straight to the window. Render thread.
+     */
+    public static void whileScaled(boolean on) {
+        scaled = on;
     }
 
     /**

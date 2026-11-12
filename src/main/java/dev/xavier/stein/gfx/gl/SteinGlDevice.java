@@ -475,6 +475,48 @@ public final class SteinGlDevice extends SteinDevice {
         return SteinGlRenderTarget.game();
     }
 
+    /**
+     * A blit between the two framebuffers (the game's may be the window's, 0). The depth only
+     * copies between equal depth formats; a refusal (the window's depth with stencil, for one)
+     * shows up as GL_INVALID_OPERATION and is reported as false.
+     */
+    @Override
+    public boolean copyTarget(SteinRenderTarget src, SteinRenderTarget dst, boolean depth) {
+        SteinGlFrame.sync("API copyTarget");
+        int prevRead = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int prevDraw = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        boolean scissor = GL11.glIsEnabled(GL11.GL_SCISSOR_TEST);
+        int w = dst.width();
+        int h = dst.height();
+        boolean depthCopied = true;
+        try {
+            if (scissor) {
+                GL11.glDisable(GL11.GL_SCISSOR_TEST);
+            }
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, (int) src.handle());
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, (int) dst.handle());
+            if (dst.color(0) != null) {
+                GL30.glBlitFramebuffer(
+                        0, 0, w, h, 0, 0, w, h, GL11.GL_COLOR_BUFFER_BIT, GL11.GL_NEAREST);
+            }
+            if (depth) {
+                while (GL11.glGetError() != GL11.GL_NO_ERROR) {
+                    // earlier errors are not this copy's
+                }
+                GL30.glBlitFramebuffer(
+                        0, 0, w, h, 0, 0, w, h, GL11.GL_DEPTH_BUFFER_BIT, GL11.GL_NEAREST);
+                depthCopied = GL11.glGetError() == GL11.GL_NO_ERROR;
+            }
+        } finally {
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, prevRead);
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, prevDraw);
+            if (scissor) {
+                GL11.glEnable(GL11.GL_SCISSOR_TEST);
+            }
+        }
+        return depthCopied;
+    }
+
     // ---- work ----
 
     @Override

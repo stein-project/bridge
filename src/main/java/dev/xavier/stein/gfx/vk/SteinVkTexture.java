@@ -176,6 +176,38 @@ final class SteinVkTexture extends SteinTexture {
         return lp.get(0);
     }
 
+    /** Whether {@code o}'s image can stand in for this one's. */
+    boolean sameImageShape(SteinVkTexture o) {
+        return format == o.format
+                && aspect == o.aspect
+                && desc.width == o.desc.width
+                && desc.height == o.desc.height
+                && desc.mips == o.desc.mips
+                && desc.layers == o.desc.layers;
+    }
+
+    /** Trades images with {@code o} (see {@link #sameImageShape}), layouts and history included. */
+    void swapImage(SteinVkTexture o) {
+        long i = image;
+        image = o.image;
+        o.image = i;
+        SteinVkMemory.Allocation m = mem;
+        mem = o.mem;
+        o.mem = m;
+        long v = view;
+        view = o.view;
+        o.view = v;
+        long av = attachView;
+        attachView = o.attachView;
+        o.attachView = av;
+        int l = layout;
+        layout = o.layout;
+        o.layout = l;
+        long used = usedIn;
+        usedIn = o.usedIn;
+        o.usedIn = used;
+    }
+
     long image() {
         return image;
     }
@@ -475,6 +507,7 @@ final class SteinVkTexture extends SteinTexture {
         if (image == VK_NULL_HANDLE) {
             return;
         }
+        device.closeRenderOn(this);
         if (earlyIn == device.recordingValue()) {
             endEarly(device.early()); // the image handle is still valid now, not at the submission
         }

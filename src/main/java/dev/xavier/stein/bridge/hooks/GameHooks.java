@@ -13,6 +13,7 @@ import dev.xavier.stein.bridge.bench.BenchZones;
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.bridge.engine.FrameTime;
 import dev.xavier.stein.bridge.engine.LoadingScreen;
+import dev.xavier.stein.bridge.showcase.Showcase;
 import dev.xavier.stein.gfx.SteinGfxSelfTest;
 
 import org.lwjgl.input.Keyboard;
@@ -121,6 +122,7 @@ public final class GameHooks {
     /** After each runTick (ave.s), in runGameLoop. */
     public static void tickEnd() {
         FrameTime.ticked();
+        Showcase.tick();
         if (SINK != null) {
             BenchZones.begin(BenchZones.MODS_TICK);
             try {

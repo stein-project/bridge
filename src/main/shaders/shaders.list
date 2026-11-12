@@ -17,6 +17,8 @@ entity_text.vert    vert     entity_dynamic.vert   TEXT
 terrain.vert        vert     terrain.vert
 terrain.frag        frag     terrain.frag
 terrain_alpha.frag  frag     terrain.frag          ALPHA_TEST
+terrain_filter.frag frag     terrain.frag          FILTER
+terrain_alpha_filter.frag frag terrain.frag        ALPHA_TEST FILTER
 terrain_inv.vert    vert     terrain.vert          INVARIANT
 terrain_depth.frag  frag     terrain.frag          DEPTH_ONLY
 pose.comp           comp     pose.comp
@@ -27,4 +29,15 @@ selftest.comp       comp     selftest.comp
 blue.vert           vert     fullscreen_blue.vert
 blue.frag           frag     fullscreen_blue.frag
 post.vert             vert     post.vert
+# the image options (SteinPostFx): bloom, edges, sharpening; HDR output (SteinHdr, Vulkan)
+post_bloom_first.frag frag     post_bloom_down.frag  FIRST
+post_bloom_down.frag  frag     post_bloom_down.frag
+post_bloom_up.frag    frag     post_bloom_up.frag
+post_composite.frag   frag     post_composite.frag
+post_composite_hdr.frag frag   post_composite.frag   HDR
+post_composite_hdr_layer.frag frag post_composite.frag HDR HDR_LAYER
+post_luma.frag        frag     post_luma.frag
+post_adapt.frag       frag     post_adapt.frag
+hdr_encode.frag       frag     hdr_encode.frag
+scale.frag            frag     scale.frag
 loading.frag          frag     loading.frag

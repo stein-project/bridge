@@ -40,6 +40,9 @@ final class LensConfig {
     /** Per-enchantment item textures from resource packs. */
     boolean customItems = true;
 
+    /** The resource packs' own sky (sky.CustomSky). */
+    boolean customSky = true;
+
     /** Connected blocks (connected textures from resource packs). */
     boolean connectedTextures = true;
 
@@ -54,6 +57,60 @@ final class LensConfig {
 
     /** Worn armor in view. */
     boolean armor = true;
+
+    /** The camera's roll on taking damage, in percent of the game's (Visuals.setHurtShake). */
+    int hurtShake = 100;
+
+    /** Bloom: 0 off, 1 low, 2 high (the SteinPostFx.BLOOM_*). */
+    int bloom = 0;
+
+    /** Smoothing of object outlines (where the depth breaks; textures stay sharp). */
+    boolean smoothEdges = false;
+
+    /** Anisotropic filtering: 1 (off), 2, 4, 8 or 16 (SteinTextureFilter). */
+    int anisotropy = 1;
+
+    /** The terrain's pixels sampled four times (SteinTextureFilter). */
+    boolean supersample = false;
+
+    /** Sharpening, 0 (off) to 3 (SteinPostFx). */
+    int sharpen = 0;
+
+    /**
+     * The world's resolution, in percent of the window's (SteinRenderScale); 0 is automatic: the
+     * window's own, as the game does.
+     */
+    int renderScale = 0;
+
+    /** HDR output (Vulkan with an HDR screen): lights brighter than the white of the menus. */
+    boolean hdr = false;
+
+    /** The HDR calibration's defaults: the white, the peak (nits) and the shadows (0 to 100). */
+    static final int HDR_WHITE = 200;
+
+    static final int HDR_PEAK = 1000;
+    static final int HDR_BLACK = 50;
+
+    /** HDR calibration: the white of the menus and the world, in nits. */
+    int hdrWhite = HDR_WHITE;
+
+    /** HDR calibration: the screen's peak brightness, in nits. */
+    int hdrPeak = HDR_PEAK;
+
+    /**
+     * HDR calibration: the shadows, 0 to 100; 50 leaves them as drawn, less deepens them, more
+     * lifts them (SteinHdr).
+     */
+    int hdrBlack = HDR_BLACK;
+
+    /** HDR in Stein's look (soft, vivid, moody) or as drawn (SteinHdr). */
+    boolean hdrLook = true;
+
+    /**
+     * HDR's quick quality (the frame in 8 bits, the lights in a 16-bit layer) or the maximum (the
+     * whole frame in 16 bits), SteinHdr.
+     */
+    boolean hdrQuick = true;
 
     /** Sine and cosine from a compact table (Visuals.setCompactAngles). */
     boolean compactAngles = false;
@@ -118,6 +175,7 @@ final class LensConfig {
                 zoomFactor = Math.max(1.1F, Math.min(10.0F, o.get("zoomFactor").getAsFloat()));
             }
             customItems = bool(o, "customItems", customItems);
+            customSky = bool(o, "customSky", customSky);
             connectedTextures = bool(o, "connectedTextures", connectedTextures);
             glint = integer(o, "glint", glint, 0, 2);
             if (o.has("glintNearBlocks")) {
@@ -126,6 +184,22 @@ final class LensConfig {
             }
             nametagDistance = integer(o, "nametagDistance", nametagDistance, 0, 64);
             armor = bool(o, "armor", armor);
+            hurtShake = integer(o, "hurtShake", hurtShake, 0, 100);
+            bloom = integer(o, "bloom", bloom, 0, 2);
+            smoothEdges = bool(o, "smoothEdges", smoothEdges);
+            anisotropy = integer(o, "anisotropy", anisotropy, 1, 16);
+            supersample = bool(o, "supersample", supersample);
+            sharpen = integer(o, "sharpen", sharpen, 0, 3);
+            renderScale = integer(o, "renderScale", renderScale, 0, 200);
+            if (renderScale != 0 && renderScale < 50) {
+                renderScale = 50;
+            }
+            hdr = bool(o, "hdr", hdr);
+            hdrWhite = integer(o, "hdrWhite", hdrWhite, 80, 1000);
+            hdrPeak = integer(o, "hdrPeak", hdrPeak, 200, 10000);
+            hdrBlack = integer(o, "hdrBlack", hdrBlack, 0, 100);
+            hdrLook = bool(o, "hdrLook", hdrLook);
+            hdrQuick = bool(o, "hdrQuick", hdrQuick);
             compactAngles = bool(o, "compactAngles", compactAngles);
             fog = integer(o, "fog", fog, 0, 2);
             cloudHeight = integer(o, "cloudHeight", cloudHeight, 0, 256);
@@ -170,11 +244,25 @@ final class LensConfig {
         o.addProperty("zoomSmoothCamera", zoomSmoothCamera);
         o.addProperty("zoomFactor", zoomFactor);
         o.addProperty("customItems", customItems);
+        o.addProperty("customSky", customSky);
         o.addProperty("connectedTextures", connectedTextures);
         o.addProperty("glint", glint);
         o.addProperty("glintNearBlocks", glintNearBlocks);
         o.addProperty("nametagDistance", nametagDistance);
         o.addProperty("armor", armor);
+        o.addProperty("hurtShake", hurtShake);
+        o.addProperty("bloom", bloom);
+        o.addProperty("smoothEdges", smoothEdges);
+        o.addProperty("anisotropy", anisotropy);
+        o.addProperty("supersample", supersample);
+        o.addProperty("sharpen", sharpen);
+        o.addProperty("renderScale", renderScale);
+        o.addProperty("hdr", hdr);
+        o.addProperty("hdrWhite", hdrWhite);
+        o.addProperty("hdrPeak", hdrPeak);
+        o.addProperty("hdrBlack", hdrBlack);
+        o.addProperty("hdrLook", hdrLook);
+        o.addProperty("hdrQuick", hdrQuick);
         o.addProperty("compactAngles", compactAngles);
         o.addProperty("fog", fog);
         o.addProperty("cloudHeight", cloudHeight);

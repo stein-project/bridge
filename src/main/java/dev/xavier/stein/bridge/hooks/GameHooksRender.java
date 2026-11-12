@@ -11,6 +11,7 @@ package dev.xavier.stein.bridge.hooks;
 import dev.xavier.stein.bridge.bench.BenchZones;
 import dev.xavier.stein.bridge.engine.ArmorTextures;
 import dev.xavier.stein.bridge.engine.RenderCheck;
+import dev.xavier.stein.bridge.showcase.Showcase;
 import dev.xavier.stein.gfx.SteinOpaqueCutout;
 
 import net.minecraft.block.Block;
@@ -73,7 +74,8 @@ final class GameHooksRender {
      */
     static float fov(Object renderer, float partialTicks, boolean useFovSetting) {
         float f = ((EntityRenderer) renderer).getFOVModifier(partialTicks, useFovSetting);
-        if (GameHooks.SINK != null) {
+        // the video settings' showcase is not the player's view: no zoom
+        if (GameHooks.SINK != null && !Showcase.active()) {
             try {
                 return GameHooks.SINK.fov(f, partialTicks, useFovSetting);
             } catch (Throwable e) {
@@ -163,7 +165,8 @@ final class GameHooksRender {
      * RenderWorldLastEvent. The matrix is the camera's.
      */
     static void renderWorld() {
-        if (GameHooks.SINK != null) {
+        // the showcase's world is not the game's: mods draw nothing in it
+        if (GameHooks.SINK != null && !Showcase.active()) {
             BenchZones.begin(BenchZones.MODS_WORLD);
             try {
                 GameHooks.SINK.renderWorld(partialTicks());

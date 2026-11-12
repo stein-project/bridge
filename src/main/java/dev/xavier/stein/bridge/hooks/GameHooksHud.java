@@ -12,6 +12,7 @@ import dev.xavier.stein.bridge.SteinBridge;
 import dev.xavier.stein.bridge.bench.BenchZones;
 import dev.xavier.stein.bridge.engine.FrameTime;
 import dev.xavier.stein.bridge.engine.LoadingScreen;
+import dev.xavier.stein.bridge.showcase.Showcase;
 import dev.xavier.stein.gfx.SteinDevice;
 import dev.xavier.stein.gfx.SteinGfxOptions;
 import dev.xavier.stein.gfx.game.SteinGameGl;
@@ -69,7 +70,8 @@ final class GameHooksHud {
      * the world projection, and would not show up.
      */
     static void gameOverlay(Object gui, float partialTicks) {
-        if (!GameHooks.hideHud) {
+        // the video settings' showcase shows a landscape, not the player's game: no HUD over it
+        if (!GameHooks.hideHud && !Showcase.active()) {
             ((GuiIngame) gui).renderGameOverlay(partialTicks);
             return;
         }
@@ -78,7 +80,7 @@ final class GameHooksHud {
 
     /** After GuiIngame.renderGameOverlay (avo.a), in updateCameraAndRender. */
     static void overlay() {
-        if (GameHooks.hideHud) {
+        if (GameHooks.hideHud || Showcase.active()) {
             VanillaHud.endFrame();
             return;
         }
