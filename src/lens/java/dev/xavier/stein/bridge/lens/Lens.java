@@ -19,6 +19,14 @@ import dev.xavier.stein.bridge.engine.Rain;
 import dev.xavier.stein.bridge.engine.Visuals;
 import dev.xavier.stein.bridge.hooks.GameHooks;
 import dev.xavier.stein.bridge.hooks.HookSink;
+import dev.xavier.stein.bridge.showcase.Showcase;
+import dev.xavier.stein.bridge.showcase.VideoSettings;
+import dev.xavier.stein.gfx.SteinHdr;
+import dev.xavier.stein.gfx.SteinPostFx;
+import dev.xavier.stein.gfx.SteinRenderScale;
+import dev.xavier.stein.gfx.SteinTextureFilter;
+import dev.xavier.stein.sky.CustomSky;
+import dev.xavier.stein.ui.VideoScreen;
 
 import net.minecraft.block.state.IBlockState;
 import net.minecraft.client.Minecraft;
@@ -104,6 +112,8 @@ public final class Lens implements HookSink {
      */
     @Override
     public void beforeStartGame() {
+        // every image option as data, for the video settings (ui.VideoScreen)
+        VideoSettings.provide(new VideoModel(this));
         addResourcePack();
         configFile = configFile();
         config.load(configFile);
@@ -185,6 +195,7 @@ public final class Lens implements HookSink {
     @Override
     public void textureStitch(Object textureMap) {
         customItems.reload((TextureMap) textureMap);
+        CustomSky.reload();
         connected.reload((TextureMap) textureMap);
     }
 
@@ -362,15 +373,46 @@ public final class Lens implements HookSink {
     // ---- options in the game's Video Settings ----
 
     /**
-     * The options enter the game's own Video Settings list, by topic: the "Graphics" row becomes
-     * the single selector (Fast, Fancy) and the game's options and ours sit side by side in each
-     * one's topic. Without a screen, the part is button-free.
+     * Stein's video settings (ui.VideoScreen, over the showcase) open in place of the game's.
+     * Should that fail, the options enter the game's own Video Settings list, by topic: the
+     * "Graphics" row becomes the single selector (Fast, Fancy) and the game's options and ours sit
+     * side by side in each one's topic.
      */
     @Override
     public void guiInit(Object screen, List<Object> buttons) {
         if (screen instanceof GuiVideoSettings) {
-            VideoOptions.patch((GuiScreen) screen, this);
+            if (!openSteinVideo((GuiScreen) screen)) {
+                VideoOptions.patch((GuiScreen) screen, this);
+            }
         }
+    }
+
+    /** The game's video settings were built: Stein's open in their place, with the same parent. */
+    private static boolean openSteinVideo(GuiScreen gameScreen) {
+        if (!VideoScreen.available()) {
+            return false;
+        }
+        try {
+            Minecraft.func_71410_x().func_147108_a(new VideoScreen(parentOf(gameScreen)));
+            return true;
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            Log.warn("lens", "Stein's video settings unavailable, the game's stay: " + e);
+            return false;
+        }
+    }
+
+    /**
+     * The screen GuiVideoSettings goes back to (its only GuiScreen field, private: found by type,
+     * never by name, so as not to depend on obfuscation).
+     */
+    private static GuiScreen parentOf(GuiScreen gameScreen) throws ReflectiveOperationException {
+        for (Field f : GuiVideoSettings.class.getDeclaredFields()) {
+            if (f.getType() == GuiScreen.class) {
+                f.setAccessible(true);
+                return (GuiScreen) f.get(gameScreen);
+            }
+        }
+        return null;
     }
 
     /**
@@ -399,6 +441,7 @@ public final class Lens implements HookSink {
         applyVisuals();
         if (connected.enabled() != config.connectedTextures) {
             connected.setEnabled(config.connectedTextures, true); // rebuilds the chunks
+            Showcase.blocksChanged(); // and the showcase's, the only world in the main menu
         }
     }
 
@@ -410,6 +453,19 @@ public final class Lens implements HookSink {
         Visuals.setGlint(config.glint, config.glintNearBlocks);
         Visuals.setNametagDistance(config.nametagDistance);
         Visuals.setArmorVisible(config.armor);
+        Visuals.setHurtShake(config.hurtShake / 100.0F);
+        CustomSky.setEnabled(config.customSky);
+        // the bloom stays off until it is refined (the saved choice is kept for then)
+        SteinPostFx.configure(SteinPostFx.BLOOM_OFF, config.smoothEdges, config.sharpen);
+        SteinTextureFilter.configure(config.anisotropy, config.supersample);
+        SteinRenderScale.configure(config.renderScale);
+        SteinHdr.configure(
+                config.hdr,
+                config.hdrWhite,
+                config.hdrPeak,
+                config.hdrBlack,
+                config.hdrLook,
+                config.hdrQuick);
         AngleTable.setCompact(config.compactAngles);
         Visuals.setFog(config.fog);
         Visuals.setCloudHeight(config.cloudHeight);

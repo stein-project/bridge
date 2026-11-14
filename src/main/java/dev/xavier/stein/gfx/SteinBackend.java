@@ -23,11 +23,12 @@ import java.util.Locale;
 import java.util.Properties;
 
 /**
- * The graphics API Stein GFX draws with: Vulkan (the default) or OpenGL. The player picks it in the
- * Stein Client, which writes it to {@code config/stein-graphics.properties} before starting the
- * game (the window is created for one API, so it is chosen before the game opens; the video options
- * only show it). {@code -Dsteinbridge.gfx.api=...} overrides the file for the session (the test
- * bench).
+ * The graphics API Stein GFX draws with: Vulkan (the default) or OpenGL. The Stein Client writes
+ * the player's choice to {@code config/stein-graphics.properties} before starting the game, and the
+ * video settings can change it too ({@link #choose}): the window is created for one API, so a
+ * choice made in the game counts from the next start. A choice made in the game is kept under its
+ * own key ({@code chosenInGame}), which wins over the launcher's until the launcher takes it as its
+ * own. {@code -Dsteinbridge.gfx.api=...} overrides the file for the session (the test bench).
  *
  * <p>What was asked for and what is running can differ: when Vulkan does not start (no driver, no
  * GPU with Vulkan 1.2, the window refuses a surface) the game falls back to OpenGL and {@link
@@ -68,6 +69,15 @@ public enum SteinBackend {
      * player, and the next starts do not try Vulkan again.
      */
     private static final String UNSUPPORTED = "vulkanUnsupported";
+
+    /**
+     * The API picked in the video settings, for the next start. The Stein Client adopts it as its
+     * own choice and removes it; a launcher that does not know it leaves it, and it still wins.
+     */
+    private static final String CHOSEN = "chosenInGame";
+
+    /** {@link #next()}'s answer, once read; set again by {@link #choose}. */
+    private static volatile SteinBackend nextChosen;
 
     /** A Vulkan start counts as good after this many frames over {@link #HEALTHY_NANOS}. */
     private static final int HEALTHY_FRAMES = 60;
@@ -130,7 +140,52 @@ public enum SteinBackend {
         if (FORCED != null) {
             return parse(FORCED, VULKAN);
         }
-        return parse(load().getProperty(KEY), VULKAN);
+        return saved(load());
+    }
+
+    /** The saved choice: the one made in the game, else the launcher's, else Vulkan. */
+    private static SteinBackend saved(Properties p) {
+        String inGame = p.getProperty(CHOSEN);
+        return parse(inGame != null ? inGame : p.getProperty(KEY), VULKAN);
+    }
+
+    /**
+     * The API the next start will use: {@link #peekRequested} read again from the file, since this
+     * start's decision is already made. Read once and kept: the video settings ask at every frame.
+     */
+    public static SteinBackend next() {
+        if (FORCED != null) {
+            return parse(FORCED, VULKAN);
+        }
+        SteinBackend n = nextChosen;
+        if (n == null) {
+            n = saved(load());
+            nextChosen = n;
+        }
+        return n;
+    }
+
+    /** Whether {@code -Dsteinbridge.gfx.api} fixes the API for this session (the test bench). */
+    public static boolean forced() {
+        return FORCED != null;
+    }
+
+    /**
+     * The video settings picked {@code api} for the next start. A new try clears the marks of a
+     * Vulkan that crashed or could not run: if it still cannot, the next start falls back again.
+     * Does nothing in a forced session.
+     */
+    public static void choose(SteinBackend api) {
+        if (FORCED != null) {
+            return;
+        }
+        Properties p = load();
+        p.setProperty(KEY, api.key);
+        p.setProperty(CHOSEN, api.key);
+        p.remove(CRASHED);
+        p.remove(UNSUPPORTED);
+        store(p);
+        nextChosen = api;
     }
 
     private static SteinBackend decide() {
@@ -138,12 +193,13 @@ public enum SteinBackend {
             return parse(FORCED, VULKAN);
         }
         Properties p = load();
-        SteinBackend api = parse(p.getProperty(KEY), VULKAN);
+        SteinBackend api = saved(p);
         if (api == VULKAN && !marked && Boolean.parseBoolean(p.getProperty(STARTING))) {
             Log.warn("gfx", "the last start with Vulkan did not get through: back to OpenGL");
             crashedLastTime = true;
             p.setProperty(KEY, OPENGL.key);
             p.remove(STARTING);
+            p.remove(CHOSEN);
             p.setProperty(CRASHED, "true");
             store(p);
             return OPENGL;
@@ -249,6 +305,7 @@ public enum SteinBackend {
         if (FORCED == null) {
             Properties p = load();
             p.setProperty(KEY, OPENGL.key);
+            p.remove(CHOSEN);
             p.setProperty(UNSUPPORTED, why.name().toLowerCase(Locale.ROOT));
             store(p);
         }

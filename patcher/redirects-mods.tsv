@@ -121,6 +121,12 @@ bfl	c	(F)V	fogEnd	dev/xavier/stein/bridge/engine/Visuals	static	bfk.a(IF)V
 bfl	m	()V	fogDone	dev/xavier/stein/bridge/engine/Visuals	after	bfk.a(IF)V
 # RenderGlobal.renderClouds / renderCloudsFancy (bfr.b(FI)V, bfr.c(FI)V): cloud height from the option.
 anm	f	()F	cloudHeight	dev/xavier/stein/bridge/engine/Visuals	static	bfr.b(FI)V
+# The camera's roll on taking damage (Visuals.hurtRotate): the GlStateManager.rotate calls inside
+# EntityRenderer.hurtCameraEffect, scoped, so they win over the matrix stack's unscoped rule.
+bfl	b	(FFFF)V	hurtRotate	dev/xavier/stein/bridge/engine/Visuals	static	bfk.d(F)V
+# The resource packs' sky (sky.CustomSky): in RenderGlobal.renderSky, the bind of the sun's texture draws the packs'
+# sky layers first (the other binds there pass through).
+bmj	a	(Ljy;)V	bindTexture	dev/xavier/stein/sky/CustomSky	static	bfr.a(FI)V
 anm	f	()F	cloudHeight	dev/xavier/stein/bridge/engine/Visuals	static	bfr.c(FI)V
 # Direct drawing (engine/DirectRender): the isFramebufferEnabled that Framebuffer, ScreenShotHelper and
 # LoadingScreenRenderer query; post-processing shaders and spectator outline (they need

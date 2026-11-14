@@ -10,5 +10,6 @@ layout(std140, set = 0, binding = 0) uniform Frame {
     vec4 fogColor;
     vec4 fog;           // mode (0 linear, 1 exp, 2 exp2), density, start, end
     vec4 params;        // alpha reference, lightmap on, fog on, texture on
-    vec4 anim;          // chunk fading in: now (s), duration (s; 0 turns it off)
+    vec4 anim;          // chunk fading in: now (s), duration (s; 0 turns it off); z supersampled pixels (0/1),
+                        // w anisotropic taps (1: off) — the FILTER variant (SteinTextureFilter)
 };

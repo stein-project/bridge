@@ -26,6 +26,9 @@ shaderc and SPIRV-Cross, through LWJGL (build time only, downloaded by Gradle)
 MCP mappings (build time only, downloaded by Gradle) are downloaded from their original source
 and never redistributed.
 
+Fonts in src/ui/resources/assets/steinui/fonts (Cinzel, EB Garamond, JetBrains Mono)
+  SIL Open Font License 1.1 (the OFL-*.txt files next to them).
+
 -------------------------------------------------------------------------------
 Compatibility code
 -------------------------------------------------------------------------------

@@ -46,6 +46,7 @@ import static org.lwjgl.glfw.GLFW.glfwSetWindowMonitor;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowPos;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowPosCallback;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowSize;
+import static org.lwjgl.glfw.GLFW.glfwSetWindowSizeLimits;
 import static org.lwjgl.glfw.GLFW.glfwSetWindowTitle;
 import static org.lwjgl.glfw.GLFW.glfwShowWindow;
 import static org.lwjgl.glfw.GLFW.glfwSwapBuffers;
@@ -72,6 +73,7 @@ import dev.xavier.stein.bridge.engine.ServerWatch;
 import dev.xavier.stein.gfx.SteinBackend;
 import dev.xavier.stein.gfx.SteinDevice;
 import dev.xavier.stein.gfx.SteinGfxOptions;
+import dev.xavier.stein.gfx.SteinHdr;
 import dev.xavier.stein.gfx.game.SteinGameFramebuffers;
 import dev.xavier.stein.gfx.gl.SteinGlDebug;
 import dev.xavier.stein.gfx.gl.SteinGlFrame;
@@ -167,6 +169,9 @@ public final class Display {
             throw new IllegalStateException("SteinGfxOptions was loaded before the window");
         }
         Win.handle = win;
+        // the smallest window the game's screens are laid out for (320x240, the GUI's minimum at
+        // scale 1): below it, the screens overlap and the picture no longer fits
+        glfwSetWindowSizeLimits(win, MIN_WIDTH, MIN_HEIGHT, GLFW_DONT_CARE, GLFW_DONT_CARE);
         Win.windowedWidth = mode.getWidth();
         Win.windowedHeight = mode.getHeight();
         applyIcons(); // requested by the game before the window existed
@@ -309,6 +314,11 @@ public final class Display {
         }
     }
 
+    /** The smallest window, in screen coordinates. */
+    private static final int MIN_WIDTH = 320;
+
+    private static final int MIN_HEIGHT = 240;
+
     public static boolean isCreated() {
         return Win.isCreated();
     }
@@ -415,6 +425,10 @@ public final class Display {
             SteinGameFramebuffers.present();
         } else {
             glfwSwapBuffers(Win.handle);
+            if (SteinGfxOptions.ENABLED) {
+                // the HDR option is followed between frames, as Vulkan's present does
+                SteinHdr.betweenFrames();
+            }
         }
         BenchZones.end(BenchZones.SWAP);
         long t1 = TIME_SWAP ? System.nanoTime() : 0L;

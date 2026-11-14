@@ -8,6 +8,9 @@
 
 package dev.xavier.stein.bridge.engine;
 
+import dev.xavier.stein.bridge.hooks.GameHooks;
+
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.ModelBase;
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.entity.Render;
@@ -61,6 +64,9 @@ public final class Visuals {
 
     private static boolean armor = EngineOptions.ARMOR;
 
+    /** How much of the camera's roll on taking damage is kept: 1 = the game's, 0 = none. */
+    private static float hurtShake = 1.0F;
+
     static {
         setGlint(EngineOptions.GLINT, Float.parseFloat(EngineOptions.GLINT_NEAR));
         setNametagDistance(EngineOptions.NAMETAGS);
@@ -87,6 +93,14 @@ public final class Visuals {
 
     public static void setArmorVisible(boolean visible) {
         armor = visible;
+    }
+
+    /**
+     * The camera's roll when the player takes damage, from 0 (none) to 1 (the game's). Only the
+     * picture: the player's aim and everything the server sees stay the same.
+     */
+    public static void setHurtShake(float amount) {
+        hurtShake = Math.max(0.0F, Math.min(1.0F, amount));
     }
 
     /**
@@ -215,6 +229,25 @@ public final class Visuals {
         }
     }
 
+    /**
+     * The turns of EntityRenderer.hurtCameraEffect, in place of the matrix stack's (GLMatrix,
+     * patcher/redirects-opt.tsv): the roll about the view axis is scaled by {@link #setHurtShake}
+     * while the view entity is alive. The turn about the vertical axis and its undoing pass as they
+     * are (together they cancel out), and so does the tilt of a dead player.
+     */
+    public static void hurtRotate(float angle, float x, float y, float z) {
+        float a = angle;
+        if (hurtShake != 1.0F && x == 0.0F && y == 0.0F && viewAlive()) {
+            a *= hurtShake;
+        }
+        GLMatrix.rotate(a, x, y, z);
+    }
+
+    private static boolean viewAlive() {
+        Entity view = Minecraft.getMinecraft().getRenderViewEntity();
+        return view instanceof EntityLivingBase living && living.getHealth() > 0.0F;
+    }
+
     /** RenderItem.renderEffect, the item glint: skipped, the state it ends with is kept. */
     public static void renderEffect(Object renderItem, Object model) {
         if (!glintSkipped()) {
@@ -239,6 +272,10 @@ public final class Visuals {
     @SuppressWarnings("unchecked")
     public static boolean canRenderName(Object renderer, Object entity) {
         if (nametagSquared > 0.0 && entityDistSquared > nametagSquared) {
+            return false;
+        }
+        // a mod left the name empty (hiding it): no name, and no empty label behind it either
+        if (!GameHooks.nameShown(entity)) {
             return false;
         }
         return ((RendererLivingEntity<EntityLivingBase>) renderer)

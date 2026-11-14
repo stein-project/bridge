@@ -38,6 +38,9 @@ final class SteinTerrainPipelines {
     private static final int CULL_BIT = 1 << 23;
     private static final int BACK_BIT = 1 << 24;
 
+    /** The texture filters ({@link SteinTextureFilter}): the FILTER variant of the pixel. */
+    static final int FILTER_BIT = 1 << 25;
+
     /** The solid layer's state: depth test LEQUAL with writes, back-face culling, no blending. */
     static final int DEFAULT_SOLID_KEY =
             DEPTH_TEST_BIT | 3 << FUNC_SHIFT | MASK_BIT | CULL_BIT | BACK_BIT;
@@ -48,6 +51,8 @@ final class SteinTerrainPipelines {
     private static SteinShader vertex;
     private static SteinShader fragment;
     private static SteinShader fragmentAlpha;
+    private static SteinShader fragmentFilter;
+    private static SteinShader fragmentAlphaFilter;
     private static SteinShader vertexInvariant;
     private static SteinShader fragmentDepth;
     private static SteinVertexLayout layout;
@@ -64,6 +69,9 @@ final class SteinTerrainPipelines {
         vertex = SteinShader.load(SteinShader.Stage.VERTEX, "terrain.vert");
         fragment = SteinShader.load(SteinShader.Stage.FRAGMENT, "terrain.frag");
         fragmentAlpha = SteinShader.load(SteinShader.Stage.FRAGMENT, "terrain_alpha.frag");
+        fragmentFilter = SteinShader.load(SteinShader.Stage.FRAGMENT, "terrain_filter.frag");
+        fragmentAlphaFilter =
+                SteinShader.load(SteinShader.Stage.FRAGMENT, "terrain_alpha_filter.frag");
         if (SteinGfxOptions.TERRAIN_CUTOUT_PREPASS) {
             vertexInvariant = SteinShader.load(SteinShader.Stage.VERTEX, "terrain_inv.vert");
             fragmentDepth = SteinShader.load(SteinShader.Stage.FRAGMENT, "terrain_depth.frag");
@@ -125,6 +133,14 @@ final class SteinTerrainPipelines {
                 | (SteinGameState.cullMode() != GL11.GL_FRONT ? BACK_BIT : 0);
     }
 
+    /** The pixel: with the alpha test or not, with the texture filters or not. */
+    private static SteinShader plainFragment(int key, boolean alpha) {
+        boolean filter = (key & FILTER_BIT) != 0;
+        return alpha
+                ? (filter ? fragmentAlphaFilter : fragmentAlpha)
+                : (filter ? fragmentFilter : fragment);
+    }
+
     static SteinPipeline pipeline(int key) {
         SteinPipeline p = byKey.get(key);
         if (p != null) {
@@ -133,7 +149,7 @@ final class SteinTerrainPipelines {
         SteinPipeline.Builder b =
                 SteinPipeline.builder("terrain " + Integer.toHexString(key))
                         .vertex(vertex)
-                        .fragment((key & ALPHA_BIT) != 0 ? fragmentAlpha : fragment)
+                        .fragment(plainFragment(key, (key & ALPHA_BIT) != 0))
                         .layout(layout)
                         .texture("tex", 0)
                         .texture("lightmap", 1)
@@ -210,7 +226,7 @@ final class SteinTerrainPipelines {
                     variant(
                             key,
                             "terrain colour ",
-                            fragmentAlpha,
+                            plainFragment(key, true),
                             true,
                             false,
                             SteinPipeline.Depth.EQUAL);
@@ -231,7 +247,14 @@ final class SteinTerrainPipelines {
         }
         SteinPipeline p = opaqueByKey.get(key);
         if (p == null) {
-            p = variant(key, "terrain opaque ", fragment, true, true, SteinPipeline.Depth.LEQUAL);
+            p =
+                    variant(
+                            key,
+                            "terrain opaque ",
+                            plainFragment(key, false),
+                            true,
+                            true,
+                            SteinPipeline.Depth.LEQUAL);
             opaqueByKey.put(key, p);
         }
         return p;

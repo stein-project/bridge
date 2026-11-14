@@ -441,4 +441,71 @@ public final class SteinGfxOptions {
     public static boolean feature(String name, boolean defaultValue) {
         return ENABLED && Opt.flag("steinbridge.gfx." + name, defaultValue);
     }
+
+    // ---- the image options (SteinPostFx, SteinHdr) ----
+
+    /**
+     * {@code -Dsteinbridge.diag.hdrLayerView=true} (diagnostics): with HDR's quick quality, the
+     * encode paints green where it took the light from the lights layer (default: off).
+     */
+    public static final boolean HDR_LAYER_VIEW = Opt.flag("steinbridge.diag.hdrLayerView");
+
+    /**
+     * {@code -Dsteinbridge.diag.hdrShotAtSec=N} (diagnostics): N seconds after startup, saves the
+     * HDR encode's output (clipped to 8 bits) to screenshots/hdr-encode.png (default: off).
+     */
+    public static final long HDR_SHOT_AT = Opt.number("steinbridge.diag.hdrShotAtSec", -1L);
+
+    /**
+     * {@code -Dsteinbridge.diag.hdrWithoutScreen=true} (diagnostics): draws every step of the HDR
+     * output on a window that does not offer scRGB, presenting in SDR: for measuring it anywhere
+     * (default: off).
+     */
+    public static final boolean HDR_WITHOUT_SCREEN = Opt.flag("steinbridge.diag.hdrWithoutScreen");
+
+    /**
+     * {@code -Dsteinbridge.gfx.postEdgeRatio=R}: the edge smoothing treats a pixel as an outline
+     * when the depth's second difference passes R times its first difference (default 0.5).
+     */
+    static final double POST_EDGE_RATIO = Opt.decimal("steinbridge.gfx.postEdgeRatio", 0.5);
+
+    /**
+     * {@code -Dsteinbridge.gfx.postEdgeFloor=D}: the smallest depth step (in the depth buffer's
+     * 0..1) the edge smoothing counts as an outline, above its rounding (default 4e-7).
+     */
+    static final double POST_EDGE_FLOOR = Opt.decimal("steinbridge.gfx.postEdgeFloor", 4e-7);
+
+    /**
+     * {@code -Dsteinbridge.gfx.postBloomStrength=X}: multiplies the strength of the Lens bloom, for
+     * tuning (default 1).
+     */
+    static final double POST_BLOOM_STRENGTH = Opt.decimal("steinbridge.gfx.postBloomStrength", 1.0);
+
+    /**
+     * {@code -Dsteinbridge.gfx.hdrPaperWhite=NITS}: with the Lens HDR output, how bright the game's
+     * white (HUD, menus, a white wall in daylight) is on the screen, over the Lens calibration
+     * (default: unset, the calibration's; 200 without one).
+     */
+    public static final double HDR_PAPER_WHITE =
+            Math.max(80.0, Opt.decimal("steinbridge.gfx.hdrPaperWhite", 200.0));
+
+    /** {@code hdrPaperWhite} was given: it wins over the Lens calibration. */
+    static final boolean HDR_PAPER_WHITE_SET =
+            System.getProperty("steinbridge.gfx.hdrPaperWhite") != null;
+
+    /**
+     * {@code -Dsteinbridge.gfx.hdrPeak=NITS}: with the Lens HDR output, the brightest the screen is
+     * asked for, over the Lens calibration (default: unset, the calibration's; 1000 without one).
+     */
+    public static final double HDR_PEAK =
+            Math.max(HDR_PAPER_WHITE, Opt.decimal("steinbridge.gfx.hdrPeak", 1000.0));
+
+    /** {@code hdrPeak} was given: it wins over the Lens calibration. */
+    static final boolean HDR_PEAK_SET = System.getProperty("steinbridge.gfx.hdrPeak") != null;
+
+    /**
+     * {@code -Dsteinbridge.gfx.hdrBoost=X}: with the Lens HDR output, a light source gets up to 1 +
+     * X times brighter than without HDR, in linear light (default 3).
+     */
+    static final double HDR_BOOST = Math.max(0.0, Opt.decimal("steinbridge.gfx.hdrBoost", 3.0));
 }

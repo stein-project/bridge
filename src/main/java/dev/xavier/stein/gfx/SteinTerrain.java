@@ -108,6 +108,8 @@ public final class SteinTerrain {
     private static final int FRAME_TEXTURE_ON = 172;
     private static final int FRAME_TIME = 176;
     private static final int FRAME_FADE_SECONDS = 180;
+    private static final int FRAME_SUPERSAMPLE = 184;
+    private static final int FRAME_ANISOTROPY = 188;
 
     private static final Map<Long, SteinTerrainRegion> REGIONS = new HashMap<>();
 
@@ -421,6 +423,9 @@ public final class SteinTerrain {
         writeRings(d, count, vx, vy, vz);
         int textures = importGameTextures(dev);
         int key = SteinTerrainPipelines.stateKey();
+        if (SteinTextureFilter.on()) {
+            key |= SteinTerrainPipelines.FILTER_BIT;
+        }
         SteinPipeline pipeline;
         if (d.pipe != null && d.pipeKey == key) {
             pipeline = d.pipe;
@@ -701,6 +706,9 @@ public final class SteinTerrain {
             MemoryUtil.memPutFloat(p + FRAME_TEXTURE_ON, SteinGameState.texture2D(0) ? 1f : 0f);
             MemoryUtil.memPutFloat(p + FRAME_TIME, SteinChunkFade.now());
             MemoryUtil.memPutFloat(p + FRAME_FADE_SECONDS, SteinChunkFade.FADE_SECONDS);
+            MemoryUtil.memPutFloat(
+                    p + FRAME_SUPERSAMPLE, SteinTextureFilter.supersample() ? 1f : 0f);
+            MemoryUtil.memPutFloat(p + FRAME_ANISOTROPY, SteinTextureFilter.anisotropy());
         }
     }
 

@@ -284,6 +284,15 @@ listed at the end.
 - `-Dsteinbridge.gfx.retainTilesStats=...`: (diagnostics) prints only the retained tile numbers (default: off).
 - `-Dsteinbridge.gfx.retainTilesReplayCheck=...`: (diagnostics) checks every re-emitted retained tile against the plain computation (corrected matrices and group lookups) and prints the mismatches (default: off).
 - `-Dsteinbridge.gfx.retainTilesPredict=false`: the retained tiles read the state for every block instead of predicting it between blocks of a sequence; only the exact value `false` turns the prediction off (default: on).
+- `-Dsteinbridge.diag.hdrLayerView=true` (diagnostics): with HDR's quick quality, the encode paints green where it took the light from the lights layer (default: off).
+- `-Dsteinbridge.diag.hdrShotAtSec=N` (diagnostics): N seconds after startup, saves the HDR encode's output (clipped to 8 bits) to screenshots/hdr-encode.png (default: off).
+- `-Dsteinbridge.diag.hdrWithoutScreen=true` (diagnostics): draws every step of the HDR output on a window that does not offer scRGB, presenting in SDR: for measuring it anywhere (default: off).
+- `-Dsteinbridge.gfx.postEdgeRatio=R`: the edge smoothing treats a pixel as an outline when the depth's second difference passes R times its first difference (default 0.5).
+- `-Dsteinbridge.gfx.postEdgeFloor=D`: the smallest depth step (in the depth buffer's 0..1) the edge smoothing counts as an outline, above its rounding (default 4e-7).
+- `-Dsteinbridge.gfx.postBloomStrength=X`: multiplies the strength of the Lens bloom, for tuning (default 1).
+- `-Dsteinbridge.gfx.hdrPaperWhite=NITS`: with the Lens HDR output, how bright the game's white (HUD, menus, a white wall in daylight) is on the screen, over the Lens calibration (default: unset, the calibration's; 200 without one).
+- `-Dsteinbridge.gfx.hdrPeak=NITS`: with the Lens HDR output, the brightest the screen is asked for, over the Lens calibration (default: unset, the calibration's; 1000 without one).
+- `-Dsteinbridge.gfx.hdrBoost=X`: with the Lens HDR output, a light source gets up to 1 + X times brighter than without HDR, in linear light (default 3).
 
 ## SteinGlOptions
 
@@ -317,6 +326,15 @@ listed at the end.
 - `-Dsteinbridge.gfx.vkSwapchainImages=N` (experiment): asks the window for N swapchain images, within what the surface allows; more images give the presentation engine slack, so a present waits less often (default: 0, the surface minimum plus one).
 - `-Dsteinbridge.gfx.vkMailbox=true` (experiment, visible): without VSync, MAILBOX before IMMEDIATE when the driver has it: no tearing, the newest finished frame replaces the one waiting for the refresh (default: off, IMMEDIATE first).
 - `-Dsteinbridge.gfx.vkParallelRecord=true` (experiment): the entity pass's bulk writes (the camera-corrected instances of retained tile entities and the indirect commands of the entity groups) run on the pose threads (`poseThreads`) at the flush instead of on the render thread, into the same reserved ring bytes; the draws are recorded as before, so the image is the same (default: off; without pose threads it writes on the render thread).
+
+## UiOptions
+
+`dev.xavier.stein.ui.UiOptions`
+
+- `-Dsteinloader.vanillaFont=true`: Stein's screens use Minecraft's font instead of Stein's (default: off).
+- `-Dsteinloader.hudWeight=SemiBold|Bold|ExtraBold`: the weight of the HUD font, for comparison (default `Bold`).
+- `-Dsteinloader.hudFontSize=N`: the body size of the HUD font, for comparison (default 8.6).
+- `-Dsteinbridge.diag.hdrStep=N` (diagnostics): the video settings open straight into step N (0-2) of the HDR calibration, even where HDR cannot be shown (the steps' layout; default: unset).
 
 ## Removed options
 

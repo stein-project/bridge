@@ -58,6 +58,11 @@ public final class SteinRenderPass {
         return new SteinRenderPass(name, target, Load.KEEP, Load.KEEP, null, 1f, null);
     }
 
+    /** What was in the target does not matter: the pass covers all of it. */
+    public static SteinRenderPass discard(String name, SteinRenderTarget target) {
+        return new SteinRenderPass(name, target, Load.DONT_CARE, Load.DONT_CARE, null, 1f, null);
+    }
+
     /** Clears color and depth first. */
     public static SteinRenderPass clear(
             String name, SteinRenderTarget target, float r, float g, float b, float a) {
