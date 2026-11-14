@@ -10,9 +10,12 @@ package dev.xavier.stein.ui;
 
 import dev.xavier.stein.bridge.showcase.VideoSettings;
 
-import net.minecraft.util.ResourceLocation;
-
+import java.awt.image.BufferedImage;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.List;
+
+import javax.imageio.ImageIO;
 
 /**
  * The drawing of {@link VideoScreen}'s panel: the header, the row of topics, the list and the hint.
@@ -28,6 +31,9 @@ final class VideoDrawing {
 
     /** A slider's value, right-aligned in a column this wide: the track does not move with it. */
     private static final int VALUE_W = 46;
+
+    /** The column of a value longer than a number ({@code Entry#wideValue}). */
+    private static final int VALUE_W_WIDE = 62;
 
     private VideoDrawing() {}
 
@@ -58,25 +64,36 @@ final class VideoDrawing {
         // the hint's room: as many lines as the topic's longest hint, so the list does not move
         // when the mouse goes from one option to another
         int lines = hintLines(s, l.contentW);
-        l.listBottom = l.py + l.ph - (10 + lines * HINT_LINE);
+        l.listBottom = l.py + l.ph - (HINT_PAD + 6 + lines * HINT_LINE);
         String hint = list(l, s, mx, my, dragging, dragAt, alpha, delta);
         hint(l, hint, lines, alpha);
     }
 
-    /** The Stein wordmark (the loading screen's), 337 by 160 pixels. */
-    private static final ResourceLocation LOGO =
-            new ResourceLocation("steinbridge", "logo/stein.png");
+    /** The Stein wordmark (the loading screen's), 337 by 160 pixels; null if it cannot be read. */
+    private static final BufferedImage LOGO = logo();
 
     private static final int LOGO_H = 14;
-    private static final int LOGO_W = Math.round(LOGO_H * 337 / 160.0F);
+    private static final float LOGO_W = LOGO_H * 337 / 160.0F;
 
-    /** The top of the panel: the Stein wordmark, and the screen's name beside it. */
+    private static BufferedImage logo() {
+        try (InputStream in =
+                VideoDrawing.class.getResourceAsStream("/assets/steinbridge/logo/stein.png")) {
+            return in == null ? null : ImageIO.read(in);
+        } catch (IOException e) {
+            return null;
+        }
+    }
+
+    /**
+     * The top of the panel: the Stein wordmark (reduced to the screen's pixels, sharp at every
+     * interface scale) and the screen's name beside it.
+     */
     private static void header(VideoLayout l, float alpha) {
         int y = l.py + 6;
-        Ui.image(LOGO, l.contentX, y, LOGO_W, LOGO_H, alpha);
+        Shapes.picture("stein logo", LOGO, l.contentX, y, LOGO_W, LOGO_H, alpha);
         Ui.label(
                 VideoScreen.tr("steinui.video.title"),
-                l.contentX + LOGO_W + 7,
+                l.contentX + Math.round(LOGO_W) + 7,
                 y + (LOGO_H - 8) / 2 + 1,
                 Ui.alpha(Theme.MUTED, alpha));
     }
@@ -85,7 +102,10 @@ final class VideoDrawing {
     private static final int HINT_LINE = 11;
 
     /** The most lines a hint takes; a longer one ends in "...". */
-    private static final int HINT_MAX = 4;
+    private static final int HINT_MAX = 7;
+
+    /** Room between the hint's last line and the panel's bottom edge. */
+    private static final int HINT_PAD = 8;
 
     /** {@link #hintLines}' last answer, for the same topic and width. */
     private static VideoSettings.Section linesOf;
@@ -95,7 +115,7 @@ final class VideoDrawing {
 
     private static int hintLines(VideoSettings.Section s, int w) {
         if (s != linesOf || w != linesWidth) {
-            int n = Ui.wrap(VideoScreen.tr("steinui.video.hintIdle"), w).size();
+            int n = 1;
             for (VideoSettings.Entry e : s.entries) {
                 n = Math.max(n, Ui.wrap(e.hint.get(), w).size());
             }
@@ -222,9 +242,18 @@ final class VideoDrawing {
         String label = e.label.get();
         if (e.kind == VideoSettings.Kind.SLIDER) {
             double f = active ? dragAt : e.fraction.getAsDouble();
-            String value = Ui.trim(e.value.get(), VALUE_W);
-            int tw = Math.min(56, l.contentW / 4);
-            int tx = right - VALUE_W - 6 - tw;
+            // applied on release: while dragged, the value it will take
+            String now =
+                    active && e.onRelease && e.preview != null
+                            ? e.preview.apply(dragAt)
+                            : e.value.get();
+            // a long value ("30% · 576×324") in the narrower mono, with a shorter track, so the
+            // name keeps its room
+            boolean wide = e.wideValue;
+            int vw = wide ? Math.min(VALUE_W_WIDE, Ui.monoWidth(now) + 2) : VALUE_W;
+            String value = wide ? now : Ui.trim(now, vw);
+            int tw = wide ? Math.min(40, l.contentW / 5) : Math.min(56, l.contentW / 4);
+            int tx = right - (wide ? VALUE_W_WIDE : vw) - 6 - tw;
             Ui.text(Ui.trim(label, tx - 8 - l.contentX), l.contentX, ty, Ui.alpha(ink, alpha));
             Widgets.slider(
                     key,
@@ -236,11 +265,12 @@ final class VideoDrawing {
                     active,
                     alpha * (enabled ? 1.0F : 0.4F),
                     delta);
-            Ui.text(
-                    value,
-                    right - Ui.width(value),
-                    ty,
-                    Ui.alpha(enabled ? Theme.GOLD : Theme.FAINT, alpha));
+            int valueInk = Ui.alpha(enabled ? Theme.GOLD : Theme.FAINT, alpha);
+            if (wide) {
+                Ui.mono(value, right - Ui.monoWidth(value), ty + 1, valueInk);
+            } else {
+                Ui.text(value, right - Ui.width(value), ty, valueInk);
+            }
             hit.trackX = tx;
             hit.trackW = tw;
             return;
@@ -314,18 +344,19 @@ final class VideoDrawing {
     private static void hint(VideoLayout l, String hint, int room, float alpha) {
         int top = l.listBottom + 4;
         Ui.hair(l.px + 10, top, l.pw - 20, Ui.alpha(Theme.RULE, alpha));
-        boolean idle = hint == null || hint.isEmpty();
+        if (hint == null || hint.isEmpty()) {
+            return; // nothing under the mouse: nothing to explain
+        }
         // the hint in the reading font: a sentence, not a label
-        List<String> lines =
-                Ui.wrap(idle ? VideoScreen.tr("steinui.video.hintIdle") : hint, l.contentW);
-        int color = idle ? Theme.FAINT : Theme.MUTED;
+        List<String> lines = Ui.wrap(hint, l.contentW);
+        int color = Theme.MUTED;
         int n = Math.min(room, lines.size());
         for (int i = 0; i < n; i++) {
             String line = lines.get(i);
             if (i == n - 1 && n < lines.size()) {
                 line = Ui.trim(line + " ...", l.contentW);
             }
-            Ui.text(line, l.contentX, top + 5 + i * HINT_LINE, Ui.alpha(color, alpha));
+            Ui.text(line, l.contentX, top + 6 + i * HINT_LINE, Ui.alpha(color, alpha));
         }
     }
 

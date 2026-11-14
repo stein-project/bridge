@@ -18,6 +18,7 @@ import net.minecraft.entity.DataWatcher;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
+import net.minecraft.util.IChatComponent;
 
 import java.util.List;
 
@@ -303,11 +304,36 @@ final class GameHooksEntity {
         }
     }
 
+    /** The entity {@link #nameShown} last asked about, and the name the listeners gave it. */
+    private static Object lastEntity;
+
+    private static Object lastName;
+
+    /**
+     * Whether the name above the head is drawn at all: not when the listeners left it empty (a mod
+     * hiding it). Asked by canRenderName just before getDisplayName for the same entity: the name
+     * found here is the one {@link #nametag} hands out next, so the listeners run once.
+     */
+    static boolean nameShown(Object entity) {
+        Object name = askName(entity);
+        lastEntity = entity;
+        lastName = name;
+        return !(name instanceof IChatComponent c) || !c.getUnformattedText().isEmpty();
+    }
+
     /**
      * In place of getDisplayName() in RendererLivingEntity.renderName: the name above the head,
      * which the listener can change.
      */
     static Object nametag(Object entity) {
+        if (entity == lastEntity) {
+            lastEntity = null; // asked a moment ago by canRenderName
+            return lastName;
+        }
+        return askName(entity);
+    }
+
+    private static Object askName(Object entity) {
         Object name = ((EntityLivingBase) entity).getDisplayName();
         if (GameHooks.SINK != null && name != null) {
             try {

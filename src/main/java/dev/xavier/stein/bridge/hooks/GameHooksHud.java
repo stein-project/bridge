@@ -15,6 +15,7 @@ import dev.xavier.stein.bridge.engine.LoadingScreen;
 import dev.xavier.stein.bridge.showcase.Showcase;
 import dev.xavier.stein.gfx.SteinDevice;
 import dev.xavier.stein.gfx.SteinGfxOptions;
+import dev.xavier.stein.gfx.SteinRenderScale;
 import dev.xavier.stein.gfx.game.SteinGameGl;
 
 import net.minecraft.client.Minecraft;
@@ -177,6 +178,9 @@ final class GameHooksHud {
         ours.add("");
         ours.add(SteinBridge.NAME + " v" + SteinBridge.VERSION);
         ours.add(SteinGfxOptions.describe());
+        if (SteinGfxOptions.ENABLED) {
+            ours.add(SteinRenderScale.describe());
+        }
         ours.add(FrameTime.describe());
         if (GameHooks.SINK != null) {
             try {

@@ -12,10 +12,10 @@ import net.minecraft.client.Minecraft;
 
 /**
  * The controls over the picture of {@link VideoScreen} (the panel is on the right): back in the top
- * left corner, and in the bottom left corner hide the menu, day or night, and the landscape or the
- * player's own view. The two-way ones are a small switch with the highlight sliding to the side
- * that is on. Where the row does not fit next to the panel, the buttons keep only their icons and
- * the name shows above the one under the mouse.
+ * left corner, and in the bottom left corner hide the menu, day or night, and the player's own view
+ * or the landscape. The two-way ones are a small switch with the highlight sliding to the side that
+ * is on. Where the row does not fit next to the panel, the buttons keep only their icons and the
+ * name shows above the one under the mouse.
  *
  * <p>Inside a server, a note next to back says the player is still there, and turns red while they
  * take damage.
@@ -63,7 +63,7 @@ final class VideoToolbar {
             long delta) {
         tip = null;
         dayAt = Ui.towards(dayAt, night ? 1.0F : 0.0F, 10.0F, delta);
-        viewAt = Ui.towards(viewAt, landscape ? 0.0F : 1.0F, 10.0F, delta);
+        viewAt = Ui.towards(viewAt, landscape ? 1.0F : 0.0F, 10.0F, delta);
         float stay = hidden ? 0.7F * open : alpha;
 
         // back, in the top left corner (Esc does the same)
@@ -91,7 +91,7 @@ final class VideoToolbar {
         boolean full =
                 buttonWidth(hide, true)
                                 + (landscape ? switchWidth(day, nightText, true) + GAP : 0)
-                                + (canChooseView ? switchWidth(scene, own, true) + GAP : 0)
+                                + (canChooseView ? switchWidth(own, scene, true) + GAP : 0)
                         <= room;
         int y = height - VideoLayout.MARGIN - H;
         int x = VideoLayout.MARGIN;
@@ -130,14 +130,15 @@ final class VideoToolbar {
             x += w + GAP;
         }
         if (canChooseView) {
-            w = switchWidth(scene, own, full);
+            // the player's own view first: on a server it is the one that opens
+            w = switchWidth(own, scene, full);
             twoWay(
                     l,
                     VideoLayout.Kind.VIEW,
-                    "mountain",
-                    scene,
                     "person",
                     own,
+                    "mountain",
+                    scene,
                     viewAt,
                     x,
                     y,

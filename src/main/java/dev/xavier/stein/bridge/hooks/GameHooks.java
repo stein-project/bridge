@@ -559,6 +559,11 @@ public final class GameHooks {
     }
 
     /** See {@link GameHooksEntity#nametag}. */
+    /** See {@link GameHooksEntity#nameShown}. */
+    public static boolean nameShown(Object entity) {
+        return GameHooksEntity.nameShown(entity);
+    }
+
     public static Object nametag(Object entity) throws Throwable {
         return GameHooksEntity.nametag(entity);
     }

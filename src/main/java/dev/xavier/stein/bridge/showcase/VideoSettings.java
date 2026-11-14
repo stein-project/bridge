@@ -12,6 +12,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.DoubleConsumer;
+import java.util.function.DoubleFunction;
 import java.util.function.DoubleSupplier;
 import java.util.function.Supplier;
 
@@ -73,6 +74,30 @@ public final class VideoSettings {
          * (the HDR calibration); negative when it has none.
          */
         public double byDefault = -1;
+
+        /**
+         * The text a slider applied on release ({@link #onRelease}) would show at a fraction: the
+         * screen shows it while the track is dragged, before anything changes. Null for none.
+         */
+        public DoubleFunction<String> preview;
+
+        /**
+         * A value longer than a number ("30% · 576×324"): the screen gives it a wider column, the
+         * same at every value, so the track does not move while it is dragged.
+         */
+        public boolean wideValue;
+
+        /** Sets {@link #wideValue} and returns the option. */
+        public Entry wideValue() {
+            this.wideValue = true;
+            return this;
+        }
+
+        /** Sets {@link #preview} and returns the option. */
+        public Entry preview(DoubleFunction<String> text) {
+            this.preview = text;
+            return this;
+        }
 
         /** Sets {@link #byDefault} and returns the option. */
         public Entry byDefault(double f) {

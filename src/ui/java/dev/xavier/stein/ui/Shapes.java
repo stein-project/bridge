@@ -178,6 +178,67 @@ public final class Shapes {
         rec.setTransform(saved);
     }
 
+    /** {@link #picture}'s textures: key and size in pixels -> {texture, width, height}. */
+    private static final Map<String, int[]> pictures = new HashMap<>();
+
+    /**
+     * A picture (a logo) at {@code w} by {@code h} interface units, sharp at any interface scale:
+     * reduced once from {@code source} to the exact size in screen pixels — halving step by step,
+     * then bicubic, so nothing is skipped — and kept per size. Stretching a large texture on the
+     * card instead drops pixels unevenly, which is what made the logo look jagged.
+     */
+    public static void picture(
+            String key, BufferedImage source, float x, float y, float w, float h, float alpha) {
+        if (alpha <= 0.0F || source == null) {
+            return;
+        }
+        int sc = Ui.scale();
+        int pw = Math.max(1, Math.round(w * sc));
+        int ph = Math.max(1, Math.round(h * sc));
+        String k = key + '|' + pw + 'x' + ph;
+        int[] tex = pictures.get(k);
+        if (tex == null) {
+            BufferedImage img = reduce(source, pw, ph);
+            tex = new int[] {uploadRgba(img, pw, ph, GL11.GL_LINEAR, false), pw, ph};
+            pictures.put(k, tex);
+        }
+        float u = 1.0F / sc;
+        float px = Math.round(x * sc) * u;
+        float py = Math.round(y * sc) * u;
+        GlStateManager.bindTexture(tex[0]);
+        blend();
+        Tessellator tess = Tessellator.getInstance();
+        WorldRenderer wr = tess.getWorldRenderer();
+        wr.begin(GL11.GL_QUADS, DefaultVertexFormats.POSITION_TEX_COLOR);
+        int a = Math.round(255 * Math.min(1.0F, alpha));
+        wr.pos(px, py + tex[2] * u, 0).tex(0, 1).color(255, 255, 255, a).endVertex();
+        wr.pos(px + tex[1] * u, py + tex[2] * u, 0).tex(1, 1).color(255, 255, 255, a).endVertex();
+        wr.pos(px + tex[1] * u, py, 0).tex(1, 0).color(255, 255, 255, a).endVertex();
+        wr.pos(px, py, 0).tex(0, 0).color(255, 255, 255, a).endVertex();
+        tess.draw();
+        unblend();
+    }
+
+    /** {@code src} at {@code w} by {@code h}: halved while still twice as large, then bicubic. */
+    private static BufferedImage reduce(BufferedImage src, int w, int h) {
+        BufferedImage cur = src;
+        while (cur.getWidth() / 2 >= w && cur.getHeight() / 2 >= h) {
+            cur = scaled(cur, cur.getWidth() / 2, cur.getHeight() / 2);
+        }
+        return scaled(cur, w, h);
+    }
+
+    private static BufferedImage scaled(BufferedImage src, int w, int h) {
+        BufferedImage out = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = out.createGraphics();
+        g.setRenderingHint(
+                RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+        g.setRenderingHint(RenderingHints.KEY_RENDERING, RenderingHints.VALUE_RENDER_QUALITY);
+        g.drawImage(src, 0, 0, w, h, null);
+        g.dispose();
+        return out;
+    }
+
     /**
      * Uploads the image as an RGBA texture (clamped, one-pixel rows) and returns its id. With
      * {@code whiteRgb} only the alpha is kept (the color comes from the vertex), otherwise the

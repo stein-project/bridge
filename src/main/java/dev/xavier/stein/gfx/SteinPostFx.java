@@ -161,6 +161,12 @@ public final class SteinPostFx {
 
     private static SteinTexture worldDepth;
 
+    /**
+     * The post-processing already ran on the world drawn at another resolution ({@link
+     * #afterScaledWorld}): the call after renderWorld has nothing left to do.
+     */
+    private static boolean ranScaled;
+
     /** Frames seen by {@link #afterWorld}, and the one whose world depth was copied. */
     private static long frame;
 
@@ -206,11 +212,7 @@ public final class SteinPostFx {
      * hand, the world's depth is copied for the edge smoothing.
      */
     public static void worldClear(int mask) {
-        if (mask == GL11.GL_DEPTH_BUFFER_BIT
-                && edges
-                && !noDepth
-                && !SteinRenderScale.active()
-                && available()) {
+        if (mask == GL11.GL_DEPTH_BUFFER_BIT && edges && !noDepth && !scaledHdr() && available()) {
             try {
                 SteinDevice dev = SteinDevice.get();
                 SteinRenderTarget game = dev.gameTarget();
@@ -227,12 +229,32 @@ public final class SteinPostFx {
         GlStateManager.clear(mask);
     }
 
+    /** With HDR and the render scale, the post-processing runs at the window's size, no edges. */
+    private static boolean scaledHdr() {
+        return SteinRenderScale.active() && SteinHdr.active();
+    }
+
+    /**
+     * Inside SteinRenderScale, with the world drawn at its own size and still bound: the
+     * post-processing on that picture. With HDR output it waits for the window's size.
+     */
+    public static void afterScaledWorld() {
+        if (!SteinHdr.active()) {
+            afterWorld();
+            ranScaled = true;
+        }
+    }
+
     /** After EntityRenderer.renderWorld, inside updateCameraAndRender. */
     public static void afterWorld() {
+        if (ranScaled) {
+            ranScaled = false; // done on the scaled picture this frame
+            return;
+        }
         long thisFrame = frame++;
         int level = bloom;
-        // the world at another resolution: its depth is not at the window's size
-        boolean smooth = edges && !noDepth && !SteinRenderScale.active();
+        // with HDR and the scale this runs at the window's size: the world's depth is not
+        boolean smooth = edges && !noDepth && !scaledHdr();
         boolean hdr = SteinHdr.active();
         if (!available() || level == BLOOM_OFF && !smooth && !hdr && sharpen == 0) {
             return;

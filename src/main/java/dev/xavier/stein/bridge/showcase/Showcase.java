@@ -76,6 +76,18 @@ public final class Showcase {
     private static long startNanos;
     private static boolean night;
 
+    /**
+     * Bumped when an option changes what the blocks look like without a game setting of its own
+     * (the packs' connected textures): the real world rebuilds its chunks then, and so must the
+     * scene, which in the main menu is the only world there is.
+     */
+    private static volatile int blocksChanged;
+
+    /** An option changed how blocks are drawn: the scene's chunks are rebuilt at its next frame. */
+    public static void blocksChanged() {
+        blocksChanged++;
+    }
+
     /** The settings the scene's chunks were built with; a change rebuilds them. */
     private static int builtFor;
 
@@ -293,6 +305,8 @@ public final class Showcase {
         key = key * 31 + gs.ambientOcclusion;
         key = key * 31 + gs.mipmapLevels;
         key = key * 31 + (gs.useVbo ? 1 : 0);
+        key = key * 31 + (gs.allowBlockAlternatives ? 1 : 0);
+        key = key * 31 + blocksChanged;
         // the atlas itself: a resource reload (mipmaps, a pack) stitches it again a frame or more
         // after the setting changed, with every texture in a new place; chunks built before it
         // would show other textures

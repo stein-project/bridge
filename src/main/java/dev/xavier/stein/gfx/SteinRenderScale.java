@@ -20,7 +20,7 @@ import net.minecraft.client.shader.Framebuffer;
 import org.lwjgl.system.MemoryUtil;
 
 /**
- * The world's resolution apart from the window's (the "Render resolution" option): from half of it,
+ * The world's resolution apart from the window's (the "Render resolution" option): from 30% of it,
  * lighter on a weak graphics card, to twice it, sharper and without jagged edges. Automatic (the
  * default) is the window's own, as the game draws.
  *
@@ -32,8 +32,10 @@ import org.lwjgl.system.MemoryUtil;
  * window's resolution, sharp. The proportion is the window's, in a window or full screen.
  *
  * <p>In direct drawing (no intermediate framebuffer) the game's framebuffer is allowed for the
- * world alone ({@link DirectRender#whileScaled}). The edge smoothing, which reads the world's depth
- * at the window's size, is off while the scale is (bloom and sharpening stay).
+ * world alone ({@link DirectRender#whileScaled}). The post-processing runs on the world's own
+ * picture, at its size, before it is brought to the window ({@link SteinPostFx#afterScaledWorld}),
+ * so the edge smoothing reads a depth of the same size; with HDR output it runs after, at the
+ * window's size, without the edges (its lights layer is the window's size).
  *
  * <p>Any failure turns it off for the session with one line in the log.
  *
@@ -63,7 +65,23 @@ public final class SteinRenderScale {
 
     /** The option (any thread): 0 automatic, else 50 to 200 percent of the window. */
     public static void configure(int pct) {
-        percent = pct == 0 ? 0 : Math.max(50, Math.min(200, pct));
+        percent = pct == 0 ? 0 : Math.max(30, Math.min(200, pct));
+    }
+
+    /** For F3: the size the world is drawn at now, and its share of the window's. */
+    public static String describe() {
+        Minecraft mc = Minecraft.getMinecraft();
+        if (!active()) {
+            return "Render: " + mc.displayWidth + "x" + mc.displayHeight + " (automatic)";
+        }
+        int p = percent;
+        return "Render: "
+                + Math.max(1, Math.round(mc.displayWidth * p / 100f))
+                + "x"
+                + Math.max(1, Math.round(mc.displayHeight * p / 100f))
+                + " ("
+                + p
+                + "%)";
     }
 
     /** Whether the option can act: Stein GFX draws (not the fixed-function fallback). */
@@ -92,13 +110,19 @@ public final class SteinRenderScale {
         // the frame goes through the game's framebuffer, or straight to the window (direct)
         boolean viaFramebuffer = DirectRender.framebufferEnabled();
         Framebuffer main = mc.framebufferMc;
+        // allowed before the framebuffer is made: in direct drawing the game skips making one
+        // while its framebuffers are off, and the world would go to the window
+        DirectRender.whileScaled(true);
         try {
             if (world == null) {
                 world = new Framebuffer(w, h, true);
-            } else if (world.framebufferWidth != w || world.framebufferHeight != h) {
+            } else if (world.framebufferObject < 0
+                    || world.framebufferWidth != w
+                    || world.framebufferHeight != h) {
                 world.createBindFramebuffer(w, h);
             }
         } catch (RuntimeException | LinkageError e) {
+            DirectRender.whileScaled(false);
             failed = true;
             Log.warn("gfx", "render resolution turned off for this session: " + e);
             restore(main, viaFramebuffer, fullW, fullH);
@@ -106,13 +130,14 @@ public final class SteinRenderScale {
             return;
         }
         SteinRenderTarget scaled;
-        DirectRender.whileScaled(true);
         try {
             mc.framebufferMc = world;
             mc.displayWidth = w;
             mc.displayHeight = h;
             world.bindFramebuffer(true);
             er.renderWorld(partialTicks, finishNanos);
+            // the post-processing on the world's own picture, before it is brought back
+            SteinPostFx.afterScaledWorld();
             scaled = SteinDevice.get().gameTarget();
         } finally {
             mc.framebufferMc = main;

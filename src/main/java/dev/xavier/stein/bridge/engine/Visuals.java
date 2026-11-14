@@ -8,6 +8,8 @@
 
 package dev.xavier.stein.bridge.engine;
 
+import dev.xavier.stein.bridge.hooks.GameHooks;
+
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.ModelBase;
 import net.minecraft.client.renderer.GlStateManager;
@@ -270,6 +272,10 @@ public final class Visuals {
     @SuppressWarnings("unchecked")
     public static boolean canRenderName(Object renderer, Object entity) {
         if (nametagSquared > 0.0 && entityDistSquared > nametagSquared) {
+            return false;
+        }
+        // a mod left the name empty (hiding it): no name, and no empty label behind it either
+        if (!GameHooks.nameShown(entity)) {
             return false;
         }
         return ((RendererLivingEntity<EntityLivingBase>) renderer)

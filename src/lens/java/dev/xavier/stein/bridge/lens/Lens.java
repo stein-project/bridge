@@ -19,6 +19,7 @@ import dev.xavier.stein.bridge.engine.Rain;
 import dev.xavier.stein.bridge.engine.Visuals;
 import dev.xavier.stein.bridge.hooks.GameHooks;
 import dev.xavier.stein.bridge.hooks.HookSink;
+import dev.xavier.stein.bridge.showcase.Showcase;
 import dev.xavier.stein.bridge.showcase.VideoSettings;
 import dev.xavier.stein.gfx.SteinHdr;
 import dev.xavier.stein.gfx.SteinPostFx;
@@ -440,6 +441,7 @@ public final class Lens implements HookSink {
         applyVisuals();
         if (connected.enabled() != config.connectedTextures) {
             connected.setEnabled(config.connectedTextures, true); // rebuilds the chunks
+            Showcase.blocksChanged(); // and the showcase's, the only world in the main menu
         }
     }
 
@@ -453,7 +455,8 @@ public final class Lens implements HookSink {
         Visuals.setArmorVisible(config.armor);
         Visuals.setHurtShake(config.hurtShake / 100.0F);
         CustomSky.setEnabled(config.customSky);
-        SteinPostFx.configure(config.bloom, config.smoothEdges, config.sharpen);
+        // the bloom stays off until it is refined (the saved choice is kept for then)
+        SteinPostFx.configure(SteinPostFx.BLOOM_OFF, config.smoothEdges, config.sharpen);
         SteinTextureFilter.configure(config.anisotropy, config.supersample);
         SteinRenderScale.configure(config.renderScale);
         SteinHdr.configure(

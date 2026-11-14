@@ -54,14 +54,14 @@ import java.util.function.Supplier;
  */
 final class VideoModel implements VideoSettings.Source {
 
-    /** Nametag distances, in blocks; 0 = the game's. */
-    private static final int[] NAMETAG_STEPS = {0, 48, 32, 16, 8};
+    /** Nametag distances, in blocks, nearest first; 0 = the game's (64), the farthest. */
+    private static final int[] NAMETAG_STEPS = {8, 16, 32, 48, 0};
 
     /** The highest the clouds go above the game's, in blocks (in steps of 4). */
     private static final int CLOUD_MAX = 128;
 
-    /** Chunks sent per frame; 0 = as in the game. */
-    private static final int[] UPLOAD_STEPS = {0, 1, 2, 4, 8};
+    /** Chunks sent per frame, fewest first; 0 = as in the game (no limit), the most. */
+    private static final int[] UPLOAD_STEPS = {1, 2, 4, 8, 0};
 
     /** The game's highest mipmap level. */
     private static final int MIPMAP_MAX = 4;
@@ -72,8 +72,8 @@ final class VideoModel implements VideoSettings.Source {
     /** Anisotropic filtering, 1 = off. */
     private static final int[] ANISOTROPY_STEPS = {1, 2, 4, 8, 16};
 
-    /** The render resolution's track: automatic, then 50% to 200% in steps of 5. */
-    private static final int SCALE_MIN = 50;
+    /** The render resolution's track: automatic, then 30% to 200% in steps of 5. */
+    private static final int SCALE_MIN = 30;
 
     private static final int SCALE_STEP = 5;
     private static final int SCALE_STEPS = (200 - SCALE_MIN) / SCALE_STEP + 1;
@@ -146,12 +146,12 @@ final class VideoModel implements VideoSettings.Source {
                         this::nextPreset,
                         this::nextPreset));
         graphicsApi();
-        game(GameSettings.Options.RENDER_DISTANCE);
-        game(GameSettings.Options.FRAMERATE_LIMIT);
-        game(GameSettings.Options.ENABLE_VSYNC);
-        game(GameSettings.Options.USE_FULLSCREEN);
-        game(GameSettings.Options.GUI_SCALE);
-        game(GameSettings.Options.GAMMA);
+        game(GameSettings.Options.RENDER_DISTANCE, "renderDistance");
+        game(GameSettings.Options.FRAMERATE_LIMIT, "framerate");
+        game(GameSettings.Options.ENABLE_VSYNC, "vsync");
+        game(GameSettings.Options.USE_FULLSCREEN, "fullscreen");
+        game(GameSettings.Options.GUI_SCALE, "guiScale");
+        game(GameSettings.Options.GAMMA, "gamma");
     }
 
     /** Fast and Fancy are the only two: either arrow goes to the other one. */
@@ -223,35 +223,25 @@ final class VideoModel implements VideoSettings.Source {
     /** How the game lights the world: the smooth lighting and the shadow under the entities. */
     private void light() {
         topic("light");
-        game(GameSettings.Options.AMBIENT_OCCLUSION);
-        game(GameSettings.Options.ENTITY_SHADOWS);
+        game(GameSettings.Options.AMBIENT_OCCLUSION, "smoothLighting");
+        game(GameSettings.Options.ENTITY_SHADOWS, "entityShadows");
     }
 
     /**
-     * How the picture is finished (only where Stein GFX draws): bloom, the edges, the texture
-     * filters, the sharpening and the resolution the world is drawn at.
+     * How the picture is finished (only where Stein GFX draws): the edges, the texture filters, the
+     * sharpening and the resolution the world is drawn at.
      */
     private void image() {
         topic("image");
+        // (the bloom is not offered yet: it needs more refinement before it ships)
         BooleanSupplier post = SteinPostFx::available;
-        choice(
-                "steinlens.bloom",
-                () ->
-                        !post.getAsBoolean() || c.bloom == SteinPostFx.BLOOM_OFF
-                                ? tr("options.off")
-                                : c.bloom == SteinPostFx.BLOOM_HIGH
-                                        ? tr("steinlens.bloom.high")
-                                        : tr("steinlens.bloom.low"),
-                () -> c.bloom = (c.bloom + 1) % 3,
-                () -> c.bloom = (c.bloom + 2) % 3,
-                post);
         toggleText(
                 "steinlens.smoothEdges",
                 shown(() -> c.smoothEdges, post),
                 () -> c.smoothEdges = !c.smoothEdges,
                 () ->
                         tr(
-                                c.renderScale != 0 && c.renderScale != 100
+                                c.renderScale != 0 && c.renderScale != 100 && c.hdr
                                         ? "steinlens.smoothEdges.scaled"
                                         : "steinlens.smoothEdges.hint"),
                 post);
@@ -279,45 +269,75 @@ final class VideoModel implements VideoSettings.Source {
                 shown(() -> c.supersample, mips),
                 () -> c.supersample = !c.supersample,
                 mips);
-        choice(
+        steps(
                 "steinlens.sharpen",
-                () ->
-                        !post.getAsBoolean() || c.sharpen == 0
-                                ? tr("options.off")
-                                : tr("steinlens.sharpen." + c.sharpen),
-                () -> c.sharpen = (c.sharpen + 1) % (SteinPostFx.SHARPEN_MAX + 1),
-                () ->
-                        c.sharpen =
-                                (c.sharpen + SteinPostFx.SHARPEN_MAX)
-                                        % (SteinPostFx.SHARPEN_MAX + 1),
-                post);
+                new int[] {0, 1, 2, 3},
+                () -> post.getAsBoolean() ? c.sharpen : 0,
+                v -> c.sharpen = v,
+                v -> v == 0 ? tr("options.off") : tr("steinlens.sharpen." + v),
+                post,
+                true);
     }
 
     /**
-     * The resolution the world is drawn at (SteinRenderScale): automatic (the window's), or 50% to
-     * 200% of it in steps of 5. Applied when the drag ends: each size is a new framebuffer.
+     * The resolution the world is drawn at (SteinRenderScale): automatic (the window's), or 30% to
+     * 200% of it in steps of 5. The value is the resolution itself; the hint says the percentage.
+     * Applied when the drag ends: each size is a new framebuffer.
      */
     private void renderScale() {
         BooleanSupplier can = SteinRenderScale::available;
         entries.add(
                 Entry.slider(
-                        () -> tr("steinlens.renderScale"),
-                        () ->
-                                !can.getAsBoolean() || c.renderScale == 0
-                                        ? tr("steinlens.renderScale.auto")
-                                        : c.renderScale + "%",
-                        () -> tr("steinlens.renderScale.hint"),
-                        can,
-                        () ->
-                                c.renderScale == 0
-                                        ? 0.0
-                                        : (c.renderScale - SCALE_MIN + SCALE_STEP)
-                                                / (double) (SCALE_STEPS * SCALE_STEP),
-                        f -> {
-                            int i = (int) Math.round(f * SCALE_STEPS);
-                            c.renderScale = i == 0 ? 0 : SCALE_MIN + (i - 1) * SCALE_STEP;
-                        },
-                        true));
+                                () -> tr("steinlens.renderScale"),
+                                () -> scaleText(can.getAsBoolean() ? c.renderScale : 0),
+                                () -> {
+                                    int p = can.getAsBoolean() ? c.renderScale : 0;
+                                    Minecraft mc = Minecraft.func_71410_x();
+                                    String now =
+                                            p == 0 || p == 100
+                                                    ? tr(
+                                                            "steinlens.renderScale.nowAuto",
+                                                            resolution(0))
+                                                    : tr(
+                                                            "steinlens.renderScale.now",
+                                                            resolution(p),
+                                                            p,
+                                                            mc.field_71443_c
+                                                                    + "\u00d7"
+                                                                    + mc.field_71440_d);
+                                    return now + ". " + tr("steinlens.renderScale.hint");
+                                },
+                                can,
+                                () ->
+                                        c.renderScale == 0
+                                                ? 0.0
+                                                : (c.renderScale - SCALE_MIN + SCALE_STEP)
+                                                        / (double) (SCALE_STEPS * SCALE_STEP),
+                                f -> c.renderScale = scaleAt(f),
+                                true)
+                        .preview(f -> scaleText(scaleAt(f)))
+                        .wideValue());
+    }
+
+    /** The scale at a point of the track: 0 (automatic) at its start. */
+    private static int scaleAt(double f) {
+        int i = (int) Math.round(f * SCALE_STEPS);
+        return i == 0 ? 0 : SCALE_MIN + (i - 1) * SCALE_STEP;
+    }
+
+    /** "75% · 1440×810", or "Auto · 1920×1080": the share and the size the world is drawn at. */
+    private static String scaleText(int percent) {
+        String share = percent == 0 ? tr("steinlens.renderScale.autoShort") : percent + "%";
+        return share + " · " + resolution(percent);
+    }
+
+    /** "1440×810": the world's size at {@code percent} of the window (0: the window's). */
+    private static String resolution(int percent) {
+        Minecraft mc = Minecraft.func_71410_x();
+        int p = percent == 0 ? 100 : percent;
+        int w = Math.max(1, Math.round(mc.field_71443_c * p / 100f));
+        int h = Math.max(1, Math.round(mc.field_71440_d * p / 100f));
+        return w + "\u00d7" + h;
     }
 
     /**
@@ -401,7 +421,7 @@ final class VideoModel implements VideoSettings.Source {
     /** The world around: sky, weather and particles. */
     private void world() {
         topic("world");
-        game(GameSettings.Options.RENDER_CLOUDS);
+        game(GameSettings.Options.RENDER_CLOUDS, "clouds");
         entries.add(
                 Entry.slider(
                         () -> tr("steinlens.cloudHeight"),
@@ -432,14 +452,14 @@ final class VideoModel implements VideoSettings.Source {
                 () -> c.customSky = !c.customSky,
                 () -> tr("steinlens.customSky.hint", CustomSky.layerCount()),
                 null);
-        game(GameSettings.Options.PARTICLES);
+        game(GameSettings.Options.PARTICLES, "particles");
     }
 
     /** The textures of blocks and items, and what the resource packs add to them. */
     private void textures() {
         topic("textures");
         mipmaps();
-        game(GameSettings.Options.BLOCK_ALTERNATIVES);
+        game(GameSettings.Options.BLOCK_ALTERNATIVES, "blockAlternatives");
         toggleText(
                 "steinlens.connectedTextures",
                 () -> c.connectedTextures,
@@ -469,30 +489,28 @@ final class VideoModel implements VideoSettings.Source {
     }
 
     /**
-     * The mipmap levels, step by step instead of a track: each change reloads every texture of the
-     * game (seconds), which a track would do at every step of a drag.
+     * The mipmap levels on a track applied on release: each change reloads every texture of the
+     * game (seconds), which applying at every step of a drag would do over and over.
      */
     private void mipmaps() {
         GameSettings s = Minecraft.func_71410_x().field_71474_y;
         GameSettings.Options o = GameSettings.Options.MIPMAP_LEVELS;
-        entries.add(
-                Entry.choice(
-                        () -> tr(o.func_74378_d()),
-                        () -> valueOf(s.func_74297_c(o)),
-                        null,
-                        null,
-                        null,
-                        () -> s.func_74304_a(o, (s.field_151442_I + 1) % (MIPMAP_MAX + 1)),
-                        () ->
-                                s.func_74304_a(
-                                        o, (s.field_151442_I + MIPMAP_MAX) % (MIPMAP_MAX + 1))));
+        steps(
+                () -> tr(o.func_74378_d()),
+                () -> tr("steinlens.game.mipmap.hint"),
+                new int[] {0, 1, 2, 3, MIPMAP_MAX},
+                () -> s.field_151442_I,
+                v -> s.func_74304_a(o, v),
+                v -> v == 0 ? tr("options.off") : String.valueOf(v),
+                null,
+                true);
     }
 
     /** The camera, then how the other players and their names are shown. */
     private void camera() {
         topic("camera");
-        game(GameSettings.Options.FOV);
-        game(GameSettings.Options.VIEW_BOBBING);
+        game(GameSettings.Options.FOV, "fov");
+        game(GameSettings.Options.VIEW_BOBBING, "viewBobbing");
         entries.add(
                 Entry.slider(
                         () -> tr("steinlens.hurtShake"),
@@ -578,7 +596,7 @@ final class VideoModel implements VideoSettings.Source {
 
     private void performance() {
         topic("performance");
-        game(GameSettings.Options.USE_VBO);
+        game(GameSettings.Options.USE_VBO, "vbo");
         toggle(
                 "steinlens.directRender",
                 () -> c.directRender,
@@ -666,17 +684,21 @@ final class VideoModel implements VideoSettings.Source {
         sections.add(new Section(id, () -> tr("steinlens.topic." + id), entries));
     }
 
-    /** A game option, changed as the game's own button would change it. */
-    private void game(GameSettings.Options o) {
+    /**
+     * A game option, changed as the game's own button would change it; its hint is {@code
+     * steinlens.game.<name>.hint}.
+     */
+    private void game(GameSettings.Options o, String name) {
         GameSettings s = Minecraft.func_71410_x().field_71474_y;
         Supplier<String> label = () -> tr(o.func_74378_d());
+        Supplier<String> hint = () -> tr("steinlens.game." + name + ".hint");
         Supplier<String> value = () -> valueOf(s.func_74297_c(o));
         if (o.func_74380_a()) {
             entries.add(
                     Entry.slider(
                             label,
                             value,
-                            null,
+                            hint,
                             null,
                             () -> o.func_148266_c(s.func_74296_a(o)),
                             f -> s.func_74304_a(o, o.func_148262_d((float) f)),
@@ -685,7 +707,7 @@ final class VideoModel implements VideoSettings.Source {
         }
         BooleanSupplier state = o.func_74382_b() ? () -> s.func_74308_b(o) : null;
         entries.add(
-                Entry.choice(label, value, null, null, state, () -> s.func_74306_a(o, 1), null));
+                Entry.choice(label, value, hint, null, state, () -> s.func_74306_a(o, 1), null));
     }
 
     /** The value part of the game's "Name: value" text. */
@@ -733,7 +755,7 @@ final class VideoModel implements VideoSettings.Source {
                         previous));
     }
 
-    /** A value from a fixed list, forward and back. */
+    /** A value from a fixed list, on a track (applied while dragged). */
     private void steps(
             String key,
             int[] steps,
@@ -741,21 +763,55 @@ final class VideoModel implements VideoSettings.Source {
             IntConsumer set,
             IntFunction<String> text,
             BooleanSupplier enabled) {
-        choice(
-                key,
-                () -> text.apply(get.getAsInt()),
-                () -> set.accept(step(steps, get.getAsInt(), 1)),
-                () -> set.accept(step(steps, get.getAsInt(), -1)),
-                enabled);
+        steps(key, steps, get, set, text, enabled, false);
     }
 
-    private static int step(int[] steps, int value, int by) {
+    /** A value from a fixed list, on a track; {@code onRelease}: applied when the drag ends. */
+    private void steps(
+            String key,
+            int[] steps,
+            IntSupplier get,
+            IntConsumer set,
+            IntFunction<String> text,
+            BooleanSupplier enabled,
+            boolean onRelease) {
+        steps(() -> tr(key), () -> tr(key + ".hint"), steps, get, set, text, enabled, onRelease);
+    }
+
+    /**
+     * A value from a fixed list, on a track: one stop per value, left to right in the list's order;
+     * while a track applied on release is dragged, its value shows the stop under the hand.
+     */
+    private void steps(
+            Supplier<String> label,
+            Supplier<String> hint,
+            int[] steps,
+            IntSupplier get,
+            IntConsumer set,
+            IntFunction<String> text,
+            BooleanSupplier enabled,
+            boolean onRelease) {
+        int last = steps.length - 1;
+        entries.add(
+                Entry.slider(
+                                label,
+                                () -> text.apply(get.getAsInt()),
+                                hint,
+                                enabled,
+                                () -> stop(steps, get.getAsInt()) / (double) last,
+                                f -> set.accept(steps[(int) Math.round(f * last)]),
+                                onRelease)
+                        .preview(f -> text.apply(steps[(int) Math.round(f * last)])));
+    }
+
+    /** Where {@code value} sits in {@code steps} (the first stop if it is not there). */
+    private static int stop(int[] steps, int value) {
         for (int i = 0; i < steps.length; i++) {
             if (steps[i] == value) {
-                return steps[((i + by) % steps.length + steps.length) % steps.length];
+                return i;
             }
         }
-        return steps[0];
+        return 0;
     }
 
     private String zoomKeyName() {

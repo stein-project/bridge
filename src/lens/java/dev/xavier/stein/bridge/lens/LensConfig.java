@@ -191,8 +191,8 @@ final class LensConfig {
             supersample = bool(o, "supersample", supersample);
             sharpen = integer(o, "sharpen", sharpen, 0, 3);
             renderScale = integer(o, "renderScale", renderScale, 0, 200);
-            if (renderScale != 0 && renderScale < 50) {
-                renderScale = 50;
+            if (renderScale != 0 && renderScale < 30) {
+                renderScale = 30;
             }
             hdr = bool(o, "hdr", hdr);
             hdrWhite = integer(o, "hdrWhite", hdrWhite, 80, 1000);

@@ -118,9 +118,13 @@ public final class VideoScreen extends GuiScreen {
         Keyboard.enableRepeatEvents(true);
     }
 
-    /** The own view, chosen and possible (there is a world to see). */
+    /**
+     * The own view: possible only with a world to see. On a server it is the one that opens — the
+     * landscape is a second world drawn in its place, which an old computer feels, and the player's
+     * own view shows the same options at work; in singleplayer, the last choice.
+     */
     private boolean ownViewChosen() {
-        return VideoPrefs.ownView() && mc.theWorld != null;
+        return mc.theWorld != null && (!mc.isSingleplayer() || VideoPrefs.ownView());
     }
 
     private void showLandscape(boolean on) {
@@ -300,7 +304,9 @@ public final class VideoScreen extends GuiScreen {
             }
             case VIEW -> {
                 showLandscape(!landscape);
-                VideoPrefs.setOwnView(!landscape);
+                if (mc.isSingleplayer()) {
+                    VideoPrefs.setOwnView(!landscape); // on a server the own view always opens
+                }
                 click();
             }
             case ENTRY -> entry(hit, mouseX, button);
@@ -360,6 +366,9 @@ public final class VideoScreen extends GuiScreen {
      * owner applies and saves only when the value shown changes (one step), not at every frame.
      */
     private void live(VideoSettings.Entry e, double at) {
+        if (e.onRelease) {
+            return; // heavy (a reload, a new framebuffer): only when the drag ends
+        }
         String before = e.value.get();
         e.setFraction.accept(at);
         VideoSettings.Source s = VideoSettings.source();
