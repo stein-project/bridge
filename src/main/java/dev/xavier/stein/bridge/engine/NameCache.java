@@ -11,10 +11,13 @@ package dev.xavier.stein.bridge.engine;
 import dev.xavier.stein.bridge.core.Log;
 
 import net.minecraft.entity.Entity;
+import net.minecraft.entity.EntityList;
 import net.minecraft.util.EnumChatFormatting;
+import net.minecraft.util.StatCollector;
 
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.VarHandle;
+import java.lang.reflect.Method;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
@@ -143,6 +146,96 @@ public final class NameCache {
         ID_KEY[slot] = text;
         ID_VALUE[slot] = low;
         return low;
+    }
+
+    /**
+     * The translated default name of one entity class: the key is built once, and the translation
+     * is kept until the language changes.
+     */
+    private static final class DefaultName {
+        final String key;
+        String value;
+        int version = -1;
+
+        DefaultName(String key) {
+            this.key = key;
+        }
+    }
+
+    /** Marks a class whose getName is its own (player, item, horse...): always the game's path. */
+    private static final DefaultName OWN_NAME = new DefaultName(null);
+
+    /** Entity.getName (pk.e_), to find the classes that override it. */
+    private static final String GET_NAME = "e_";
+
+    private static final Map<Class<?>, DefaultName> DEFAULT_NAMES = new HashMap<>();
+    private static Class<?> lastType;
+    private static DefaultName lastName;
+
+    /** Bumped after every StringTranslate.replaceWith (a language or resource pack change). */
+    private static volatile int languageVersion;
+
+    /** After every StringTranslate.replaceWith: the translations changed. */
+    public static void languageChanged() {
+        languageVersion++;
+    }
+
+    /**
+     * In place of Entity.getName() in rotateCorpse, which asks every living entity, every frame,
+     * whether it is called Dinnerbone or Grumm. Without a custom name, the game's getName builds
+     * "entity." + EntityList.getEntityString + ".name" and translates it, on every call (~12% of
+     * the render thread with 300 chickens). The class's key never changes (EntityList is fixed
+     * after start) and the translation only changes with replaceWith, so both are kept. Classes
+     * that override getName, entities with a custom name, other threads and the vanilla option take
+     * the game's path.
+     */
+    public static Object rotateName(Object e) {
+        Entity entity = (Entity) e;
+        if (VANILLA || Thread.currentThread() != renderThread() || entity.hasCustomName()) {
+            return entity.getName();
+        }
+        Class<?> type = entity.getClass();
+        DefaultName n;
+        if (type == lastType) {
+            n = lastName;
+        } else {
+            n = DEFAULT_NAMES.get(type);
+            if (n == null) {
+                n = ownName(type) ? OWN_NAME : new DefaultName(defaultKey(entity));
+                DEFAULT_NAMES.put(type, n);
+            }
+            lastType = type;
+            lastName = n;
+        }
+        if (n == OWN_NAME) {
+            return entity.getName();
+        }
+        int v = languageVersion;
+        if (n.version != v) {
+            n.value = StatCollector.translateToLocal(n.key);
+            n.version = v;
+        }
+        return n.value;
+    }
+
+    /** The key Entity.getName translates for an entity without a custom name. */
+    private static String defaultKey(Entity entity) {
+        String s = EntityList.getEntityString(entity);
+        return "entity." + (s == null ? "generic" : s) + ".name";
+    }
+
+    /** Whether the class, or a superclass below Entity, has its own getName. */
+    private static boolean ownName(Class<?> type) {
+        for (Class<?> c = type; c != null && c != Entity.class; c = c.getSuperclass()) {
+            for (Method m : c.getDeclaredMethods()) {
+                if (m.getName().equals(GET_NAME)
+                        && m.getParameterCount() == 0
+                        && m.getReturnType() == String.class) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** In place of EnumChatFormatting.getTextWithoutFormattingCodes in rotateCorpse. */
