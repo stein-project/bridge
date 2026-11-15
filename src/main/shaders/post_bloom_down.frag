@@ -44,6 +44,14 @@ vec3 box(vec3 a, vec3 b, vec3 c, vec3 d) {
 }
 #endif
 
+#if defined(FIRST) && defined(LEAN)
+// The Performance presets: the same bright pass over four bilinear taps (sixteen texels) instead of thirteen.
+void main() {
+    vec2 uv = gl_FragCoord.xy * texel.zw;
+    color = vec4(bright(box(tap(uv, vec2(-1.0, 1.0)), tap(uv, vec2(1.0, 1.0)), tap(uv, vec2(-1.0, -1.0)),
+                            tap(uv, vec2(1.0, -1.0)))), 1.0);
+}
+#else
 void main() {
     vec2 uv = gl_FragCoord.xy * texel.zw;
     vec3 a = tap(uv, vec2(-2.0, 2.0));
@@ -66,3 +74,4 @@ void main() {
 #endif
     color = vec4(sum, 1.0);
 }
+#endif

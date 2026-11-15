@@ -447,8 +447,16 @@ public final class SteinTerrain {
         SteinShadows.prepare(
                 dev, GLMatrix.current(), vx, vy, vz, (textures & ATLAS_BOUND) != 0 ? atlas : null);
         writeRings(d, count, vx, vy, vz);
-        int key = SteinTerrainPipelines.stateKey();
         boolean lens = SteinLensLight.on();
+        boolean opaqueLayer = SteinTerrainLayers.ordinalNow < TRANSLUCENT;
+        // (with the water switched off, the translucent layer is Ultra's)
+        boolean stein = lens && SteinRayLight.on() && (opaqueLayer || SteinRayOptions.water());
+        int key = SteinTerrainPipelines.stateKey();
+        if (stein) {
+            key |= SteinTerrainPipelines.STEIN_BIT;
+        } else if (!lens && SteinTextureFilter.on()) {
+            key |= SteinTerrainPipelines.FILTER_BIT;
+        }
         // (the cached pipelines are told apart by the variant too: bit 30 is free in the key)
         int pipeKey = lens ? key | LENS_PIPE : key;
         SteinPipeline pipeline;
@@ -461,14 +469,14 @@ public final class SteinTerrain {
         }
         long t1 = STATS ? System.nanoTime() : 0L;
         // the opaque layers in the Stein mode: the game's target with the G-buffer (SteinRayLight)
-        boolean opaqueLayer = SteinTerrainLayers.ordinalNow < TRANSLUCENT;
         SteinRenderTarget target =
-                lens && opaqueLayer ? SteinRayLight.target(dev) : dev.gameTarget();
-        if (lens && opaqueLayer) {
+                stein && opaqueLayer ? SteinRayLight.target(dev) : dev.gameTarget();
+        if (stein && opaqueLayer) {
             SteinRayLight.frame(frameUbo, frameAt);
         }
         // the Stein water reads the image and the depth from before the translucent layer
-        waterLayer = lens && !opaqueLayer && SteinRayLight.capable();
+        steinLayer = stein;
+        waterLayer = stein && !opaqueLayer;
         if (waterLayer) {
             SteinRayLight.beforeTranslucent(dev);
         }
@@ -678,7 +686,7 @@ public final class SteinTerrain {
         cmd.bindTexture(5, SteinShadows.previous(), SteinShadows.sampler());
         SteinClouds.ensure(SteinDevice.get());
         cmd.bindTexture(6, SteinClouds.texture(), SteinClouds.sampler());
-        if (SteinRayLight.capable()) {
+        if (steinLayer) {
             cmd.bindTexture(
                     7, SteinMaterialMap.texture(SteinDevice.get()), SteinMaterialMap.sampler());
         }
@@ -748,6 +756,8 @@ public final class SteinTerrain {
 
     /** The layer being drawn is the Stein mode's translucent one (our water). */
     private static boolean waterLayer;
+
+    private static boolean steinLayer;
 
     /** The blocks' atlas as last bound for the terrain (the light pass reads it). */
     static SteinTexture atlasTexture() {

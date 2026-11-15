@@ -22,8 +22,8 @@ final class LensOptions {
     static final String CONFIG = Opt.text("steinlens.config", null);
 
     /**
-     * {@code -Dsteinlens.diag.presetAtSec=S:P}: test, applies quality level P (0 Fast to 4 Ultra)
-     * after S seconds of play (default: unset).
+     * {@code -Dsteinlens.diag.presetAtSec=S:P[,S:P...]}: test, preset P (0-2 Performance, 3-6
+     * Quality), rt0, rt1 or flip=field, after S seconds of play (default: unset).
      */
     static final String DIAG_PRESET_AT_SEC = Opt.text("steinlens.diag.presetAtSec", null);
 

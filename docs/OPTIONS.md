@@ -10,7 +10,7 @@ listed at the end.
 `dev.xavier.stein.bridge.lens.LensOptions`
 
 - `-Dsteinlens.config=file`: reads another configuration file instead of config/steinlens.json (default: unset).
-- `-Dsteinlens.diag.presetAtSec=S:P`: test, applies quality level P (0 Fast to 4 Ultra) after S seconds of play (default: unset).
+- `-Dsteinlens.diag.presetAtSec=S:P[,S:P...]`: test, preset P (0-2 Performance, 3-6 Quality), rt0, rt1 or flip=field, after S seconds of play (default: unset).
 - `-Dsteinlens.customItems=true|false`: overrides the file's custom items setting without saving (default: unset, the file decides).
 - `-Dsteinlens.connectedTextures=true|false`: overrides the file's connected textures setting without saving (default: unset, the file decides).
 - `-Dsteinlens.bloom=0|1|2`: overrides the file's bloom (off, low, high) without saving (default: unset, the file decides).
@@ -252,6 +252,7 @@ listed at the end.
 - `-Dsteinbridge.gfx.gpuPassTiming=true` (diagnostics): GPU time of each pass (OpenGL or Vulkan timestamps), read a few frames later and printed every 5 s.
 - `-Dsteinbridge.diag.hdrLayerView=true` (diagnostics): with HDR's quick quality, the encode paints green where it took the light from the lights layer (default: off).
 - `-Dsteinbridge.diag.hdrShotAtSec=N` (diagnostics): N seconds after startup, saves the HDR encode's output (clipped to 8 bits) to screenshots/hdr-encode.png (default: off).
+- `-Dsteinbridge.diag.hdrWithoutScreen=true` (diagnostics): draws every step of the HDR output on a window that does not offer scRGB, presenting in SDR: for measuring it anywhere (default: off).
 - `-Dsteinbridge.gfx.gpuPassTiming.every=N`: only one frame in N carries the per-pass timestamps (default: 1, every frame; the benchmark asks for 16). With Vulkan on AMD, writing the timestamps of every pass cost a heavy scene a fifth of its frames per second and halved its 1% low; one frame in 16 still gives each part hundreds of GPU frames.
 - `-Dsteinbridge.gfx.recordFrameCheck=true` (diagnostics): on one frame in 300, each command is described at recording and again at replay, compared one by one, and the resources it uses are checked in the driver at replay time (buffer, texture, sampler and framebuffer still exist).
 - `-Dsteinbridge.gfx.frameSubmitStats=true` (diagnostics): submissions to the driver per frame and the reason (and the caller) of each submission outside the end of the frame, every 5 s.
@@ -312,6 +313,11 @@ listed at the end.
 - `-Dsteinbridge.gfx.hdrPaperWhite=NITS`: with the Lens HDR output, how bright the game's white (HUD, menus, a white wall in daylight) is on the screen, over the Lens calibration (default: unset, the calibration's; 200 without one).
 - `-Dsteinbridge.gfx.hdrPeak=NITS`: with the Lens HDR output, the brightest the screen is asked for, over the Lens calibration (default: unset, the calibration's; 1000 without one).
 - `-Dsteinbridge.gfx.hdrBoost=X`: with the Lens HDR output, a light source gets up to 1 + X times brighter than without HDR, in linear light (default 3).
+
+## SteinRayOptions
+
+`dev.xavier.stein.gfx.SteinRayOptions`
+
 
 ## SteinGlOptions
 

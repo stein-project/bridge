@@ -122,7 +122,7 @@ final class SteinVolume {
         float k = SteinShadows.drawnStrength();
         float[] light = SteinWorldLight.direct();
         if (SteinGfxOptions.NO_VOLUME
-                || !SteinRayLight.active() // the light in the air: the Stein mode only
+                || !SteinRayOptions.volume() // the light in the air: with ray tracing only
                 || level <= 0
                 || k <= 0f
                 || light[0] + light[1] + light[2] <= 0.01f
@@ -171,7 +171,7 @@ final class SteinVolume {
      */
     static void motes(float[] b, int level, float[] view, boolean volume) {
         float k =
-                volume && enclosed > 0f && !SteinGfxOptions.NO_MOTES && SteinRayLight.active()
+                volume && enclosed > 0f && !SteinGfxOptions.NO_MOTES && SteinRayOptions.volume()
                         ? MOTES[level] * enclosed
                         : 0f;
         if (k <= 0f) {

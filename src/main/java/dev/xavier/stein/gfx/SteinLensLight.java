@@ -28,8 +28,6 @@ public final class SteinLensLight {
                 || SteinGlow.level() > 0
                 || SteinDynamicLights.enabled()
                 || SteinWorldLight.enabled()
-                || SteinTextureFilter.anisotropy() > 1
-                || SteinTextureFilter.supersample()
                 || SteinMaterials.on();
     }
 }

@@ -201,7 +201,14 @@ public final class SteinHdr {
 
     /** Whether the option can act: Vulkan draws and the window offers scRGB. */
     public static boolean available() {
-        return SteinGfxOptions.VULKAN && supported && !failed;
+        return SteinGfxOptions.VULKAN
+                && (supported || SteinGfxOptions.HDR_WITHOUT_SCREEN)
+                && !failed;
+    }
+
+    /** Whether the swapchain must be scRGB now. */
+    public static boolean scRgb() {
+        return active && supported;
     }
 
     /**

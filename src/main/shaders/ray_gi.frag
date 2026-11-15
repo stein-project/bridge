@@ -33,7 +33,7 @@ layout(std140, set = 0, binding = 13) uniform History {
     mat4 prevProjection;
     mat4 prevModelview;
     vec4 camDelta;   // xyz: the camera's block now minus last frame's; w: the frame's number
-    vec4 info;       // x: 1 when last frame's out can be read
+    vec4 info;       // x: 1 when last frame's out can be read; z: the bounced light, w: the reflections
 };
 layout(location = 0) out vec4 color;
 layout(location = 1) out vec4 gloss;
@@ -86,7 +86,7 @@ void main() {
     vec3 from = pointFromCamera(eye) + nW * 0.03;   // relative to the camera (the rays' scene)
     uint seed = uint(p.x) * 1973u + uint(p.y) * 9277u + uint(camDelta.w) * 26699u;
     vec3 sum = vec3(0.0);
-    for (int i = 0; i < RAYS; i++) {
+    for (int i = 0; i < RAYS && info.z > 0.5; i++) {
         vec3 dir = overFace(nW, rand(seed), rand(seed));
         RayHit h = traceHit(from, dir, REACH);
         if (!h.hit) {
@@ -111,7 +111,7 @@ void main() {
     // the satin reflection: one ray around the mirror direction, the wider the rougher
     float smoothness = texelFetch(gNormal, p, 0).z;
     vec3 glossNow = vec3(0.0);
-    bool satin = smoothness > GLOSS_FROM && smoothness < SHARP;
+    bool satin = info.w > 0.5 && smoothness > GLOSS_FROM && smoothness < SHARP;
     if (satin) {
         vec3 v = normalize(eye);
         vec3 rW = toWorld * reflect(v, n);

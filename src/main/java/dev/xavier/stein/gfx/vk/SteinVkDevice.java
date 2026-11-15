@@ -795,6 +795,19 @@ public final class SteinVkDevice extends SteinDevice {
         renderOwner = pass;
     }
 
+    /**
+     * {@code t} is about to be destroyed: a render left open on it ends now, while its image can
+     * still take the barrier that closes it (a null image reaches the driver otherwise).
+     */
+    void closeRenderOn(SteinVkTexture t) {
+        if (openPass != null && openPass.drawsInto(t)) {
+            openPass.suspend();
+        }
+        if (renderOwner != null && renderOwner.drawsInto(t)) {
+            renderOwner.suspend();
+        }
+    }
+
     /** The value that the submission being recorded will signal. */
     long recordingValue() {
         return submitted + 1;
@@ -1060,6 +1073,18 @@ public final class SteinVkDevice extends SteinDevice {
             return false;
         }
         SteinVkTransfers.copyTexture(this, fromDepth, 0, dst.depth(), 0, w, h);
+        return true;
+    }
+
+    @Override
+    public boolean swapImages(SteinTexture a, SteinTexture b) {
+        SteinVkTexture x = resolve(a);
+        SteinVkTexture y = resolve(b);
+        if (x == null || y == null || x == y || !x.sameImageShape(y)) {
+            return false;
+        }
+        outside(); // a render left open holds the image it was started on
+        x.swapImage(y);
         return true;
     }
 

@@ -20,8 +20,6 @@ import dev.xavier.stein.gfx.SteinRayLight;
 import dev.xavier.stein.gfx.SteinShadows;
 
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.GuiScreen;
-import net.minecraft.client.gui.GuiYesNo;
 import net.minecraft.client.resources.I18n;
 import net.minecraft.client.settings.GameSettings;
 
@@ -130,6 +128,23 @@ final class VideoModel implements VideoSettings.Source {
         topic("general");
         entries.add(
                 Entry.choice(
+                        () -> tr("steinlens.videoMode"),
+                        () ->
+                                tr(
+                                        c.qualityMode
+                                                ? "steinlens.mode.quality"
+                                                : "steinlens.mode.performance"),
+                        () ->
+                                tr(
+                                        c.qualityMode
+                                                ? "steinlens.mode.quality.hint"
+                                                : "steinlens.mode.performance.hint"),
+                        null,
+                        null,
+                        this::switchMode,
+                        null));
+        entries.add(
+                Entry.choice(
                         () -> tr("steinlens.quality"),
                         () -> {
                             Presets.Position p = Presets.current(c);
@@ -138,7 +153,7 @@ final class VideoModel implements VideoSettings.Source {
                                             ? "steinlens.quality.custom"
                                             : "steinlens.quality." + p.key());
                         },
-                        () -> tr("steinlens.quality.hint"),
+                        this::presetHint,
                         null,
                         null,
                         () -> preset(1),
@@ -153,52 +168,86 @@ final class VideoModel implements VideoSettings.Source {
     }
 
     /**
-     * The next or previous quality level: the game's and Stein's options together, the chunks
-     * rebuilt. From Custom, it starts at the game's Fancy.
+     * Ray tracing and each of its effects, on GPUs that have it. Free of the presets: turning it on
+     * or off works from any of them, and the effects stay as the player left them.
      */
-    private void preset(int by) {
-        Presets.Position now = Presets.current(c);
-        int from =
-                now == null ? Presets.Position.FANCY.ordinal() - Integer.signum(by) : now.ordinal();
-        Presets.Position p = Presets.at(from + by);
-        if (p.rayTracing() && !SteinBackend.rayTracingSupported()) {
-            return; // the Stein mode needs a GPU with ray tracing on Vulkan
-        }
-        if (p == now) {
+    private void rayTracing() {
+        if (!SteinBackend.rayTracingSupported()) {
             return;
         }
-        if (p.rayTracing()) {
-            confirmStein(p);
-            return;
-        }
-        applyPreset(p);
+        BooleanSupplier chosen = SteinBackend::rayTracingChosen;
+        toggleText(
+                "steinlens.rt",
+                chosen,
+                () -> SteinBackend.setRayTracing(!chosen.getAsBoolean()),
+                () ->
+                        tr(
+                                chosen.getAsBoolean() && !SteinRayLight.active()
+                                        ? "steinlens.rt.reopen"
+                                        : "steinlens.rt.hint"),
+                null);
+        BooleanSupplier on = SteinRayLight::active;
+        toggle("steinlens.rt.sun", shown(() -> c.rtSun, on), () -> c.rtSun = !c.rtSun, on);
+        toggle(
+                "steinlens.rt.bounce",
+                shown(() -> c.rtBounce, on),
+                () -> c.rtBounce = !c.rtBounce,
+                on);
+        toggle(
+                "steinlens.reflections",
+                shown(() -> c.reflections, on),
+                () -> c.reflections = !c.reflections,
+                on);
+        toggle("steinlens.rt.water", shown(() -> c.rtWater, on), () -> c.rtWater = !c.rtWater, on);
+        toggle(
+                "steinlens.rt.volume",
+                shown(() -> c.rtVolume, on),
+                () -> c.rtVolume = !c.rtVolume,
+                on);
+        choice(
+                "steinlens.occlusion",
+                () ->
+                        !on.getAsBoolean() || c.occlusion == 0
+                                ? tr("options.off")
+                                : tr("steinlens.occlusion." + c.occlusion),
+                () -> c.occlusion = (c.occlusion + 1) % 3,
+                () -> c.occlusion = (c.occlusion + 2) % 3,
+                on);
+        toggle(
+                "steinlens.rt.leaves",
+                shown(() -> c.rtLeaves, on),
+                () -> c.rtLeaves = !c.rtLeaves,
+                on);
+    }
+
+    /** Between the modes: the other one, at the preset it was left at. */
+    private void switchMode() {
+        applyPreset(
+                Presets.last(c, c.qualityMode ? Presets.Mode.PERFORMANCE : Presets.Mode.QUALITY));
     }
 
     /**
-     * The Stein mode asks first: its terms (a joke, and what it really needs), then applies on
-     * "accept" and comes back to the settings either way.
+     * The next or previous preset of the mode: the game's and Stein's options together, the chunks
+     * rebuilt. From Custom, the first step lands on the preset last used.
      */
-    private void confirmStein(Presets.Position p) {
-        Minecraft mc = Minecraft.func_71410_x();
-        GuiScreen back = mc.field_71462_r;
-        StringBuilder terms = new StringBuilder();
-        for (int i = 1; i <= 4; i++) {
-            terms.append(tr("steinlens.stein.term" + i)).append('\n');
+    private void preset(int by) {
+        Presets.Mode mode = c.qualityMode ? Presets.Mode.QUALITY : Presets.Mode.PERFORMANCE;
+        List<Presets.Position> all = Presets.of(mode);
+        Presets.Position now = Presets.current(c);
+        Presets.Position p =
+                now == null
+                        ? Presets.last(c, mode)
+                        : all.get(Math.clamp(all.indexOf(now) + by, 0, all.size() - 1));
+        if (p != now) {
+            applyPreset(p);
         }
-        terms.append('\n').append(tr("steinlens.stein.needs"));
-        mc.func_147108_a(
-                new GuiYesNo(
-                        (accepted, id) -> {
-                            if (accepted) {
-                                applyPreset(p);
-                            }
-                            mc.func_147108_a(back);
-                        },
-                        tr("steinlens.stein.title"),
-                        terms.toString(),
-                        tr("steinlens.stein.accept"),
-                        tr("steinlens.stein.cancel"),
-                        0));
+    }
+
+    /** What the presets do; on Ultra before the rays are on, that the game must be reopened. */
+    private String presetHint() {
+        Presets.Position p = Presets.current(c);
+        boolean waiting = p != null && p.rayTracing() && !SteinRayLight.active();
+        return tr(waiting ? "steinlens.quality.reopen" : "steinlens.quality.hint");
     }
 
     private void applyPreset(Presets.Position p) {
@@ -240,6 +289,7 @@ final class VideoModel implements VideoSettings.Source {
      */
     private void light() {
         topic("light");
+        rayTracing();
         BooleanSupplier shadowsCan = SteinShadows::available;
         choice(
                 "steinlens.shadows",
@@ -315,22 +365,6 @@ final class VideoModel implements VideoSettings.Source {
                 shown(() -> c.smoothEdges, post),
                 () -> c.smoothEdges = !c.smoothEdges,
                 post);
-        // the special light effects: the Stein mode (ray tracing) only
-        BooleanSupplier stein = () -> post.getAsBoolean() && SteinRayLight.active();
-        choice(
-                "steinlens.occlusion",
-                () ->
-                        !stein.getAsBoolean() || c.occlusion == 0
-                                ? tr("options.off")
-                                : tr("steinlens.occlusion." + c.occlusion),
-                () -> c.occlusion = (c.occlusion + 1) % 3,
-                () -> c.occlusion = (c.occlusion + 2) % 3,
-                stein);
-        toggle(
-                "steinlens.reflections",
-                shown(() -> c.reflections, stein),
-                () -> c.reflections = !c.reflections,
-                stein);
         filters(post);
         BooleanSupplier hdrCan = SteinHdr::available;
         toggle("steinlens.hdr", shown(() -> c.hdr, hdrCan), () -> c.hdr = !c.hdr, hdrCan);

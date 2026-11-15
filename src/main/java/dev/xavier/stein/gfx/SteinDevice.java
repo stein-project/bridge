@@ -106,6 +106,15 @@ public abstract class SteinDevice {
      */
     public abstract boolean copyTarget(SteinRenderTarget src, SteinRenderTarget dst, boolean depth);
 
+    /**
+     * Makes {@code a} and {@code b} trade images, in place of a copy that would leave the other's
+     * contents unused: what each holds is then read through the other, at no cost for the GPU.
+     * Outside a pass. False when this backend or these textures cannot: nothing changed.
+     */
+    public boolean swapImages(SteinTexture a, SteinTexture b) {
+        return false;
+    }
+
     // ---- work ----
 
     /**

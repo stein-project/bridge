@@ -120,6 +120,13 @@ public final class SteinGfxOptions {
     public static final long HDR_SHOT_AT = Opt.number("steinbridge.diag.hdrShotAtSec", -1L);
 
     /**
+     * {@code -Dsteinbridge.diag.hdrWithoutScreen=true} (diagnostics): draws every step of the HDR
+     * output on a window that does not offer scRGB, presenting in SDR: for measuring it anywhere
+     * (default: off).
+     */
+    public static final boolean HDR_WITHOUT_SCREEN = Opt.flag("steinbridge.diag.hdrWithoutScreen");
+
+    /**
      * {@code -Dsteinbridge.gfx.gpuPassTiming.every=N}: only one frame in N carries the per-pass
      * timestamps (default: 1, every frame; the benchmark asks for 16). With Vulkan on AMD, writing
      * the timestamps of every pass cost a heavy scene a fifth of its frames per second and halved

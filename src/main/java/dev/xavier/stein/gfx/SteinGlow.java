@@ -114,6 +114,9 @@ public final class SteinGlow {
     /** The sprite the mask was made for: a new one after a reload. */
     private static TextureAtlasSprite madeFor;
 
+    /** Whether the mask was made with the leaves' code (their switch remakes it). */
+    private static boolean madeWithLeaves;
+
     private static boolean failed;
 
     /** The textures drawn past white (game texture names; 0 not loaded yet). */
@@ -194,10 +197,12 @@ public final class SteinGlow {
         }
         TextureMap atlas = Minecraft.getMinecraft().getTextureMapBlocks();
         TextureAtlasSprite probe = atlas.getAtlasSprite("minecraft:blocks/torch_on");
-        if (probe != madeFor) {
+        boolean leaves = SteinRayOptions.leaves();
+        if (probe != madeFor || leaves != madeWithLeaves) {
             try {
                 make(dev, atlas);
                 madeFor = probe;
+                madeWithLeaves = leaves;
             } catch (RuntimeException | LinkageError e) {
                 failed = true;
                 Log.warn("gfx", "glowing blocks turned off for this session: " + e);
@@ -223,7 +228,7 @@ public final class SteinGlow {
             if (s == null
                     || s == missing
                     || CODES[i] == 5
-                            && (SteinGfxOptions.NO_LEAF_LIGHT || !SteinRayLight.active())) {
+                            && (SteinGfxOptions.NO_LEAF_LIGHT || !SteinRayOptions.leaves())) {
                 continue;
             }
             found[i] = s;

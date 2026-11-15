@@ -38,8 +38,12 @@ layout(set = 0, binding = 1) uniform sampler2D scene;
 layout(set = 0, binding = 2) uniform sampler2D bloom;
 layout(set = 0, binding = 3) uniform sampler2D depth;      // the world's, before the game cleared it for the hand
 layout(set = 0, binding = 4) uniform sampler2D handDepth;  // after the hand: 1 wherever there is no hand
+#if !defined(LEAN) || defined(LEAN_HDR)
 layout(set = 0, binding = 5) uniform sampler2D average;    // the scene's mean luma in its last mipmap
+#endif
+#ifndef LEAN
 layout(set = 0, binding = 6) uniform sampler2D rays;       // the light shafts, at half the size
+#endif
 layout(location = 0) out vec4 color;
 #ifdef HDR_LAYER
 // HDR output, quick quality (SteinHdr): the game's image stays 8 bits, clipped at white; the full light goes into this
@@ -48,6 +52,7 @@ layout(location = 0) out vec4 color;
 layout(location = 1) out vec4 lights;
 #endif
 
+#ifndef LEAN
 // The light in the air (half the size) brought to the pixel: the 3x3 of its texels around it, each counted by its
 // distance (the half-size pass keeps, in the alpha, the depth it walked to) against this pixel's, so the light keeps
 // the edges of what stands in front at the full size (from inside a cave the opening's rim stepped), and by its
@@ -84,6 +89,8 @@ vec3 softRays(vec2 uv, ivec2 p, ivec2 last) {
     return weights > 1e-4 ? sum / weights : nearest;
 }
 
+#endif
+
 // The hand where it was drawn, the world elsewhere (the hand's depth is from its own projection: always a step).
 float depthAt(ivec2 p, ivec2 last) {
     ivec2 q = clamp(p, ivec2(0), last);
@@ -118,6 +125,76 @@ bool outline(ivec2 p, ivec2 last) {
     return edge && !thin(p, last, c);
 }
 
+#ifdef LEAN
+// LEAN: no 16-bit light and no atmosphere (the Performance presets): bloom, edges and sharpening alone. The four
+// neighbours are read once for both, and where their colour is flat there is nothing to smooth: the depths, ten reads
+// a pixel, are left alone over most of the screen.
+// LEAN_HDR: with HDR output, what is a light gets stronger; the rest of the screen is the same image as without it and
+// never goes through the curves.
+#if defined(LEAN_HDR) && !defined(HDR_LAYER)
+#define NEIGHBOUR(c) finite(c)  // the scene is 16 bits at maximum quality
+#else
+#define NEIGHBOUR(c) (c)
+#endif
+
+void main() {
+    ivec2 p = ivec2(gl_FragCoord.xy);
+    vec2 uv = gl_FragCoord.xy * texel.xy;
+    vec4 base = texelFetch(scene, p, 0);
+    vec3 c = NEIGHBOUR(base.rgb);
+    if (params.y > 0.0 || params.w > 0.0) {
+        ivec2 last = textureSize(scene, 0) - 1;
+        vec3 n = NEIGHBOUR(texelFetch(scene, clamp(p + ivec2(0, 1), ivec2(0), last), 0).rgb);
+        vec3 s = NEIGHBOUR(texelFetch(scene, clamp(p + ivec2(0, -1), ivec2(0), last), 0).rgb);
+        vec3 e = NEIGHBOUR(texelFetch(scene, clamp(p + ivec2(1, 0), ivec2(0), last), 0).rgb);
+        vec3 w = NEIGHBOUR(texelFetch(scene, clamp(p + ivec2(-1, 0), ivec2(0), last), 0).rgb);
+        vec2 g = vec2(luma(e) - luma(w), luma(n) - luma(s));
+        if (params.w > 0.0 && dot(g, g) >= 1.0 / 1024.0 && outline(p, last)) {
+            float z = 0.05 / max(1.0 - depthAt(p, last), 1e-7);
+            float near = 1.0 - smoothstep(params4.z * 0.5, params4.z, z);
+            vec2 along = normalize(vec2(-g.y, g.x)) * texel.xy * 0.5;
+            vec3 soft = 0.5 * (textureLod(scene, uv + along, 0.0).rgb + textureLod(scene, uv - along, 0.0).rgb);
+            c = mix(c, soft, near);
+        } else if (params.y > 0.0) {
+            vec3 lo = min(c, min(min(n, s), min(e, w)));
+            vec3 hi = max(c, max(max(n, s), max(e, w)));
+            vec3 room = sqrt(clamp(min(lo, 1.0 - hi) / max(hi, vec3(1e-4)), 0.0, 1.0));
+            vec3 r = c + (c - 0.25 * (n + s + e + w)) * room * params.y * 2.0;
+            vec3 reach = 0.25 * (hi - lo);
+            c = clamp(r, max(lo - reach, vec3(0.0)), min(hi + reach, vec3(1.0)));
+        }
+    }
+#ifdef LEAN_HDR
+    c = min(c, vec3(1.0));
+    float lit = smoothstep(lightThreshold(average, params3), 1.0, luma(c));
+    if (params.x > 0.0 || lit > 0.0) {
+        vec3 glow = finite(textureLod(bloom, uv, 0.0).rgb);
+        if (params.x > 0.0) {
+            c = 1.0 - (1.0 - c) * (1.0 - min(glow * params.x, vec3(1.0)));
+        }
+        if (lit > 0.0) {
+            float mean = textureLod(average, vec2(0.5), params3.w).r;
+            float gain = (1.0 - smoothstep(0.15, 0.35, mean)) * lit * clamp(luma(glow) * params4.y, 0.0, 1.0);
+            if (gain > 0.0) {
+                c = linearToSrgb(srgbToLinear(c) * (1.0 + params2.w * gain));
+            }
+        }
+    }
+#ifdef HDR_LAYER
+    lights = vec4(c, 1.0);
+    color = vec4(min(c, vec3(1.0)), base.a);
+#else
+    color = vec4(c, base.a);
+#endif
+#else
+    if (params.x > 0.0) {
+        vec3 glow = textureLod(bloom, uv, 0.0).rgb;
+        c = 1.0 - (1.0 - c) * (1.0 - min(glow * params.x, vec3(1.0)));
+    }
+    color = vec4(c, base.a);
+#endif
+}
+#else
 vec3 smoothEdge(ivec2 p, vec2 uv, vec3 c) {
     ivec2 last = textureSize(scene, 0) - 1;
     float ln = luma(texelFetch(scene, clamp(p + ivec2(0, 1), ivec2(0), last), 0).rgb);
@@ -359,3 +436,4 @@ void main() {
     color = vec4(c, base.a);
 #endif
 }
+#endif

@@ -81,6 +81,10 @@ public final class SteinRayLight {
     private static final int HISTORY_BYTES = 160;
 
     private static SteinBuffer history;
+
+    /** This frame's History block, which the light pass reads too. */
+    private static long historyAt;
+
     private static final float[] PREV = new float[32];
     private static final float[] NOW = new float[32];
     private static int prevCamX;
@@ -187,6 +191,7 @@ public final class SteinRayLight {
                 c.bindTexture(9, shade, nearest);
                 c.bindTexture(10, dist, nearest);
                 c.bindUniforms(0, frameBlock, frameAt, SteinTerrain.FRAME_BYTES);
+                c.bindUniforms(1, history, historyAt, HISTORY_BYTES);
                 c.bindTexture(0, SteinTerrain.atlasTexture(), null);
                 c.bindTexture(1, SteinTerrain.lightmapTexture(), null);
                 c.bindTexture(2, targetDepth, nearest);
@@ -245,7 +250,22 @@ public final class SteinRayLight {
         MemoryUtil.memPutFloat(p + 136, cz - prevCamZ);
         MemoryUtil.memPutFloat(p + 140, frameNumber++ & 0xFFFFFF);
         MemoryUtil.memPutFloat(p + 144, giValid ? 1f : 0f);
+        boolean bounced = SteinRayOptions.bounce();
+        boolean reflected = SteinMaterials.on();
+        MemoryUtil.memPutFloat(p + 148, SteinRayOptions.sun() ? 1f : 0f);
+        MemoryUtil.memPutFloat(p + 152, bounced ? 1f : 0f);
+        MemoryUtil.memPutFloat(p + 156, reflected ? 1f : 0f);
         history.commitRing();
+        historyAt = at;
+        if (!bounced && !reflected) {
+            // nothing reads the pass's result; what it kept is stale when it comes back
+            System.arraycopy(NOW, 0, PREV, 0, 32);
+            prevCamX = cx;
+            prevCamY = cy;
+            prevCamZ = cz;
+            giValid = false;
+            return gi[giTurn];
+        }
         int now = giTurn;
         SteinCommands c = dev.beginPass(SteinRenderPass.discard("stein bounced", giTarget[now]));
         try {
@@ -282,7 +302,12 @@ public final class SteinRayLight {
      * which the water shows through itself.
      */
     static void beforeTranslucent(SteinDevice dev) {
-        if (failed || sceneCopyTarget == null || colorTarget == null) {
+        // a colour other than the one the targets were made over: this frame drew no opaque terrain
+        // since the game replaced it, and the old image is gone
+        if (failed
+                || sceneCopyTarget == null
+                || colorTarget == null
+                || targetColor != dev.gameTarget().color(0)) {
             return;
         }
         try {
@@ -421,6 +446,7 @@ public final class SteinRayLight {
                                         SteinPipeline.Factor.ZERO,
                                         SteinPipeline.Factor.ONE)
                                 .uniforms("Frame", 0)
+                                .uniforms("History", 1)
                                 .texture("tex", 0)
                                 .texture("lightmap", 1)
                                 .texture("depthMap", 2)

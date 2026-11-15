@@ -108,6 +108,27 @@ public final class SteinPostFx {
     private static boolean noDepth;
 
     private static SteinPipeline bloomFirst;
+
+    /** Without 16-bit light or atmosphere: lighter first step and composite, see run. */
+    private static SteinPipeline bloomFirstLean;
+
+    private static SteinPipeline compositeLean;
+
+    /** The same with HDR output: at maximum quality, and at quick quality with the lights layer. */
+    private static SteinPipeline compositeLeanHdr;
+
+    private static SteinPipeline compositeLeanLayered;
+
+    /**
+     * The bloom's levels in that case: its reach is not worth two more passes there. With HDR they
+     * stay: how far it reaches is also what says how big a light is.
+     */
+    private static final int LEAN_BLOOM_LEVELS = 3;
+
+    /** The game's colour alone, for reading the game's own depth while drawing on it. */
+    private static SteinRenderTarget colorOnly;
+
+    private static SteinTexture colorOnlyOf;
     private static SteinPipeline bloomDown;
     private static SteinPipeline bloomUp;
     private static SteinPipeline composite;
@@ -215,7 +236,8 @@ public final class SteinPostFx {
                 SteinDevice dev = SteinDevice.get();
                 SteinRenderTarget game = dev.gameTarget();
                 sceneSize(dev, game.width(), game.height(), true);
-                if (dev.copyTarget(game, world, true)) {
+                // the clear below throws the game's depth away: its image can simply change hands
+                if (dev.swapImages(game.depth(), worldDepth) || dev.copyTarget(game, world, true)) {
                     worldFrame = frame;
                 }
             } catch (RuntimeException | LinkageError e) {
@@ -272,7 +294,14 @@ public final class SteinPostFx {
         boolean ao = SteinAo.on();
         boolean depth = smooth || atmosphere || ao;
         sceneSize(dev, w, h, depth);
-        if (!dev.copyTarget(game, scene, depth) && depth) {
+        boolean wideNow = wideScene();
+        boolean lean = !wideNow && !atmosphere && !SteinGfxOptions.POST_EDGE_VIEW;
+        // on Vulkan the game's depth is a texture: read in place instead of copied (the corner
+        // shading writes around it, and OpenGL's is not ours to read)
+        boolean direct = lean && !ao && SteinGfxOptions.VULKAN && game.depth() != null;
+        // the composite covers every pixel: the image itself goes to the scene, unread and uncopied
+        boolean swapped = direct && dev.swapImages(game.color(0), sceneColor);
+        if (!swapped && !dev.copyTarget(game, scene, depth && !direct) && depth) {
             noDepth = true;
             smooth = false;
             atmosphere = false;
@@ -297,6 +326,10 @@ public final class SteinPostFx {
         }
         // with HDR the bloom is always built: it says where the lights are, even when not added
         int levels = level == BLOOM_OFF && !hdr && !wide ? 0 : BLOOM.levels();
+        if (lean && !hdr) {
+            levels = Math.min(levels, LEAN_BLOOM_LEVELS);
+        }
+        SteinTexture handDepth = !depth ? sceneColor : direct ? game.depth() : sceneDepth;
         boolean shafts = atmosphere && raysBlock(dev, w, h);
         writeBlocks(dev, w, h, levels, level, smooth, hdr, atmosphere, shafts, wide);
         SteinTexture mean = sceneColor;
@@ -310,7 +343,7 @@ public final class SteinPostFx {
                     AT[0],
                     sceneColor,
                     depth ? worldDepth : sceneColor,
-                    depth ? sceneDepth : sceneColor,
+                    handDepth,
                     null);
             lumaTarget.color(0).generateMips();
             // the first time the other target was never drawn: the luma image stands in (its value
@@ -336,7 +369,7 @@ public final class SteinPostFx {
                     dev,
                     DOWN_NAMES[i],
                     BLOOM.down(i),
-                    i == 0 ? bloomFirst : bloomDown,
+                    i > 0 ? bloomDown : lean ? bloomFirstLean : bloomFirst,
                     AT[1 + i],
                     src.color(0),
                     i == 0 ? mean : null,
@@ -374,19 +407,39 @@ public final class SteinPostFx {
         draw(
                 dev,
                 "post composite",
-                layered ? layered(dev, game) : game,
-                layered ? compositeLayered : composite,
+                layered ? layered(dev, game) : direct ? colorOnly(dev, game) : game,
+                compositeFor(lean, hdr, layered),
                 AT[1 + 2 * levels],
                 sceneColor,
                 bloomed,
                 depth ? worldDepth : sceneColor,
-                depth ? sceneDepth : sceneColor,
+                handDepth,
                 // (only read with HDR; never bound before it was first drawn)
-                mean,
-                shafts ? raysTarget.color(0) : sceneColor);
+                lean && !hdr ? null : mean,
+                lean ? null : shafts ? raysTarget.color(0) : sceneColor);
         if (layered) {
             SteinHdr.lightsWritten();
         }
+    }
+
+    private static SteinPipeline compositeFor(boolean lean, boolean hdr, boolean layered) {
+        if (lean) {
+            return layered ? compositeLeanLayered : hdr ? compositeLeanHdr : compositeLean;
+        }
+        return layered ? compositeLayered : composite;
+    }
+
+    /** The game's colour without its depth, remade when the game replaces it. */
+    private static SteinRenderTarget colorOnly(SteinDevice dev, SteinRenderTarget game) {
+        SteinTexture color = game.color(0);
+        if (colorOnly == null || colorOnlyOf != color) {
+            if (colorOnly != null) {
+                colorOnly.destroy();
+            }
+            colorOnly = dev.createTarget(new SteinTexture[] {color}, null);
+            colorOnlyOf = color;
+        }
+        return colorOnly;
     }
 
     /** The game's colour and the lights layer together, remade when either changes. */
@@ -472,7 +525,10 @@ public final class SteinPostFx {
             SteinTexture e,
             SteinTexture f) {
         SteinRenderPass pass =
-                pipeline == composite || pipeline == compositeLayered
+                pipeline == composite
+                                || pipeline == compositeLayered
+                                || (pipeline == compositeLean || pipeline == compositeLeanHdr)
+                                        && target != colorOnly
                         ? SteinRenderPass.keep(name, target)
                         : SteinRenderPass.discard(name, target);
         SteinCommands cmd = dev.beginPass(pass);
@@ -490,7 +546,9 @@ public final class SteinPostFx {
                 cmd.bindTexture(
                         1,
                         b,
-                        pipeline == bloomFirst ? mipmapped : pipeline == luma ? nearest : linear);
+                        pipeline == bloomFirst || pipeline == bloomFirstLean
+                                ? mipmapped
+                                : pipeline == luma ? nearest : linear);
             }
             if (c != null && pipeline != rays) {
                 cmd.bindTexture(2, c, nearest);
@@ -683,6 +741,50 @@ public final class SteinPostFx {
                         "post_bloom_first.frag",
                         false,
                         "src",
+                        "average");
+        bloomFirstLean =
+                pipeline(
+                        dev,
+                        "post bloom first lean",
+                        vertex,
+                        "post_bloom_first_lean.frag",
+                        false,
+                        "src",
+                        "average");
+        compositeLean =
+                pipeline(
+                        dev,
+                        "post composite lean",
+                        vertex,
+                        "post_composite_lean.frag",
+                        false,
+                        "scene",
+                        "bloom",
+                        "depth",
+                        "handDepth");
+        compositeLeanHdr =
+                pipeline(
+                        dev,
+                        "post composite lean hdr",
+                        vertex,
+                        "post_composite_lean_hdr.frag",
+                        true,
+                        "scene",
+                        "bloom",
+                        "depth",
+                        "handDepth",
+                        "average");
+        compositeLeanLayered =
+                pipeline(
+                        dev,
+                        "post composite lean layer",
+                        vertex,
+                        "post_composite_lean_layer.frag",
+                        false,
+                        "scene",
+                        "bloom",
+                        "depth",
+                        "handDepth",
                         "average");
         bloomDown = pipeline(dev, "post bloom down", vertex, "post_bloom_down.frag", false, "src");
         bloomUp =

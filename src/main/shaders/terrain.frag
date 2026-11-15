@@ -14,6 +14,7 @@
 // reference goes out with alpha 0.
 // GBUFFER (with LENS, the Stein mode on Vulkan): also writes what the pixel is (its colour, face, light and material)
 // for the light pass (SteinRayLight), which traces the rays and mixes the reflections.
+// FILTER: the plain terrain with the texture filters and nothing else of the Lens.
 // LENS: the variant with the Lens's light (sun shadows, glow, dynamic lights, texture filters); without it the pixel is
 // the game's, at the game's cost (SteinLensLight picks the variant).
 #include "common/terrain_frame.glsl"
@@ -123,6 +124,9 @@ vec3 leafLight(vec3 albedo, float sky) {
 }
 
 
+#endif
+
+#if defined(LENS) || defined(FILTER)
 // The texture's own cell of the atlas around uv, as the range a tap may take (half a texel in from its sides): with
 // mipmaps the game places every texture on a grid of 2^levels pixels, so a tap kept inside never reads the
 // neighbouring texture (the graphics card's own anisotropy, or a tap left free, draws its colour as lines along the
@@ -166,18 +170,24 @@ vec4 supersampled(vec2 uv) {
 // the mipmap of the short side, so a surface at a grazing angle keeps its detail; every tap in the texture's cell.
 // Colour weighted by alpha; the cutout is the centre's.
 vec4 anisotropic(vec2 uv, float taps) {
-    vec2 lo;
-    vec2 hi;
-    if (!cell(uv, lo, hi)) {
-        return texture(tex, uv);
-    }
     vec2 size = vec2(textureSize(tex, 0));
     vec2 dx = dFdx(uv);
     vec2 dy = dFdy(uv);
     float lx = length(dx * size);
     float ly = length(dy * size);
+    float longest = max(lx, ly);
+    float ratio = longest / max(min(lx, ly), 1e-6);
+    // most of a frame: a texel over several pixels, or a face seen square on, where one tap gives the
+    // same picture (explicit gradients: this branch differs inside a pixel quad)
+    if (longest <= 1.0 || ratio < 1.25) {
+        return textureGrad(tex, uv, dx, dy);
+    }
+    vec2 lo;
+    vec2 hi;
+    if (!cell(uv, lo, hi)) {
+        return textureGrad(tex, uv, dx, dy);
+    }
     bool alongX = lx >= ly;
-    float ratio = max(lx, ly) / max(min(lx, ly), 1e-6);
     float n = clamp(ceil(ratio), 1.0, taps);
     vec2 major = alongX ? dx : dy;
     vec2 gx = alongX ? dx / n : dx;
@@ -188,8 +198,12 @@ vec4 anisotropic(vec2 uv, float taps) {
         vec4 s = textureGrad(tex, clamp(uv + major * t, lo, hi), gx, gy);
         sum += vec4(s.rgb * s.a, s.a);
     }
-    vec4 centre = texture(tex, uv);
+#ifdef ALPHA_TEST
+    vec4 centre = textureGrad(tex, uv, dx, dy);   // what the cutout tests
     return vec4(sum.a > 0.0 ? sum.rgb / sum.a : centre.rgb, centre.a);
+#else
+    return vec4(sum.a > 0.0 ? sum.rgb / sum.a : vec3(0.0), sum.a / n);
+#endif
 }
 #endif
 
@@ -221,7 +235,7 @@ void main() {
 #endif
     vec4 c = vColor;
     if (params.w > 0.5) {
-#ifdef LENS
+#if defined(LENS) || defined(FILTER)
         c *= anim.w > 1.5 ? anisotropic(vUv, anim.w) : anim.z > 0.5 ? supersampled(vUv) : texture(tex, vUv);
 #else
         c *= texture(tex, vUv);

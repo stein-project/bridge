@@ -1,5 +1,10 @@
 # Stein graphics mode (above Ultra): plan
 
+Naming (01/11/2026): players see two video modes, Performance (Low, Medium, High) and Quality (Low, Medium, High,
+Ultra). What this plan calls "Stein" is Quality Ultra; the name is internal and the terms popup is gone.
+Ray tracing is a switch of its own and so is each effect (`SteinRayOptions`, topic Light); a preset only turns ray
+tracing on or off, so Ultra is High with it.
+
 Goal (the user's words, 29/10/2026): a graphics mode "Stein", above Ultra, that reaches the look of the reference
 pictures (Minecraft RTX / RTX Remix screenshots kept on his desktop, folder `RT`; ideas only, nothing copied): a lake
 reflecting the shore, lava lighting the Nether orange, a lighthouse's beam in the night fog, water glowing blue in a

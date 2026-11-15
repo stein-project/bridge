@@ -30,6 +30,12 @@ layout(set = 0, binding = 7) uniform sampler2D giNow;      // the bounced light 
 layout(set = 0, binding = 14) uniform sampler2D glossNow;  // the satin materials' blurred reflection (ray_gi.frag)
 #define RAY_MATERIALS
 #include "common/ray_world.glsl"
+layout(std140, set = 0, binding = 13) uniform History {
+    mat4 prevProjection;
+    mat4 prevModelview;
+    vec4 camDelta;
+    vec4 info;       // y: the sun's ray, z: the bounced light, w: the reflections (the player's switches)
+};
 layout(location = 0) out vec4 color;
 
 // The point in eye space for a texture coordinate (row 0 at the top) and a depth, from the projection's terms.
@@ -91,11 +97,13 @@ void main() {
     float keep = 0.0;
     mat3 toWorld = transpose(mat3(modelview));
     // the light bounced off the world around
-    add += a.rgb * settled(giNow, p, length(eye)) * (BOUNCED * (1.0 - l.z));   // (a light-giving face: its own)
+    if (info.z > 0.5) {
+        add += a.rgb * settled(giNow, p, length(eye)) * (BOUNCED * (1.0 - l.z));   // (a light-giving face: its own)
+    }
     // the sun's shadow by a ray, in place of the map's (worldLight is linear in it: add the difference)
     float nlSun = dot(n, sunEye.xyz);
     float sunRay = shadow;
-    if (nlSun > 0.02 && sunColor.r + sunColor.g + sunColor.b > 0.0) {
+    if (info.y > 0.5 && nlSun > 0.02 && sunColor.r + sunColor.g + sunColor.b > 0.0) {
         sunRay = sunBlocked(pointFromCamera(eye + n * 0.03), toWorld * sunEye.xyz, 256.0) ? 0.0 : 1.0;
         sunRay *= texelFetch(gShade, p, 0).r;
         vec2 lt = vec2(l.y, l.x) * 240.0;
@@ -104,7 +112,7 @@ void main() {
         add += a.rgb * (worldLight(full, block, lt / 16.0, sunRay) - worldLight(full, block, lt / 16.0, shadow));
     }
     shadow = sunRay;
-    if (max(k.r, max(k.g, k.b)) > 0.01) {
+    if (info.w > 0.5 && max(k.r, max(k.g, k.b)) > 0.01) {
         vec3 env;
         if (smoothness >= 0.92) {
             // a mirror: its own ray
@@ -123,7 +131,7 @@ void main() {
     // the sun's highlight (GGX), where the sun reaches
     vec3 sun = sunEye.xyz;
     float nl = dot(n, sun);
-    if (nl > 0.0 && shadow > 0.0 && smoothness > 0.05) {
+    if (info.w > 0.5 && nl > 0.0 && shadow > 0.0 && smoothness > 0.05) {
         float rough = max(1.0 - smoothness, 0.04);
         float a2 = rough * rough * rough * rough;
         vec3 h = normalize(sun - v);

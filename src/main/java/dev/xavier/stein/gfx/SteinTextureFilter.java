@@ -40,6 +40,11 @@ public final class SteinTextureFilter {
         supersample = supersampled;
     }
 
+    /** Whether any filter is on: the terrain then needs a shader that has them. */
+    static boolean on() {
+        return anisotropy() > 1 || supersample();
+    }
+
     /** The anisotropic taps of the terrain (1: off). */
     public static int anisotropy() {
         return SteinGfxOptions.ENABLED ? anisotropy : 1;

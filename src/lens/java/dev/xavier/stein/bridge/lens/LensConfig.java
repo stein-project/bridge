@@ -30,6 +30,14 @@ import java.nio.charset.StandardCharsets;
  */
 final class LensConfig {
 
+    /** The video mode: Quality, or Performance ({@link Presets.Mode}), also through Custom. */
+    boolean qualityMode = false;
+
+    /** The preset last used in each mode, as an index inside it ({@link Presets#last}). */
+    int performanceLevel = 1;
+
+    int qualityLevel = 1;
+
     boolean dynamicFov = false;
     boolean zoom = true;
     boolean zoomSmoothCamera = true;
@@ -106,10 +114,18 @@ final class LensConfig {
     boolean smoothEdges = false;
 
     /** Corner shading: 0 off, 1 soft, 2 strong (SteinAo). */
-    int occlusion = 0;
+    int occlusion = 2;
 
     /** Shiny materials reflect the sky and the sun (SteinMaterials). */
-    boolean reflections = false;
+    boolean reflections = true;
+
+    /** The ray traced effects, each the player's ({@link dev.xavier.stein.gfx.SteinRayOptions}). */
+    boolean rtSun = true;
+
+    boolean rtBounce = true;
+    boolean rtWater = true;
+    boolean rtVolume = true;
+    boolean rtLeaves = true;
 
     /** Anisotropic filtering: 1 (off), 2, 4, 8 or 16 (SteinTextureFilter). */
     int anisotropy = 1;
@@ -185,6 +201,14 @@ final class LensConfig {
     private void read(File file) {
         try (Reader r = new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8)) {
             JsonObject o = new JsonParser().parse(r).getAsJsonObject();
+            rtSun = bool(o, "rtSun", rtSun);
+            rtBounce = bool(o, "rtBounce", rtBounce);
+            rtWater = bool(o, "rtWater", rtWater);
+            rtVolume = bool(o, "rtVolume", rtVolume);
+            rtLeaves = bool(o, "rtLeaves", rtLeaves);
+            qualityMode = bool(o, "qualityMode", qualityMode);
+            performanceLevel = integer(o, "performanceLevel", performanceLevel, 0, 2);
+            qualityLevel = integer(o, "qualityLevel", qualityLevel, 0, 3);
             dynamicFov = bool(o, "dynamicFov", dynamicFov);
             zoom = bool(o, "zoom", zoom);
             zoomSmoothCamera = bool(o, "zoomSmoothCamera", zoomSmoothCamera);
@@ -272,6 +296,14 @@ final class LensConfig {
 
     void save(File file) {
         JsonObject o = new JsonObject();
+        o.addProperty("rtSun", rtSun);
+        o.addProperty("rtBounce", rtBounce);
+        o.addProperty("rtWater", rtWater);
+        o.addProperty("rtVolume", rtVolume);
+        o.addProperty("rtLeaves", rtLeaves);
+        o.addProperty("qualityMode", qualityMode);
+        o.addProperty("performanceLevel", performanceLevel);
+        o.addProperty("qualityLevel", qualityLevel);
         o.addProperty("dynamicFov", dynamicFov);
         o.addProperty("zoom", zoom);
         o.addProperty("zoomSmoothCamera", zoomSmoothCamera);

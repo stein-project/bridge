@@ -38,6 +38,18 @@ final class SteinTerrainPipelines {
     private static final int CULL_BIT = 1 << 23;
     private static final int BACK_BIT = 1 << 24;
 
+    /**
+     * The Stein mode's variant of a LENS key (G-buffer, our water). Chosen for each layer from
+     * whether the mode is on now, not from what the device can do: Ultra in a session with ray
+     * tracing draws like Ultra anywhere else.
+     */
+    static final int STEIN_BIT = 1 << 25;
+
+    /**
+     * The plain terrain with the texture filters ({@link SteinTextureFilter}) and no Lens light.
+     */
+    static final int FILTER_BIT = 1 << 26;
+
     /** The solid layer's state: depth test LEQUAL with writes, back-face culling, no blending. */
     static final int DEFAULT_SOLID_KEY =
             DEPTH_TEST_BIT | 3 << FUNC_SHIFT | MASK_BIT | CULL_BIT | BACK_BIT;
@@ -58,6 +70,9 @@ final class SteinTerrainPipelines {
     private static SteinShader vertexInvariantLens;
 
     /** The opaque LENS variants write the G-buffer too (the Stein mode, SteinRayLight). */
+    private static SteinShader fragmentFilter;
+
+    private static SteinShader fragmentAlphaFilter;
     private static boolean gbuffer;
 
     private static SteinShader fragmentLensG;
@@ -90,6 +105,9 @@ final class SteinTerrainPipelines {
         vertex = SteinShader.load(SteinShader.Stage.VERTEX, "terrain.vert");
         fragment = SteinShader.load(SteinShader.Stage.FRAGMENT, "terrain.frag");
         fragmentAlpha = SteinShader.load(SteinShader.Stage.FRAGMENT, "terrain_alpha.frag");
+        fragmentFilter = SteinShader.load(SteinShader.Stage.FRAGMENT, "terrain_filter.frag");
+        fragmentAlphaFilter =
+                SteinShader.load(SteinShader.Stage.FRAGMENT, "terrain_alpha_filter.frag");
         vertexLens = SteinShader.load(SteinShader.Stage.VERTEX, "terrain_lens.vert");
         fragmentLens = SteinShader.load(SteinShader.Stage.FRAGMENT, "terrain_lens.frag");
         fragmentAlphaLens = SteinShader.load(SteinShader.Stage.FRAGMENT, "terrain_alpha_lens.frag");
@@ -166,15 +184,19 @@ final class SteinTerrainPipelines {
     }
 
     /** The textures the LENS variants read besides the game's (slots 2 to 6, SteinTerrain). */
-    private static void lensTextures(SteinPipeline.Builder b) {
+    private static void lensTextures(SteinPipeline.Builder b, boolean stein) {
         b.texture("shadowMap", 2)
                 .texture("casterMap", 3)
                 .texture("glowMask", 4)
                 .texture("shadowPrevMap", 5)
                 .texture("cloudMap", 6);
-        if (gbuffer) {
+        if (stein) {
             b.texture("materialMap", 7);
         }
+    }
+
+    private static boolean stein(int key) {
+        return gbuffer && (key & STEIN_BIT) != 0;
     }
 
     /** The pipeline for {@code key}, in the LENS variant when {@code lens}. */
@@ -186,7 +208,8 @@ final class SteinTerrainPipelines {
         }
         boolean alpha = (key & ALPHA_BIT) != 0;
         // the Stein mode's translucent layer: our water, which reads the image and depth before it
-        boolean water = lens && gbuffer && (key & BLEND_BIT) != 0;
+        boolean stein = stein(key);
+        boolean water = stein && (key & BLEND_BIT) != 0;
         SteinPipeline.Builder b =
                 SteinPipeline.builder(
                                 (lens ? "terrain lens " : "terrain ") + Integer.toHexString(key))
@@ -195,14 +218,14 @@ final class SteinTerrainPipelines {
                                 water
                                         ? fragmentWater
                                         : lens
-                                                ? lensFragment(alpha, (key & BLEND_BIT) == 0)
-                                                : (alpha ? fragmentAlpha : fragment))
+                                                ? lensFragment(alpha, (key & BLEND_BIT) == 0, stein)
+                                                : plainFragment(key, alpha))
                         .layout(layout)
                         .texture("tex", 0)
                         .texture("lightmap", 1)
                         .uniforms("Frame", 0);
         if (lens) {
-            lensTextures(b);
+            lensTextures(b, stein && !water);
         }
         if (water) {
             b.texture("sceneCopy", 8)
@@ -284,7 +307,7 @@ final class SteinTerrainPipelines {
                     variant(
                             key,
                             lens ? "terrain lens colour " : "terrain colour ",
-                            lens ? lensFragment(true, true) : fragmentAlpha,
+                            lens ? lensFragment(true, true, stein(key)) : plainFragment(key, true),
                             lens,
                             true,
                             false,
@@ -311,7 +334,9 @@ final class SteinTerrainPipelines {
                     variant(
                             key,
                             lens ? "terrain lens opaque " : "terrain opaque ",
-                            lens ? lensFragment(false, true) : fragment,
+                            lens
+                                    ? lensFragment(false, true, stein(key))
+                                    : plainFragment(key, false),
                             lens,
                             true,
                             true,
@@ -321,9 +346,17 @@ final class SteinTerrainPipelines {
         return p;
     }
 
+    /** The pixel without the Lens's light: with the alpha test or not, with the filters or not. */
+    private static SteinShader plainFragment(int key, boolean alpha) {
+        boolean filter = (key & FILTER_BIT) != 0;
+        return alpha
+                ? (filter ? fragmentAlphaFilter : fragmentAlpha)
+                : (filter ? fragmentFilter : fragment);
+    }
+
     /** The LENS pixel: with the alpha test or not; opaque ones write the G-buffer in Stein. */
-    private static SteinShader lensFragment(boolean alpha, boolean opaque) {
-        if (gbuffer && opaque) {
+    private static SteinShader lensFragment(boolean alpha, boolean opaque, boolean stein) {
+        if (stein && opaque) {
             return alpha ? fragmentAlphaLensG : fragmentLensG;
         }
         return alpha ? fragmentAlphaLens : fragmentLens;
@@ -356,7 +389,7 @@ final class SteinTerrainPipelines {
             b.colorWrite(false);
         }
         if (lens) {
-            lensTextures(b);
+            lensTextures(b, stein(key));
         }
         return pipelines.get(b.build());
     }

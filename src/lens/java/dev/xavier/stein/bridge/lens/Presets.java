@@ -14,35 +14,57 @@ import dev.xavier.stein.gfx.SteinPostFx;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.settings.GameSettings;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
- * The quality levels of the video settings ({@link VideoModel}): one choice that sets the options
- * of every other topic, the game's and Stein's, from the lightest to the richest. The render
- * distance is not one of them: it is the player's own choice, on its own line.
+ * The video modes and their presets ({@link VideoModel}): one choice that sets the options of every
+ * other topic, the game's and Stein's. The render distance, the frame limit and the screen are not
+ * among them: they depend on the player's machine.
+ *
+ * <p><b>Performance</b> never turns the new light on; it is for frames first, PvP and low-end PCs.
  *
  * <ul>
- *   <li><b>Fast</b>: the lightest the game can be — fast graphics, no clouds, few particles, no
- *       smooth lighting, no ground shadow, no rain, direct drawing (without the intermediate
- *       frame), compact angles;
- *   <li><b>Fancy</b>: the game as Mojang ships it;
- *   <li><b>Medium</b>: Fancy with a soft bloom and 4x anisotropic filtering;
- *   <li><b>High</b>: soft bloom, smooth edges, soft corner shading, 8x anisotropic, supersampled
- *       pixels, light sharpening;
- *   <li><b>Ultra</b>: strong bloom, smooth edges, strong corner shading, 16x anisotropic,
- *       supersampled pixels, medium sharpening, HDR at maximum quality (the others: quick).
+ *   <li><b>Low</b>: the lightest the game can be — fast graphics, no clouds, few particles, no
+ *       smooth lighting, no ground shadow, no rain, no enchantment glint, direct drawing (without
+ *       the intermediate frame);
+ *   <li><b>Medium</b>: the game as Mojang ships it (Fancy);
+ *   <li><b>High</b>: Medium with the image filters (soft bloom, smooth edges, 8x anisotropic,
+ *       supersampled pixels, light sharpening) and HDR on screens that have it.
  * </ul>
  *
- * <p>Light and shadows: Medium has low shadows; High medium shadows, moonlight and darkness; Ultra
- * high shadows, moonlight and darkness.
+ * <p><b>Quality</b> always has the new light; each preset includes the image of Performance High.
  *
- * <p>When an option is changed by hand the level becomes "Custom" ({@link #current} returns null):
- * the options are compared with each level, only those a level sets and that change the picture.
+ * <ul>
+ *   <li><b>Low</b>: low sun shadows, dynamic lights;
+ *   <li><b>Medium</b>: medium shadows, moonlight, darkness, the Stein sky, soft atmosphere;
+ *   <li><b>High</b>: high shadows, strong bloom, 16x anisotropic, medium sharpening, HDR at maximum
+ *       quality (the others: quick);
+ *   <li><b>Ultra</b>: High with ray tracing (Vulkan, a GPU that has it; from the next start);
+ *       offered only on such a GPU.
+ * </ul>
+ *
+ * <p>A preset turns ray tracing on or off (Ultra is High with it), and that is all it says about
+ * it: which ray traced effects stay on is the player's ({@link SteinRayOptions}).
+ *
+ * <p>When an option is changed by hand the preset becomes "Custom" ({@link #current} returns null):
+ * the options are compared with each preset, only those a preset sets and that change the picture.
+ * HDR is set but not compared: a player whose screen looks better without it keeps the preset.
  */
 final class Presets {
 
-    /** A level; the order is the selector's, from the lightest. */
+    /** The two video modes. */
+    enum Mode {
+        PERFORMANCE,
+        QUALITY
+    }
+
+    /** A preset; the order is the modes', each from the lightest. */
     enum Position {
-        FAST(
-                "fast",
+        PERFORMANCE_LOW(
+                Mode.PERFORMANCE,
+                "low",
+                false,
                 false,
                 0,
                 0,
@@ -57,49 +79,68 @@ final class Presets {
                 false,
                 0,
                 0,
-                0,
-                false,
                 false),
-        FANCY(
-                "fancy",
-                true,
-                2,
-                2,
-                0,
-                true,
-                SteinPostFx.BLOOM_OFF,
-                false,
-                1,
-                false,
-                0,
-                true,
-                false,
-                0,
-                0,
-                0,
-                false,
-                false),
-        MEDIUM(
+        PERFORMANCE_MEDIUM(
+                Mode.PERFORMANCE,
                 "medium",
+                false,
+                true,
+                2,
+                2,
+                0,
+                true,
+                SteinPostFx.BLOOM_OFF,
+                false,
+                1,
+                false,
+                0,
+                true,
+                false,
+                0,
+                0,
+                false),
+        PERFORMANCE_HIGH(
+                Mode.PERFORMANCE,
+                "high",
+                true,
                 true,
                 2,
                 2,
                 0,
                 true,
                 SteinPostFx.BLOOM_LOW,
-                false,
-                4,
+                true,
+                8,
+                true,
+                1,
+                true,
                 false,
                 0,
+                0,
+                false),
+        QUALITY_LOW(
+                Mode.QUALITY,
+                "low",
+                true,
+                true,
+                2,
+                2,
+                0,
+                true,
+                SteinPostFx.BLOOM_LOW,
+                true,
+                8,
+                true,
+                1,
                 true,
                 true,
                 0,
                 1,
-                0,
-                false,
                 false),
-        HIGH(
-                "high",
+        QUALITY_MEDIUM(
+                Mode.QUALITY,
+                "medium",
+                true,
                 true,
                 2,
                 2,
@@ -114,34 +155,31 @@ final class Presets {
                 true,
                 1,
                 2,
-                1,
-                true,
                 true),
-        ULTRA(
+        QUALITY_HIGH(
+                Mode.QUALITY,
+                "high",
+                true,
+                true,
+                2,
+                2,
+                0,
+                true,
+                SteinPostFx.BLOOM_HIGH,
+                true,
+                16,
+                true,
+                2,
+                false,
+                true,
+                2,
+                3,
+                true),
+        /** High with ray tracing; offered only on a GPU that has it. */
+        QUALITY_ULTRA(
+                Mode.QUALITY,
                 "ultra",
                 true,
-                2,
-                2,
-                0,
-                true,
-                SteinPostFx.BLOOM_HIGH,
-                true,
-                16,
-                true,
-                2,
-                false,
-                true,
-                2,
-                3,
-                2,
-                true,
-                true),
-        /**
-         * Above Ultra: Ultra's options and ray tracing (Vulkan, a GPU that has it; from the next
-         * start). Offered only on such a GPU.
-         */
-        STEIN(
-                "stein",
                 true,
                 2,
                 2,
@@ -156,11 +194,11 @@ final class Presets {
                 true,
                 2,
                 3,
-                2,
-                true,
                 true);
 
+        final Mode mode;
         private final String key;
+        final boolean hdr;
         final boolean fancy;
         final int smoothLighting;
         final int clouds;
@@ -175,12 +213,12 @@ final class Presets {
         final boolean dynamicLights;
         final int atmosphere;
         final int sunShadows;
-        final int occlusion;
         final boolean sky;
-        final boolean reflections;
 
         Position(
+                Mode mode,
                 String key,
+                boolean hdr,
                 boolean fancy,
                 int smoothLighting,
                 int clouds,
@@ -195,10 +233,10 @@ final class Presets {
                 boolean dynamicLights,
                 int atmosphere,
                 int sunShadows,
-                int occlusion,
-                boolean sky,
-                boolean reflections) {
+                boolean sky) {
+            this.mode = mode;
             this.key = key;
+            this.hdr = hdr;
             this.fancy = fancy;
             this.smoothLighting = smoothLighting;
             this.clouds = clouds;
@@ -213,17 +251,15 @@ final class Presets {
             this.dynamicLights = dynamicLights;
             this.atmosphere = atmosphere;
             this.sunShadows = sunShadows;
-            this.occlusion = occlusion;
             this.sky = sky;
-            this.reflections = reflections;
         }
 
-        /** The Stein mode: ray tracing on. */
+        /** Ultra: ray tracing on. */
         boolean rayTracing() {
-            return this == STEIN;
+            return this == QUALITY_ULTRA;
         }
 
-        /** Name of the level, for the translation key (steinlens.quality.&lt;key&gt;). */
+        /** Name of the preset, for the translation key (steinlens.quality.&lt;key&gt;). */
         String key() {
             return key;
         }
@@ -231,17 +267,32 @@ final class Presets {
 
     private static final Position[] POSITIONS = Position.values();
 
-    /** Highest level, as an index. */
-    static final int MAX_POSITION = POSITIONS.length - 1;
-
-    /** The level at an index (0 = Fast), clamped. */
+    /** The preset at an index of all of them (0 = Performance Low), clamped. */
     static Position at(int index) {
-        return POSITIONS[Math.clamp(index, 0, MAX_POSITION)];
+        return POSITIONS[Math.clamp(index, 0, POSITIONS.length - 1)];
+    }
+
+    /** The presets of {@code mode} this PC can use, from the lightest. */
+    static List<Position> of(Mode mode) {
+        List<Position> out = new ArrayList<>(4);
+        for (Position p : POSITIONS) {
+            if (p.mode == mode && (!p.rayTracing() || SteinBackend.rayTracingSupported())) {
+                out.add(p);
+            }
+        }
+        return out;
+    }
+
+    /** The preset last used in {@code mode}: where the mode opens. */
+    static Position last(LensConfig c, Mode mode) {
+        List<Position> all = of(mode);
+        int level = mode == Mode.QUALITY ? c.qualityLevel : c.performanceLevel;
+        return all.get(Math.clamp(level, 0, all.size() - 1));
     }
 
     private Presets() {}
 
-    /** The level the options are at now, or null when they match none (Custom). */
+    /** The preset the options are at now, or null when they match none (Custom). */
     static Position current(LensConfig c) {
         GameSettings s = Minecraft.func_71410_x().field_71474_y;
         for (Position p : POSITIONS) {
@@ -252,9 +303,7 @@ final class Presets {
                     && s.field_181151_V == p.shadows
                     && c.bloom == p.bloom
                     && c.smoothEdges == p.smoothEdges
-                    && c.occlusion == p.occlusion
                     && c.sky == p.sky
-                    && c.reflections == p.reflections
                     && c.anisotropy == p.anisotropy
                     && c.supersample == p.supersample
                     && c.sharpen == p.sharpen
@@ -265,6 +314,7 @@ final class Presets {
                     && c.moonlight == (p.sunShadows >= 2)
                     && c.darkness == (p.sunShadows >= 2)
                     && c.glowingBlocks == glowOf(p)
+                    && c.glint == glintOf(p)
                     && p.rayTracing() == SteinBackend.rayTracingRequested()) {
                 return p;
             }
@@ -273,7 +323,7 @@ final class Presets {
     }
 
     /**
-     * Applies the level: game and Stein options. Returns true when the terrain needs to be rebuilt
+     * Applies the preset: game and Stein options. Returns true when the terrain needs to be rebuilt
      * (fast/fancy graphics and smooth lighting change the chunk mesh).
      */
     static boolean apply(Lens mod, Position p) {
@@ -289,12 +339,11 @@ final class Presets {
         s.field_178881_t = true; // VBO (faster than lists)
         c.bloom = p.bloom;
         c.smoothEdges = p.smoothEdges;
-        c.occlusion = p.occlusion;
         c.sky = p.sky;
-        c.reflections = p.reflections;
         c.anisotropy = p.anisotropy;
         c.supersample = p.supersample;
         c.sharpen = p.sharpen;
+        c.hdr = p.hdr; // only where the screen has it: SteinHdr.available
         c.hdrQuick = p.hdrQuick;
         c.dynamicLights = p.dynamicLights;
         c.atmosphere = p.atmosphere;
@@ -305,9 +354,16 @@ final class Presets {
         if (p.rayTracing() != SteinBackend.rayTracingRequested()) {
             SteinBackend.setRayTracing(p.rayTracing()); // the device's, from the next start
         }
-        boolean fast = p == Position.FAST;
+        c.qualityMode = p.mode == Mode.QUALITY;
+        int level = of(p.mode).indexOf(p);
+        if (p.mode == Mode.QUALITY) {
+            c.qualityLevel = level;
+        } else {
+            c.performanceLevel = level;
+        }
+        boolean fast = p == Position.PERFORMANCE_LOW;
         c.directRender = fast;
-        c.compactAngles = fast;
+        c.glint = glintOf(p);
         c.rain = !fast;
         if (fast) {
             c.fog = 0;
@@ -316,6 +372,11 @@ final class Presets {
         s.func_74303_b();
         mod.changed();
         return rebuild;
+    }
+
+    /** Enchantment glint: off in Performance Low, where it is measured frames (4%); else on. */
+    private static int glintOf(Position p) {
+        return p == Position.PERFORMANCE_LOW ? 2 : 0;
     }
 
     /** Glowing blocks: on from Medium, intense in Ultra. */

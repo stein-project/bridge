@@ -175,7 +175,7 @@ final class SteinVkSwapchain {
         SteinVkDebug.frame();
         // the slot's previous frame must be done before its semaphore is used again
         device.waitValue(frameValue[slot], Long.MAX_VALUE);
-        if (stale || hdr != SteinHdr.active() || sizeChanged()) {
+        if (stale || hdr != SteinHdr.scRgb() || sizeChanged()) {
             if (!recreate()) {
                 frameValue[slot] = device.submit(VK_NULL_HANDLE, 0, VK_NULL_HANDLE);
                 return;

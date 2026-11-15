@@ -22,11 +22,13 @@ import dev.xavier.stein.bridge.hooks.HookSink;
 import dev.xavier.stein.bridge.showcase.VideoSettings;
 import dev.xavier.stein.gfx.SteinAo;
 import dev.xavier.stein.gfx.SteinAtmosphere;
+import dev.xavier.stein.gfx.SteinBackend;
 import dev.xavier.stein.gfx.SteinDynamicLights;
 import dev.xavier.stein.gfx.SteinGlow;
 import dev.xavier.stein.gfx.SteinHdr;
 import dev.xavier.stein.gfx.SteinMaterials;
 import dev.xavier.stein.gfx.SteinPostFx;
+import dev.xavier.stein.gfx.SteinRayOptions;
 import dev.xavier.stein.gfx.SteinShadows;
 import dev.xavier.stein.gfx.SteinSkyDome;
 import dev.xavier.stein.gfx.SteinTextureFilter;
@@ -285,31 +287,54 @@ public final class Lens implements HookSink {
     }
 
     /**
-     * {@code -Dsteinlens.diag.presetAtSec=S:P} (test): at S seconds of play, quality level P,
-     * through the same path as the quality choice.
+     * {@code -Dsteinlens.diag.presetAtSec=S:P[,S:P...]} (test): at S seconds of play, quality level
+     * P, through the same path as the quality choice.
      */
     private static final String DIAG_PRESET = LensOptions.DIAG_PRESET_AT_SEC;
 
     private static final long DIAG_START = System.nanoTime();
-    private boolean diagPresetDone;
+    private int diagPresetNext;
 
     private void diagPreset() {
-        if (DIAG_PRESET == null || diagPresetDone) {
+        if (DIAG_PRESET == null) {
             return;
         }
-        String[] p = DIAG_PRESET.split(":");
+        String[] steps = DIAG_PRESET.split(",");
+        if (diagPresetNext >= steps.length) {
+            return;
+        }
+        String[] p = steps[diagPresetNext].split(":");
         if (p.length < 2) {
-            diagPresetDone = true;
+            diagPresetNext = steps.length;
             Log.warn("lens", "diag: steinlens.diag.presetAtSec needs S:P, got " + DIAG_PRESET);
             return;
         }
-        if (System.nanoTime() - DIAG_START < (long) (Double.parseDouble(p[0]) * 1e9)) {
+        if (System.nanoTime() - DIAG_START < (long) (Double.parseDouble(p[0].trim()) * 1e9)) {
             return;
         }
-        diagPresetDone = true;
-        // As the quality choice does (0 Fast, 1 Fancy, 2 Medium, 3 High, 4 Ultra).
-        Presets.apply(this, Presets.at(Integer.parseInt(p[1].trim())));
+        diagPresetNext++;
+        if (p[1].startsWith("rt")) {
+            SteinBackend.setRayTracing(p[1].endsWith("1"));
+            changed();
+        } else if (p[1].startsWith("flip=")) {
+            diagFlip(p[1].substring(5).trim());
+        } else {
+            // As the preset choice does: index among all (0-2 Performance, 3-6 Quality).
+            Presets.apply(this, Presets.at(Integer.parseInt(p[1].trim())));
+        }
         Log.info("lens", "diag: preset " + p[1]);
+    }
+
+    /** A switch of the config by its field's name, as its line on the video screen does. */
+    private void diagFlip(String field) {
+        try {
+            java.lang.reflect.Field f = LensConfig.class.getDeclaredField(field);
+            f.setAccessible(true);
+            f.setBoolean(config, !f.getBoolean(config));
+            changed();
+        } catch (ReflectiveOperationException e) {
+            Log.warn("lens", "diag: no switch " + field);
+        }
     }
 
     /** {@code -Dsteinlens.debug=true}: zoom state in the log (every 2 s and on every change). */
@@ -393,6 +418,7 @@ public final class Lens implements HookSink {
      */
     @Override
     public void beforeDrawScreen(Object screen, int mouseX, int mouseY, float partialTicks) {
+        diagPreset(); // the fov hook is skipped while the showcase is open
         if (screen instanceof GuiVideoSettings) {
             VideoOptions.beforeDraw();
         }
@@ -438,9 +464,16 @@ public final class Lens implements HookSink {
         SteinMaterials.configure(config.reflections);
         SteinTextureFilter.configure(config.anisotropy, config.supersample);
         SteinDynamicLights.configure(config.dynamicLights);
-        SteinAtmosphere.configure(config.atmosphere);
+        // what the rays stand on, from any preset: the light needs the shadow pass and the volume
+        // the atmosphere's pass (the choice, not SteinRayLight.active: this also runs before the
+        // device exists)
+        boolean rays = SteinBackend.rayTracingChosen();
+        SteinRayOptions.configure(
+                config.rtSun, config.rtBounce, config.rtWater, config.rtVolume, config.rtLeaves);
+        SteinAtmosphere.configure(
+                rays && config.rtVolume ? Math.max(config.atmosphere, 1) : config.atmosphere);
         SteinSkyDome.configure(config.sky);
-        SteinShadows.configure(config.shadows);
+        SteinShadows.configure(rays ? Math.max(config.shadows, 1) : config.shadows);
         SteinWorldLight.configure(config.moonlight, config.darkness);
         SteinGlow.configure(config.glowingBlocks);
         SteinHdr.configure(
