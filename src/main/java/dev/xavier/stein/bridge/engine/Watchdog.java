@@ -64,6 +64,12 @@ public final class Watchdog {
     /** Snapshots per freeze: one as soon as it is noticed and two more while it lasts. */
     private static final int MAX_DUMPS = 3;
 
+    /** A gap between frames this long, in a world, is a stall. */
+    private static final long FRAME_STALL_NS = EngineOptions.WATCHDOG_FRAME_MS * 1_000_000L;
+
+    /** Frame stalls whose stack goes to the log; after them, only the line on recovery. */
+    private static final int MAX_FRAME_DUMPS = 10;
+
     private static final long BETWEEN_DUMPS_NS = 30_000_000_000L;
 
     /** Enough to see where the thread is; the whole stack would only fill the log. */
@@ -72,6 +78,17 @@ public final class Watchdog {
     private static volatile long in;
     private static volatile long out;
     private static volatile long ticks;
+
+    /** When the last frame ended (System.nanoTime), written by the game thread. */
+    private static volatile long frameAt;
+
+    /** A stall the game thread came out of: its length, for the watchdog to report; 0 = none. */
+    private static volatile long stallEnded;
+
+    private static int frameDumps;
+    private static int frameStalls;
+    private static long frameStallAt;
+    private static long frameStallGc;
     private static volatile boolean started;
     private static volatile boolean broken;
     private static long lastGc;
@@ -92,6 +109,19 @@ public final class Watchdog {
     }
 
     /** End of a game tick (game thread); also starts the watchdog the first time. */
+    /**
+     * The end of every frame (Display.update). A frame that took longer than the stall limit is
+     * handed to the watchdog thread, which logs it: nothing is logged from the game thread.
+     */
+    public static void frame() {
+        long now = System.nanoTime();
+        long last = frameAt;
+        frameAt = now;
+        if (last != 0L && FRAME_STALL_NS > 0 && now - last >= FRAME_STALL_NS) {
+            stallEnded = now - last;
+        }
+    }
+
     public static void tick() {
         ticks++;
         if (!started) {
@@ -158,6 +188,11 @@ public final class Watchdog {
             if (k != lastTicks) {
                 lastTicks = k;
                 ticksAt = now;
+            }
+            try {
+                frames(now);
+            } catch (Throwable t) {
+                SteinLog.note("watchdog", "the frame check failed: " + t);
             }
             if (!inWorld()) {
                 inAt = now; // in the menu there is no server: silence is expected
@@ -245,6 +280,80 @@ public final class Watchdog {
         } catch (Throwable e) {
             return -1;
         }
+    }
+
+    /**
+     * Frames that stop for seconds while the game thread is alive (a crowded fight on a player's
+     * NVIDIA card, 15/11/2026: the screen froze for about 4 s, twice, and the chat came all at once
+     * afterwards; ticks never stopped for the 10 s the silence check needs). While stalled: the
+     * game thread's stack, the memory and the garbage collection so far. On recovery: how long it
+     * lasted and how much of it was garbage collection — which tells the GPU from Java apart.
+     */
+    private static void frames(long now) {
+        long ended = stallEnded;
+        if (ended != 0L) {
+            stallEnded = 0L;
+            frameStalls++;
+            long gc = frameStallAt != 0L ? gcMillis() - frameStallGc : -1L;
+            SteinLog.note(
+                    "watchdog",
+                    "frames back after "
+                            + ended / 1_000_000L
+                            + " ms"
+                            + (gc >= 0 ? ", garbage collection " + gc + " ms of it" : "")
+                            + " | "
+                            + memory()
+                            + " | frame stalls in the session: "
+                            + frameStalls);
+            frameStallAt = 0L;
+        }
+        long last = frameAt;
+        if (FRAME_STALL_NS <= 0
+                || last == 0L
+                || now - last < FRAME_STALL_NS
+                || frameStallAt != 0L
+                || !inWorld()) {
+            return;
+        }
+        frameStallAt = now;
+        frameStallGc = gcMillis();
+        if (frameDumps >= MAX_FRAME_DUMPS) {
+            return;
+        }
+        frameDumps++;
+        SteinLog.note(
+                "watchdog",
+                "no frame for "
+                        + (now - last) / 1_000_000L
+                        + " ms | "
+                        + memory()
+                        + " | stack "
+                        + frameDumps
+                        + " of "
+                        + MAX_FRAME_DUMPS
+                        + ":");
+        ThreadMXBean mx = ManagementFactory.getThreadMXBean();
+        for (ThreadInfo t : mx.dumpAllThreads(false, false)) {
+            if (t != null && "Client thread".equals(t.getThreadName())) {
+                SteinLog.note("watchdog", "\"Client thread\" " + t.getThreadState());
+                StackTraceElement[] stack = t.getStackTrace();
+                for (int i = 0; i < stack.length && i < STACK_LINES; i++) {
+                    SteinLog.note("watchdog", "    " + stack[i]);
+                }
+            }
+        }
+    }
+
+    /** Heap in use, its limit, and the garbage collection time of the whole session. */
+    private static String memory() {
+        Runtime rt = Runtime.getRuntime();
+        return "memory "
+                + ((rt.totalMemory() - rt.freeMemory()) >> 20)
+                + " of "
+                + (rt.maxMemory() >> 20)
+                + " MB, garbage collection "
+                + gcMillis()
+                + " ms in the session";
     }
 
     /** The player is in a world: outside one there is nobody to talk to. */

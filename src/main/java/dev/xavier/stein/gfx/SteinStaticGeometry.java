@@ -10,6 +10,7 @@ package dev.xavier.stein.gfx;
 
 import static dev.xavier.stein.gfx.SteinTessCapture.VERTEX_BYTES;
 
+import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.bridge.engine.GLMatrix;
 
 import net.minecraft.client.renderer.Tessellator;
@@ -27,19 +28,40 @@ import java.util.IdentityHashMap;
  * and the ranges owned by one object each (sky, stars, clouds), both in one buffer that the
  * recorded draws point to as instances instead of copying vertices every frame.
  *
+ * <p>Item lists fill the buffer from the start and the owned ranges from the end, so that starting
+ * the items over (a resource reload, or the buffer full) never writes over the sky. When the items
+ * run out of room, the next frame doubles the buffer (up to {@link #MAX_BYTES}) and the item lists
+ * are recorded again; before, a full buffer left every new item undrawn for the rest of the
+ * session.
+ *
  * <p>Pipeline: Stein GFX only.
  */
 final class SteinStaticGeometry {
     private SteinStaticGeometry() {}
 
-    private static final long STATIC_BYTES = 32L << 20;
+    /** {@code -Dsteinbridge.gfx.itemGeometryMb} (32 MB by default). */
+    private static final long INITIAL_BYTES = SteinGfxOptions.ITEM_GEOMETRY_BYTES;
+
+    /** Past this, a full buffer only starts the items over, without growing. */
+    private static final long MAX_BYTES = 256L << 20;
 
     /** Item list being recorded (ItemModelCache): its vertices also go to the fixed buffer. */
     static int recordList;
 
     private static boolean staticInit;
     private static SteinBuffer staticGeometry;
+    private static long capacity = INITIAL_BYTES;
+
+    /** End of the item lists (they grow from 0). */
     private static long staticUsed;
+
+    /** Start of the owned ranges (they grow down from the end of the buffer). */
+    private static long slotTop = INITIAL_BYTES;
+
+    /** An item list did not fit: the next frame starts the items over ({@link #itemsFull}). */
+    private static boolean full;
+
+    private static int restarts;
 
     /** Per display list: first vertex, how many (0 = not registered) and the format bits. */
     private static int[] listFirst = new int[1024];
@@ -62,15 +84,18 @@ final class SteinStaticGeometry {
         if (!SteinGfxOptions.ENABLED) {
             return false;
         }
-        staticGeometry =
-                SteinDevice.get()
-                        .createBuffer(
-                                new SteinBuffer.Desc(
-                                        "entities: items",
-                                        STATIC_BYTES,
-                                        SteinBuffer.Memory.GPU,
-                                        SteinBuffer.Usage.VERTEX));
+        staticGeometry = create(capacity);
         return true;
+    }
+
+    private static SteinBuffer create(long bytes) {
+        return SteinDevice.get()
+                .createBuffer(
+                        new SteinBuffer.Desc(
+                                "entities: items",
+                                bytes,
+                                SteinBuffer.Memory.GPU,
+                                SteinBuffer.Usage.VERTEX));
     }
 
     static SteinBuffer staticGeometry() {
@@ -98,7 +123,11 @@ final class SteinStaticGeometry {
         recordList = 0;
         forget(list);
         long bytes = (long) recVerts * VERTEX_BYTES;
-        if (!recOk || recVerts == 0 || staticUsed + bytes > STATIC_BYTES) {
+        if (!recOk || recVerts == 0) {
+            return;
+        }
+        if (staticUsed + bytes > slotTop) {
+            full = true;
             return;
         }
         staticGeometry.upload(staticUsed, MemoryUtil.memByteBuffer(recAddr, (int) bytes));
@@ -240,12 +269,13 @@ final class SteinStaticGeometry {
         if (s == null || s[1] < out) {
             // Grew (clouds seen from another side): headroom for the next.
             int cap = s == null ? out : out * 2;
-            if (staticUsed + (long) cap * VERTEX_BYTES > STATIC_BYTES) {
+            long capBytes = (long) cap * VERTEX_BYTES;
+            if (slotTop - capBytes < staticUsed) {
                 SLOTS.remove(owner);
                 return false;
             }
-            s = new int[] {(int) (staticUsed / VERTEX_BYTES), cap, 0, 0};
-            staticUsed += (long) cap * VERTEX_BYTES;
+            slotTop -= capBytes;
+            s = new int[] {(int) (slotTop / VERTEX_BYTES), cap, 0, 0};
             SLOTS.put(owner, s);
         }
         // glBufferSubData on the range the GPU may still be reading from the previous frame: OpenGL
@@ -287,9 +317,65 @@ final class SteinStaticGeometry {
         return true;
     }
 
-    /** Resource reload: the item lists are deleted and rebuilt; the fixed buffer starts over. */
+    /**
+     * Resource reload: the item lists are deleted and rebuilt; the items start over from the
+     * beginning of the buffer (the owned ranges stay where they are).
+     */
     static void clearLists() {
         Arrays.fill(listCount, 0);
         staticUsed = 0;
+        full = false;
+    }
+
+    /** Did an item list find no room since the last start over? */
+    static boolean itemsFull() {
+        return full;
+    }
+
+    /**
+     * Between frames, with the item lists about to be deleted ({@code ItemModelCache}): a larger
+     * buffer, with the owned ranges copied to its end, and the items start over. Called only
+     * outside a pass: the copy and the old buffer's release are ordered after what the GPU already
+     * received.
+     */
+    static void restartItems(int models) {
+        if (staticGeometry == null) {
+            return;
+        }
+        long was = capacity;
+        long next = Math.min(MAX_BYTES, capacity * 2);
+        if (next > capacity) {
+            long owned = capacity - slotTop;
+            long top = next - owned;
+            SteinBuffer bigger = create(next);
+            if (owned > 0) {
+                SteinDevice.get().copyBuffer(staticGeometry, slotTop, bigger, top, owned);
+            }
+            int shift = (int) ((top - slotTop) / VERTEX_BYTES);
+            for (int[] s : SLOTS.values()) {
+                s[0] += shift;
+            }
+            staticGeometry.destroy();
+            staticGeometry = bigger;
+            slotTop = top;
+            capacity = next;
+        }
+        restarts++;
+        if (restarts <= 8 || Integer.bitCount(restarts) == 1) {
+            Log.info(
+                    "gfx",
+                    "item geometry full ("
+                            + (staticUsed >> 20)
+                            + " MB, "
+                            + models
+                            + " models): items recorded again in "
+                            + (capacity >> 20)
+                            + " MB (was "
+                            + (was >> 20)
+                            + ", start over "
+                            + restarts
+                            + ")");
+        }
+        clearLists();
     }
 }

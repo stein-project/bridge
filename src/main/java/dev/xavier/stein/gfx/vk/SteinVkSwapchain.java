@@ -39,10 +39,12 @@ import static org.lwjgl.vulkan.VK10.VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
 import static org.lwjgl.vulkan.VK10.VK_IMAGE_LAYOUT_UNDEFINED;
 import static org.lwjgl.vulkan.VK10.VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
 import static org.lwjgl.vulkan.VK10.VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+import static org.lwjgl.vulkan.VK10.VK_NOT_READY;
 import static org.lwjgl.vulkan.VK10.VK_NULL_HANDLE;
 import static org.lwjgl.vulkan.VK10.VK_PIPELINE_STAGE_TRANSFER_BIT;
 import static org.lwjgl.vulkan.VK10.VK_SHARING_MODE_EXCLUSIVE;
 import static org.lwjgl.vulkan.VK10.VK_SUCCESS;
+import static org.lwjgl.vulkan.VK10.VK_TIMEOUT;
 import static org.lwjgl.vulkan.VK10.vkCmdBlitImage;
 import static org.lwjgl.vulkan.VK10.vkCmdClearColorImage;
 import static org.lwjgl.vulkan.VK10.vkCreateSemaphore;
@@ -52,6 +54,7 @@ import static org.lwjgl.vulkan.VK10.vkGetPhysicalDeviceFormatProperties;
 
 import dev.xavier.stein.bridge.core.CoreOptions;
 import dev.xavier.stein.bridge.core.Log;
+import dev.xavier.stein.gfx.SteinGpuWait;
 import dev.xavier.stein.gfx.SteinHdr;
 
 import org.lwjgl.system.MemoryStack;
@@ -103,7 +106,8 @@ final class SteinVkSwapchain {
     /** Presentations an old swapchain and its semaphores are kept for after being replaced. */
     private static final int KEEP_OLD = FRAMES + 1;
 
-    private static final long NO_TIMEOUT = -1L;
+    /** Rebuilds of the swapchain logged one by one before only every power of two is. */
+    private static final int FREE_REBUILD_LINES = 6;
 
     private final SteinVkDevice device;
     private final long surface;
@@ -127,6 +131,16 @@ final class SteinVkSwapchain {
 
     private boolean vsync = true;
     private boolean stale = true;
+
+    /** Why {@link #stale} was last set: goes into the rebuild's log line. */
+    private String staleWhy = "first frame";
+
+    private int rebuilds;
+    private long firstRebuildAt;
+
+    /** The video memory in the log; null without VK_EXT_memory_budget. */
+    private final SteinVkBudget budget;
+
     private int modeLogged = -1;
 
     /** The last surface query was refused (logged once per refusal). */
@@ -150,6 +164,7 @@ final class SteinVkSwapchain {
         this.device = device;
         this.surface = surface;
         this.window = window;
+        this.budget = device.memoryBudget ? new SteinVkBudget(device.physical()) : null;
         try (MemoryStack stack = MemoryStack.stackPush()) {
             for (int i = 0; i < FRAMES; i++) {
                 acquired[i] = semaphore(stack);
@@ -164,6 +179,7 @@ final class SteinVkSwapchain {
         if (vsync != on) {
             vsync = on;
             stale = true;
+            staleWhy = "vsync";
         }
     }
 
@@ -173,27 +189,58 @@ final class SteinVkSwapchain {
      */
     void present(SteinVkTexture screen) {
         SteinVkDebug.frame();
+        if (budget != null) {
+            budget.frame();
+        }
         // the slot's previous frame must be done before its semaphore is used again
-        device.waitValue(frameValue[slot], Long.MAX_VALUE);
+        long t0 = System.nanoTime();
+        long previous = frameValue[slot];
+        if (!device.waitValue(previous, SteinGpuWait.SLICE_NANOS)) {
+            SteinGpuWait.await("previous frame", 0L, ns -> device.waitValue(previous, ns));
+        }
+        SteinGpuWait.done("previous frame", System.nanoTime() - t0);
         if (stale || hdr != SteinHdr.scRgb() || sizeChanged()) {
+            String why =
+                    stale ? staleWhy : hdr != SteinHdr.scRgb() ? "HDR switched" : "window size";
             if (!recreate()) {
                 frameValue[slot] = device.submit(VK_NULL_HANDLE, 0, VK_NULL_HANDLE);
                 return;
             }
+            rebuilt(why);
         }
         int index;
         try (MemoryStack stack = MemoryStack.stackPush()) {
             IntBuffer ip = stack.mallocInt(1);
-            int r =
-                    vkAcquireNextImageKHR(
-                            device.vk(), swapchain, NO_TIMEOUT, acquired[slot], VK_NULL_HANDLE, ip);
+            long a0 = System.nanoTime();
+            int r;
+            // In slices, never forever: a driver that holds the images back leaves a line in the
+            // log every second instead of a silent frozen screen.
+            while ((r =
+                                    vkAcquireNextImageKHR(
+                                            device.vk(),
+                                            swapchain,
+                                            SteinGpuWait.SLICE_NANOS,
+                                            acquired[slot],
+                                            VK_NULL_HANDLE,
+                                            ip))
+                            == VK_TIMEOUT
+                    || r == VK_NOT_READY) {
+                Log.warn(
+                        "gfx",
+                        "vulkan: still waiting for a swapchain image: "
+                                + (System.nanoTime() - a0) / 1_000_000L
+                                + " ms so far");
+            }
+            SteinGpuWait.done("swapchain image", System.nanoTime() - a0);
             if (r == VK_ERROR_OUT_OF_DATE_KHR) {
                 stale = true;
+                staleWhy = "out of date (acquire)";
                 frameValue[slot] = device.submit(VK_NULL_HANDLE, 0, VK_NULL_HANDLE);
                 return;
             }
             if (r == VK_SUBOPTIMAL_KHR) {
                 stale = true; // still presentable: this frame goes out, the next one recreates
+                staleWhy = "suboptimal (acquire)";
             } else {
                 SteinVkDevice.check(r, "acquire swapchain image");
             }
@@ -216,6 +263,8 @@ final class SteinVkSwapchain {
             int r = vkQueuePresentKHR(device.queue(), info);
             if (r == VK_ERROR_OUT_OF_DATE_KHR || r == VK_SUBOPTIMAL_KHR) {
                 stale = true;
+                staleWhy =
+                        r == VK_SUBOPTIMAL_KHR ? "suboptimal (present)" : "out of date (present)";
             } else {
                 SteinVkDevice.check(r, "present");
             }
@@ -356,6 +405,33 @@ final class SteinVkSwapchain {
                             .baseArrayLayer(0)
                             .layerCount(1);
             vkCmdClearColorImage(c, image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, black, range);
+        }
+    }
+
+    /**
+     * Each rebuild waits for the GPU to go idle: a driver that answers SUBOPTIMAL on every present
+     * would rebuild every frame, and before, nothing in the log showed it.
+     */
+    private void rebuilt(String why) {
+        long now = System.nanoTime();
+        if (rebuilds++ == 0) {
+            firstRebuildAt = now;
+        }
+        if (rebuilds <= FREE_REBUILD_LINES || Integer.bitCount(rebuilds) == 1) {
+            double minutes = Math.max(1e-9, (now - firstRebuildAt) / 60e9);
+            Log.info(
+                    "gfx",
+                    String.format(
+                            java.util.Locale.ROOT,
+                            "vulkan: swapchain built (%s), %d in the session%s",
+                            why,
+                            rebuilds,
+                            rebuilds > 1
+                                    ? String.format(
+                                            java.util.Locale.ROOT,
+                                            ", %.1f per minute",
+                                            (rebuilds - 1) / minutes)
+                                    : ""));
         }
     }
 

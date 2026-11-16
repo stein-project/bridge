@@ -11,12 +11,14 @@ package dev.xavier.stein.gfx.game;
 import dev.xavier.stein.gfx.SteinDevice;
 import dev.xavier.stein.gfx.SteinFormat;
 import dev.xavier.stein.gfx.SteinHdr;
+import dev.xavier.stein.gfx.SteinNativeBuffer;
 import dev.xavier.stein.gfx.SteinSampler;
 import dev.xavier.stein.gfx.SteinTexture;
 
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL12;
 import org.lwjgl.opengl.GL14;
+import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
 
@@ -155,6 +157,11 @@ public final class SteinGameTexture extends SteinTexture {
         }
     }
 
+    /** Native scratch for the packed rows of an upload with a row length. */
+    private static long packedScratch;
+
+    private static long packedCap;
+
     /** glTexSubImage2D: uploads a rectangle of {@code level}. */
     void upload(int level, int x, int y, int w, int h, ByteBuffer pixels, int rowLength) {
         SteinTexture t = ensure();
@@ -163,8 +170,14 @@ public final class SteinGameTexture extends SteinTexture {
         }
         int texel = t.desc().format.bytes;
         if (rowLength > 0 && rowLength != w) {
-            // tightly packed rows, as the API wants them
-            ByteBuffer packed = ByteBuffer.allocateDirect(w * h * texel);
+            // tightly packed rows, as the API wants them (into a reused scratch: the upload copies
+            // the pixels right away)
+            long need = (long) w * h * texel;
+            if (need > packedCap) {
+                packedCap = Math.max(need, packedCap * 2);
+                packedScratch = SteinNativeBuffer.grow(packedScratch, packedCap);
+            }
+            ByteBuffer packed = MemoryUtil.memByteBuffer(packedScratch, (int) need);
             int at = pixels.position();
             for (int row = 0; row < h; row++) {
                 ByteBuffer src = pixels.duplicate();

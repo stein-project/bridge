@@ -40,6 +40,15 @@ public final class Main {
             return;
         }
         // Before the game's first log line: no ${...} lookups from what the server sends.
+        // The session log first: the copy of the output has to be in place before the game's log
+        // system takes System.out for its console.
+        try {
+            Class.forName("dev.xavier.stein.bridge.core.SessionLog")
+                    .getMethod("start", String[].class)
+                    .invoke(null, (Object) args);
+        } catch (ReflectiveOperationException | RuntimeException | LinkageError e) {
+            System.err.println("[log] the session log is off: " + e);
+        }
         Class.forName("dev.xavier.stein.bridge.core.LogLookups").getMethod("install").invoke(null);
         Class<?> game = Class.forName("net.minecraft.client.main.Main");
         java.lang.reflect.Method main = game.getMethod("main", String[].class);

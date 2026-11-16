@@ -17,6 +17,7 @@ import static dev.xavier.stein.gfx.SteinPlayerPoseModels.*;
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.bridge.engine.GLMatrix;
 import dev.xavier.stein.bridge.engine.Mat4;
+import dev.xavier.stein.bridge.engine.ModelFixes;
 
 import net.minecraft.client.entity.AbstractClientPlayer;
 import net.minecraft.client.model.ModelPlayer;
@@ -270,7 +271,8 @@ final class SteinPlayerPoseCheck {
             int o = predSlot(K_ARM, root0);
             float x0 = rp[RARM * 3];
             boolean small = mm.smallArms;
-            float xs = small ? x0 + 1.0F : x0;
+            float shift = ModelFixes.VANILLA_SLIM ? 1.0F : ModelFixes.SLIM_SHIFT;
+            float xs = small ? x0 + shift : x0;
             postRender(
                     predMat,
                     o,
@@ -281,7 +283,7 @@ final class SteinPlayerPoseCheck {
                     ang,
                     RARM * 3);
             if (small) {
-                rp[RARM * 3] = xs - 1.0F;
+                rp[RARM * 3] = xs - shift;
             }
         }
 

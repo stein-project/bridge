@@ -68,8 +68,10 @@ import dev.xavier.stein.bridge.engine.ClientSettings;
 import dev.xavier.stein.bridge.engine.DirectRender;
 import dev.xavier.stein.bridge.engine.FrameTime;
 import dev.xavier.stein.bridge.engine.IdleLimit;
+import dev.xavier.stein.bridge.engine.ItemModelCache;
 import dev.xavier.stein.bridge.engine.ModelBatch;
 import dev.xavier.stein.bridge.engine.ServerWatch;
+import dev.xavier.stein.bridge.engine.Watchdog;
 import dev.xavier.stein.gfx.SteinBackend;
 import dev.xavier.stein.gfx.SteinDevice;
 import dev.xavier.stein.gfx.SteinGfxOptions;
@@ -190,7 +192,9 @@ public final class Display {
             glfwSetWindowPosCallback(win, moved);
         }
         refreshSizes();
-        if (background) {
+        if (background && CoreOptions.DIAG_OFFSCREEN) {
+            glfwSetWindowPos(win, -30000, -30000);
+        } else if (background) {
             glfwIconifyWindow(win);
         }
         glfwShowWindow(win);
@@ -331,6 +335,10 @@ public final class Display {
         }
         endOfFrame();
         swap();
+        // Between frames: the item lists start over if their fixed geometry filled up.
+        ItemModelCache.frame();
+        // The freeze watchdog's frame clock: a frame that took seconds is logged by its thread.
+        Watchdog.frame();
         if (Win.sizeDirty) {
             Win.sizeDirty = false;
             Win.resized = refreshSizes();

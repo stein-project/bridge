@@ -50,6 +50,13 @@ public final class CoreOptions {
     public static final boolean DIAG_BACKGROUND = Opt.flag("steinbridge.diag.background");
 
     /**
+     * {@code -Dsteinbridge.diag.offscreen=true}: test bench only; with the background mode, the
+     * window goes off the screen instead of minimized, so a Vulkan run builds its swapchain and
+     * presents every frame like a player's game does (minimized, it only submits) (default: off).
+     */
+    public static final boolean DIAG_OFFSCREEN = Opt.flag("steinbridge.diag.offscreen");
+
+    /**
      * {@code -Dsteinbridge.gfx.glDebug=true}: asks GLFW for an OpenGL debug context (default: off).
      */
     public static final boolean GL_DEBUG = Opt.flag("steinbridge.gfx.glDebug");

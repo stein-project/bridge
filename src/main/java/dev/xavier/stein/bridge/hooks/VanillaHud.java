@@ -228,13 +228,14 @@ public final class VanillaHud {
             int depth = chatGameFont ? 0 : 1;
             TextHook.hudDepth += depth;
             try {
-                return ((GuiNewChat) chatGui)
-                        .getChatComponent(Math.round(ox * sf), Math.round((sh - oy) * sf));
+                return dev.xavier.stein.bridge.engine.ChatFixes.component(
+                        chatGui, Math.round(ox * sf), Math.round((sh - oy) * sf));
             } finally {
                 TextHook.hudDepth -= depth;
             }
         }
-        return ((GuiNewChat) chatGui).getChatComponent(mouseX, mouseY);
+        // ChatFixes: the game's lookup, but nothing above the lines on show.
+        return dev.xavier.stein.bridge.engine.ChatFixes.component(chatGui, mouseX, mouseY);
     }
 
     // ---- drawing of the game's parts by the Loader (with the grid position already applied) ----

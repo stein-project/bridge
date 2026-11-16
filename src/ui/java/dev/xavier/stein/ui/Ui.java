@@ -410,13 +410,20 @@ public final class Ui {
 
     /**
      * Runs the task on a daemon thread: Desktop may take a while to respond, and a second standing
-     * still with the game window frozen looks like a freeze. {@code target} is only for the log.
+     * still with the game window frozen looks like a freeze. {@code target} (a folder or a link)
+     * goes first to xdg-open on Linux, where Desktop fails without GTK (KDE, Wayland), as LWJGL 2
+     * did; the task is the fallback.
      */
     public static void openDesktop(String threadName, Object target, DesktopTask task) {
         Thread t =
                 new Thread(
                         () -> {
                             try {
+                                if (target != null
+                                        && dev.xavier.stein.bridge.core.DesktopOpen.xdgOpen(
+                                                String.valueOf(target))) {
+                                    return;
+                                }
                                 task.run();
                             } catch (Throwable e) {
                                 Log.info("loader", "could not open " + target + ": " + e);

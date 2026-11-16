@@ -15,6 +15,7 @@ import static dev.xavier.stein.gfx.SteinPlayerPoseJobs.*;
 import static dev.xavier.stein.gfx.SteinPlayerPoseModels.*;
 
 import dev.xavier.stein.bridge.engine.GLMatrix;
+import dev.xavier.stein.bridge.engine.ModelFixes;
 import dev.xavier.stein.bridge.engine.NameCache;
 import dev.xavier.stein.bridge.engine.OldAnimations;
 import dev.xavier.stein.bridge.engine.Visuals;
@@ -704,7 +705,12 @@ final class SteinPlayerPoseCollect {
                                 | (playerCopy.parts[RARM].showModel && !playerCopy.hidden[RARM]
                                         ? SteinHeldItem.IF_ARM
                                         : 0)
-                                | (gameModel.smallArms ? SteinHeldItem.IF_SMALL : 0)
+                                | (gameModel.smallArms
+                                        ? SteinHeldItem.IF_SMALL
+                                                | (ModelFixes.VANILLA_SLIM
+                                                        ? SteinHeldItem.IF_VANILLA_SLIM
+                                                        : 0)
+                                        : 0)
                                 | (renderSneak ? SteinHeldItem.IF_SNEAK : 0);
             } else {
                 heldEntry = null;

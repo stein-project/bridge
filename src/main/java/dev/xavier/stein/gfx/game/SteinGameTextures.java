@@ -11,6 +11,7 @@ package dev.xavier.stein.gfx.game;
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.gfx.SteinDevice;
 import dev.xavier.stein.gfx.SteinFormat;
+import dev.xavier.stein.gfx.SteinNativeBuffer;
 import dev.xavier.stein.gfx.SteinTexture;
 
 import org.lwjgl.opengl.GL11;
@@ -317,8 +318,20 @@ public final class SteinGameTextures {
      * The pixels as bytes in the texture's order, from the unpack position (skip rows and pixels):
      * the same memory when the order matches, a swizzled copy when it does not.
      */
+    /**
+     * Native scratch for the uploads' copies (a heap buffer made direct, BGRA swizzled to RGBA):
+     * the upload copies the pixels right away (to staging, or into the driver), so one buffer per
+     * copy serves every upload. Before, each upload took a new direct buffer, freed only when the
+     * garbage collector got to it — the animated textures alone asked for one every tick.
+     */
+    private static long directScratch;
+
+    private static long directCap;
+    private static long swizzleScratch;
+    private static long swizzleCap;
+
     private static ByteBuffer bytes(Buffer pixels, int w, int h, int format, SteinFormat into) {
-        ByteBuffer b = asBytes(pixels);
+        ByteBuffer b = uploadBytes(pixels);
         int rowLength = unpackRowLength > 0 ? unpackRowLength : w;
         int skip = (unpackSkipRows * rowLength + unpackSkipPixels) * 4;
         if (skip > 0) {
@@ -329,7 +342,12 @@ public final class SteinGameTextures {
             return b;
         }
         int n = Math.min(b.remaining() / 4, rowLength * (h - 1) + w);
-        ByteBuffer copy = ByteBuffer.allocateDirect(n * 4).order(ByteOrder.nativeOrder());
+        if ((long) n * 4 > swizzleCap) {
+            swizzleCap = Math.max((long) n * 4, swizzleCap * 2);
+            swizzleScratch = SteinNativeBuffer.grow(swizzleScratch, swizzleCap);
+        }
+        ByteBuffer copy =
+                MemoryUtil.memByteBuffer(swizzleScratch, n * 4).order(ByteOrder.nativeOrder());
         MemoryUtil.memCopy(MemoryUtil.memAddress(b), MemoryUtil.memAddress(copy), (long) n * 4);
         swizzle(copy, 0, n);
         return copy;
@@ -343,6 +361,30 @@ public final class SteinGameTextures {
             b.put(at, b.get(at + 2));
             b.put(at + 2, r);
         }
+    }
+
+    /** {@link #asBytes} for an upload: a heap buffer is copied into the reused scratch. */
+    private static ByteBuffer uploadBytes(Buffer pixels) {
+        long bytes;
+        if (pixels instanceof ByteBuffer bb && !bb.isDirect()) {
+            bytes = bb.remaining();
+        } else if (pixels instanceof IntBuffer ib && !ib.isDirect()) {
+            bytes = ib.remaining() * 4L;
+        } else {
+            return asBytes(pixels);
+        }
+        if (bytes > directCap) {
+            directCap = Math.max(bytes, directCap * 2);
+            directScratch = SteinNativeBuffer.grow(directScratch, directCap);
+        }
+        ByteBuffer d = MemoryUtil.memByteBuffer(directScratch, (int) bytes);
+        d.order(ByteOrder.nativeOrder());
+        if (pixels instanceof ByteBuffer bb) {
+            d.put(bb.duplicate()).flip();
+        } else {
+            d.asIntBuffer().put(((IntBuffer) pixels).duplicate());
+        }
+        return d;
     }
 
     /** A byte view of the game's buffer (IntBuffer from TextureUtil, ByteBuffer elsewhere). */

@@ -232,12 +232,31 @@ public final class LightCache {
 
     /**
      * The game's computation: BlockPos(posX, posY + eyes, posZ); loaded ? getCombinedLight(pos, 0)
-     * : 0.
+     * : 0 — with the loaded check on the column ({@link #loaded}).
      */
     private static int compute(World world, double x, double y, double z) {
         BlockPos pos = new BlockPos(x, y, z);
-        return world.isBlockLoaded(pos) ? world.getCombinedLight(pos, 0) : 0;
+        return loaded(world, pos) ? world.getCombinedLight(pos, 0) : 0;
     }
+
+    /**
+     * World.isBlockLoaded for an entity's light, asked of its column (y 0), as from 1.9: 1.8.9
+     * asked of the eye's block, which is never "loaded" above the build limit or below 0, so an
+     * entity up there (a player on top of a tall tower, an arrow flying high, someone falling into
+     * the void) was drawn black. Above the world the light is the open sky's, as later versions
+     * draw it. {@code -Dsteinbridge.opt.vanillaWorldEdgeLight=true} brings back 1.8.9's behaviour.
+     * Also in place of the call in Entity.getBrightness (rule in redirects-mc.tsv).
+     */
+    public static boolean loaded(Object world, Object pos) {
+        World w = (World) world;
+        BlockPos p = (BlockPos) pos;
+        if (VANILLA_EDGE || (p.getY() >= 0 && p.getY() < 256)) {
+            return w.isBlockLoaded(p);
+        }
+        return w.isBlockLoaded(new BlockPos(p.getX(), 0, p.getZ()));
+    }
+
+    private static final boolean VANILLA_EDGE = EngineOptions.VANILLA_WORLD_EDGE_LIGHT;
 
     private static void check(boolean ok) {
         if (REPORT.compared(ok)) {

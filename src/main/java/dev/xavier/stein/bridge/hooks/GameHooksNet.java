@@ -280,6 +280,7 @@ final class GameHooksNet {
      * informed.
      */
     static void setSlot(Object container, int slot, Object stack) {
+        dev.xavier.stein.bridge.engine.ArmorBreak.beforeSetSlot(container, slot, stack);
         ((Container) container).putStackInSlot(slot, (ItemStack) stack);
         if (GameHooks.SINK != null) {
             try {

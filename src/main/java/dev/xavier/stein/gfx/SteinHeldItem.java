@@ -12,6 +12,7 @@ import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.bridge.engine.GLMatrix;
 import dev.xavier.stein.bridge.engine.ItemModelCache;
 import dev.xavier.stein.bridge.engine.Mat4;
+import dev.xavier.stein.bridge.engine.ModelFixes;
 import dev.xavier.stein.bridge.engine.Visuals;
 import dev.xavier.stein.bridge.hooks.GameHooks;
 
@@ -80,8 +81,13 @@ public final class SteinHeldItem {
     /** The right arm is shown (postRender transforms). */
     static final int IF_ARM = 1;
 
-    /** Thin arm: rotationPointX + 1 during postRender. */
+    /** Thin arm: rotationPointX + 0.5 during postRender (+ 1 with {@link #IF_VANILLA_SLIM}). */
     static final int IF_SMALL = 2;
+
+    /**
+     * The thin arm's 1.8.9 shift (+ 1), with -Dsteinbridge.opt.vanillaSlimArm ({@code ModelFixes}).
+     */
+    static final int IF_VANILLA_SLIM = 32;
 
     /**
      * Block ItemBlock with render 2: the offset, the 20 and 45 degree turns and the -0.375 scale.
@@ -248,11 +254,11 @@ public final class SteinHeldItem {
             float[] m, float[] root0, float[] rp, float[] ang, int a, int flags, float[] xform) {
         System.arraycopy(root0, 0, m, 0, 16);
         if ((flags & IF_ARM) != 0) {
-            // ModelPlayer.postRenderArm: ++rotationPointX on the thin arm,
+            // ModelPlayer.postRenderArm (ModelFixes): rotationPointX + 0.5 on the thin arm,
             // ModelRenderer.postRender(0.0625)
             float rx = rp[a];
             if ((flags & IF_SMALL) != 0) {
-                rx = rx + 1.0F;
+                rx = rx + ((flags & IF_VANILLA_SLIM) != 0 ? 1.0F : ModelFixes.SLIM_SHIFT);
             }
             float ry = rp[a + 1];
             float rz = rp[a + 2];

@@ -634,6 +634,37 @@ public final class EngineOptions {
      */
     static final boolean VANILLA_PLAYER_UNLOAD = Opt.flag("steinbridge.opt.vanillaPlayerUnload");
 
+    /**
+     * {@code -Dsteinbridge.opt.vanillaWorldEdgeLight=true}: an entity above the build limit or
+     * below 0 gets no light (drawn black), as in 1.8.9 (default: its column's, as from 1.9).
+     */
+    static final boolean VANILLA_WORLD_EDGE_LIGHT =
+            Opt.flag("steinbridge.opt.vanillaWorldEdgeLight");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaSlimArm=true}: the item in a thin (Alex) arm floats one pixel
+     * out, as in 1.8.9 (MC-72397; default: half a pixel, as from 1.9).
+     */
+    public static final boolean VANILLA_SLIM_ARM = Opt.flag("steinbridge.opt.vanillaSlimArm");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaLook=true}: the local player's look vector follows the head's
+     * yaw, a tick behind the camera, as in 1.8.9 (MC-67665; default: the camera's, as from 1.11).
+     */
+    static final boolean VANILLA_LOOK = Opt.flag("steinbridge.opt.vanillaLook");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaMouseHotbar=true}: hotbar keys bound to mouse buttons do
+     * nothing in inventories, as in 1.8.9 (default: they move the item, like the keyboard's).
+     */
+    static final boolean VANILLA_MOUSE_HOTBAR = Opt.flag("steinbridge.opt.vanillaMouseHotbar");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaPlaceSound=true}: the block placing sound waits for the
+     * server's copy, as in 1.8.9 (default: played at once, as from 1.9).
+     */
+    static final boolean VANILLA_PLACE_SOUND = Opt.flag("steinbridge.opt.vanillaPlaceSound");
+
     /** {@code -Dsteinbridge.opt.noWatchdog=true}: turns the freeze watchdog off (default: on). */
     static final boolean NO_WATCHDOG = Opt.flag("steinbridge.opt.noWatchdog");
 
@@ -648,6 +679,12 @@ public final class EngineOptions {
      * 10).
      */
     static final long WATCHDOG_TICK_SEC = Opt.number("steinbridge.watchdog.tickSec", 10L);
+
+    /**
+     * {@code -Dsteinbridge.watchdog.frameMs=N}: milliseconds without a frame, in a world, before
+     * the watchdog writes the game thread's stack to the log (default: 2000; 0 turns it off).
+     */
+    static final long WATCHDOG_FRAME_MS = Opt.number("steinbridge.watchdog.frameMs", 2000L);
 
     /**
      * {@code -Dsteinbridge.diag.sprintLog=true}: every second, prints the ground speed and whether

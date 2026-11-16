@@ -492,6 +492,16 @@ public final class SteinTessCapture {
         SteinStaticGeometry.clearLists();
     }
 
+    /** Did an item list find no room in the fixed buffer since the items last started over? */
+    public static boolean itemsFull() {
+        return SteinStaticGeometry.itemsFull();
+    }
+
+    /** Between frames: a larger fixed buffer and the items start over (then delete the lists). */
+    public static void restartItems(int models) {
+        SteinStaticGeometry.restartItems(models);
+    }
+
     static SteinBuffer staticGeometry() {
         return SteinStaticGeometry.staticGeometry();
     }

@@ -143,13 +143,19 @@ public abstract class SteinBuffer {
     // and -1 come out at the same points, so the mid-pass flushes stay where they were.
 
     /**
-     * Closed regions in flight at most; with more, the CPU waits for the oldest (the GPU fell
-     * frames behind).
+     * Closed regions in flight at most; with more, the CPU waits for the oldest. The regions close
+     * on every flush, so a crowded frame closes dozens, all with the fence of the frame being
+     * recorded: with 8, the ninth flush submitted the frame halfway and waited for the GPU to go
+     * idle, again every 8 flushes. The buffer's room ({@link Ring#place}) is what limits the GPU
+     * falling behind; this only bounds the bookkeeping.
      */
-    private static final int MAX_IN_FLIGHT = 8;
+    private static final int MAX_IN_FLIGHT = SteinGfxOptions.RING_IN_FLIGHT;
 
-    /** Longest wait for one fence. */
-    private static final long FENCE_WAIT_NANOS = 1_000_000_000L;
+    /**
+     * A wait this long for a region means the GPU is stuck, not slow: the region is let go as a
+     * last resort, and the log says so.
+     */
+    private static final long FENCE_GIVE_UP_NANOS = 20_000_000_000L;
 
     /** Interval between diagnostics reports. */
     private static final long REPORT_INTERVAL_NANOS = 5_000_000_000L;
@@ -279,9 +285,14 @@ public abstract class SteinBuffer {
             SteinFence f = fences[first];
             if (block && !f.done()) {
                 long t0 = System.nanoTime();
-                f.waitFor(FENCE_WAIT_NANOS);
-                waited(name, System.nanoTime() - t0);
-                BenchCounters.ringWait(System.nanoTime() - t0);
+                // Until the GPU is done with it: the region is about to be written again, and
+                // before, after one second it was released anyway — the CPU wrote instances and
+                // indirect commands the GPU was still reading.
+                SteinGpuWait.await(name, FENCE_GIVE_UP_NANOS, f::waitFor);
+                long ns = System.nanoTime() - t0;
+                waited(name, ns);
+                BenchCounters.ringWait(ns);
+                SteinGpuWait.done(name, ns);
             }
             f.destroy();
             fences[first] = null;

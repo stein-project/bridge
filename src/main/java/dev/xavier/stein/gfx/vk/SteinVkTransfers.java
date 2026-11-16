@@ -30,6 +30,7 @@ import static org.lwjgl.vulkan.VK10.vkDestroyBuffer;
 
 import dev.xavier.stein.gfx.SteinBuffer;
 import dev.xavier.stein.gfx.SteinFormat;
+import dev.xavier.stein.gfx.SteinGpuWait;
 import dev.xavier.stein.gfx.SteinTexture;
 
 import org.lwjgl.system.MemoryStack;
@@ -205,9 +206,11 @@ final class SteinVkTransfers {
                         null);
             }
             long value = dev.recordingValue();
-            if (!dev.waitValue(value, Long.MAX_VALUE)) {
+            long t0 = System.nanoTime();
+            if (!SteinGpuWait.await("buffer readback", 0L, ns -> dev.waitValue(value, ns))) {
                 throw new IllegalStateException("vulkan: buffer readback did not finish");
             }
+            SteinGpuWait.done("buffer readback", System.nanoTime() - t0);
             MemoryUtil.memCopy(a[0].mapped, MemoryUtil.memAddress(out), bytes);
         } finally {
             vkDestroyBuffer(dev.vk(), buffer, null);
@@ -281,9 +284,11 @@ final class SteinVkTransfers {
             }
             t.toRest(c);
             long value = dev.recordingValue();
-            if (!dev.waitValue(value, Long.MAX_VALUE)) {
+            long t0 = System.nanoTime();
+            if (!SteinGpuWait.await("pixel readback", 0L, ns -> dev.waitValue(value, ns))) {
                 throw new IllegalStateException("vulkan: pixel readback did not finish");
             }
+            SteinGpuWait.done("pixel readback", System.nanoTime() - t0);
             MemoryUtil.memCopy(
                     a[0].mapped, MemoryUtil.memAddress(out), Math.min(bytes, out.remaining()));
         } finally {

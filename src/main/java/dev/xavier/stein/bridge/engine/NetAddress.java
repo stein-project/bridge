@@ -31,6 +31,12 @@ public final class NetAddress {
     /** In place of InetAddress.getByName(host): the same address, with the typed name kept. */
     public static Object getByName(Object host) throws UnknownHostException {
         String h = (String) host;
+        // A server saved before ServerListFixes trimmed the typed address can still carry the
+        // spaces around it, and "play.example.net " never resolves: trimmed here, unless nothing
+        // but spaces is left (an empty name would mean this machine).
+        if (h != null && !h.trim().isEmpty()) {
+            h = h.trim();
+        }
         if (h == null || h.isEmpty()) {
             return InetAddress.getByName(h);
         }

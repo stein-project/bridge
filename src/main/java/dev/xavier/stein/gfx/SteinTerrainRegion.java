@@ -12,6 +12,8 @@ import static dev.xavier.stein.gfx.SteinTerrain.INITIAL_VERTICES;
 import static dev.xavier.stein.gfx.SteinTerrain.ONE_BUFFER;
 import static dev.xavier.stein.gfx.SteinTerrain.VERTEX;
 
+import dev.xavier.stein.bridge.core.Log;
+
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -64,21 +66,35 @@ final class SteinTerrainRegion {
                                 SteinBuffer.Usage.VERTEX));
     }
 
+    /**
+     * Best fit: the smallest free range that holds {@code count} (an exact one ends the search).
+     * First fit split the large ranges at the start over and over: in a long session of blocks
+     * placed and broken (an arena), the free space became slivers no slice fit in, and the buffer
+     * grew by 128 MB each time while most of it stood empty.
+     */
     int alloc(int count) {
+        int bestFirst = -1;
+        int bestSize = Integer.MAX_VALUE;
         for (Map.Entry<Integer, Integer> e : free.entrySet()) {
             int size = e.getValue();
-            if (size >= count) {
-                int first = e.getKey(); // before the remove (the TreeMap reuses the node)
-                free.remove(first);
-                if (size > count) {
-                    free.put(first + count, size - count);
+            if (size >= count && size < bestSize) {
+                bestFirst = e.getKey();
+                bestSize = size;
+                if (size == count) {
+                    break;
                 }
-                used += count;
-                return first;
             }
         }
-        grow(count);
-        return alloc(count);
+        if (bestFirst < 0) {
+            grow(count);
+            return alloc(count);
+        }
+        free.remove(bestFirst);
+        if (bestSize > count) {
+            free.put(bestFirst + count, bestSize - count);
+        }
+        used += count;
+        return bestFirst;
     }
 
     /** Larger buffer, with the geometry copied on the GPU. */
@@ -92,6 +108,19 @@ final class SteinTerrainRegion {
         old.destroy();
         capacity = vertices;
         addFree(oldCapacity, vertices - oldCapacity);
+        // Each growth is a new GPU allocation of the whole buffer: with the use beside it, the log
+        // shows whether the terrain needs the room or the room went to fragments.
+        Log.info(
+                "gfx",
+                "terrain buffer grew to "
+                        + ((long) capacity * VERTEX >> 20)
+                        + " MB (in use "
+                        + ((long) used * VERTEX >> 20)
+                        + " MB, "
+                        + free.size()
+                        + " free range(s), asked for "
+                        + ((long) needed * VERTEX >> 10)
+                        + " KB)");
     }
 
     void release(int first, int count) {

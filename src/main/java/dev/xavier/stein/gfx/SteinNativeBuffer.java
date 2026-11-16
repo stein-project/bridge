@@ -16,14 +16,14 @@ import org.lwjgl.system.MemoryUtil;
  *
  * <p>Pipeline: Stein GFX only.
  */
-final class SteinNativeBuffer {
+public final class SteinNativeBuffer {
     private SteinNativeBuffer() {}
 
     /**
      * Returns a native block of {@code capacity} bytes: a new one when {@code address} is 0,
      * otherwise {@code address} reallocated (contents kept up to the old size).
      */
-    static long grow(long address, long capacity) {
+    public static long grow(long address, long capacity) {
         return address == 0L
                 ? MemoryUtil.nmemAlloc(capacity)
                 : MemoryUtil.nmemRealloc(address, capacity);

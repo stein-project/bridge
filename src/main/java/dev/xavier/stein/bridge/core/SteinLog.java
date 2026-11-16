@@ -14,18 +14,14 @@ import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.time.Instant;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.zip.GZIPOutputStream;
 
 /**
  * Stein's log: logs of our own, in {@code logs/stein/}, separate from the game's latest.log.
@@ -36,10 +32,9 @@ import java.util.zip.GZIPOutputStream;
  * opened.
  *
  * <p>One file per subject, so whoever is chasing one problem does not read through the others:
- * {@code network.log}, {@code performance.log}, {@code render.log}, plus {@code stein.log} with the
- * general notes ({@link #note}) of the session. One session per file, as the game does: a subject's
- * previous file goes to {@code archive/<year-month-day>-<n>-<subject>.log.gz} when the subject is
- * turned on again.
+ * {@code network.log}, {@code performance.log}, {@code render.log}, beside the session's {@code
+ * latest.log} ({@link SessionLog}), which has everything else, the general notes ({@link #note})
+ * included. On the next start, all of them go together into {@code <year-month-day>-<n>.zip}.
  *
  * <p>None of this may weigh on the game. Callers only enqueue the finished line; a background
  * thread writes and flushes the buffers. The queue is bounded: when full, the line is dropped and
@@ -67,8 +62,6 @@ public final class SteinLog {
             new ArrayBlockingQueue<>(QUEUE_CAPACITY);
     private static final String STOP = new String("stop"); // sentinel, by identity
     private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss.SSS");
-    private static final DateTimeFormatter DAY =
-            DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(ZoneId.systemDefault());
     private static final DateTimeFormatter DATE_TIME =
             DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").withZone(ZoneId.systemDefault());
 
@@ -115,9 +108,12 @@ public final class SteinLog {
         return (topics & (1 << topic.ordinal())) != 0;
     }
 
-    /** This session's general file, or null with the log off. */
+    /**
+     * This session's file ({@link SessionLog}: always on, everything the game prints); null if it
+     * could not be opened.
+     */
     public static File file() {
-        return on ? new File(dir(), GENERAL_NAME + ".log") : null;
+        return SessionLog.file();
     }
 
     /** The subject's file in this session, or null with the subject off. */
@@ -127,6 +123,10 @@ public final class SteinLog {
 
     /** The log folder, whether or not it exists. */
     public static File dir() {
+        File d = SessionLog.dir();
+        if (d != null) {
+            return d;
+        }
         return new File(gameDir(), "logs/stein");
     }
 
@@ -188,15 +188,12 @@ public final class SteinLog {
     }
 
     /**
-     * A line that matters even without the log on: it goes to the game log and, with the log on, to
-     * the general file too. For the little the player needs to send along with a report — a freeze,
-     * an error.
+     * A line that matters even without the log on: it goes to the game's output, which the session
+     * log ({@code logs/stein/latest.log}) always keeps. For the little the player needs to send
+     * along with a report — a freeze, an error.
      */
     public static void note(String tag, String msg) {
         Log.info(tag, msg);
-        if (on) {
-            put(GENERAL, tag, msg);
-        }
     }
 
     private static void put(int channel, String tag, String msg) {
@@ -233,12 +230,6 @@ public final class SteinLog {
         }
         File dir = dir();
         dir.mkdirs();
-        // Before the files were split, everything went to a single latest.log: it is archived like
-        // any previous session.
-        File old = new File(dir, "latest.log");
-        if (old.isFile()) {
-            archive(dir, old, "all");
-        }
         LINES.clear();
         written = 0;
         dropped.set(0);
@@ -267,40 +258,6 @@ public final class SteinLog {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
-        }
-    }
-
-    /**
-     * A subject's previous session becomes {@code archive/<date>-<n>-<name>.log.gz}, as the game
-     * archives its own.
-     */
-    private static void archive(File dir, File latest, String name) {
-        File archive = new File(dir, "archive");
-        archive.mkdirs();
-        String day = DAY.format(Instant.ofEpochMilli(latest.lastModified()));
-        for (int n = 1; n < 1000; n++) {
-            File gz = new File(archive, day + "-" + n + "-" + name + ".log.gz");
-            if (gz.exists()) {
-                continue;
-            }
-            try (InputStream in = Files.newInputStream(latest.toPath());
-                    OutputStream out = new GZIPOutputStream(new FileOutputStream(gz))) {
-                in.transferTo(out);
-            } catch (IOException e) {
-                Log.warn("log", "could not archive the previous log: " + e);
-                return;
-            }
-            if (!latest.delete()) {
-                // It happens with the file still open by another game in the same folder; the copy
-                // is already in the .gz and the new file starts from scratch (the writer opens
-                // without append), so two sessions do not end up together.
-                Log.warn(
-                        "log",
-                        "the previous log is already in "
-                                + gz.getName()
-                                + ", but it could not be deleted");
-            }
-            return;
         }
     }
 
@@ -368,18 +325,20 @@ public final class SteinLog {
         }
     }
 
-    /** Opens a channel's file for a new session, archiving its previous one. */
+    /**
+     * Opens a channel's file. The previous session's files were already archived when this one
+     * started ({@link SessionLog}), so a file that exists is this session's: turning a subject off
+     * and on again continues it.
+     */
     private static BufferedWriter openChannel(int channel) throws IOException {
         String name = channel == GENERAL ? GENERAL_NAME : Topic.values()[channel - 1].fileName;
         File dir = dir();
         dir.mkdirs();
         File f = new File(dir, name + ".log");
-        if (f.isFile()) {
-            archive(dir, f, name);
-        }
         BufferedWriter w =
                 new BufferedWriter(
-                        new OutputStreamWriter(new FileOutputStream(f), StandardCharsets.UTF_8),
+                        new OutputStreamWriter(
+                                new FileOutputStream(f, true), StandardCharsets.UTF_8),
                         1 << 16);
         head(w, name);
         return w;

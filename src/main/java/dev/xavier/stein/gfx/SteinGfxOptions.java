@@ -109,6 +109,21 @@ public final class SteinGfxOptions {
     public static final boolean PASS_TIMING = Opt.flag("steinbridge.gfx.passTiming");
 
     /**
+     * {@code -Dsteinbridge.gfx.ringInFlight=N}: closed regions a ring buffer keeps in flight before
+     * the CPU waits for the oldest (default 64; 8 before Bridge 0.1.30).
+     */
+    /**
+     * {@code -Dsteinbridge.gfx.itemGeometryMb=N}: the starting size of the item models' fixed
+     * geometry on the GPU; when it fills up, it doubles up to 256 MB and the items are recorded
+     * again (default: 32; a small value tests that path).
+     */
+    public static final long ITEM_GEOMETRY_BYTES =
+            Math.max(1L, Opt.number("steinbridge.gfx.itemGeometryMb", 32L)) << 20;
+
+    public static final int RING_IN_FLIGHT =
+            (int) Math.max(2L, Math.min(1024L, Opt.number("steinbridge.gfx.ringInFlight", 64L)));
+
+    /**
      * {@code -Dsteinbridge.gfx.chunkFade=...}: turns the chunk fade-in animation on or off
      * (default: on).
      */

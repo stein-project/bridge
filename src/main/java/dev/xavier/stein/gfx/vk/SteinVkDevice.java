@@ -71,6 +71,7 @@ import org.lwjgl.system.MemoryStack;
 import org.lwjgl.system.MemoryUtil;
 import org.lwjgl.vulkan.EXTDepthClipControl;
 import org.lwjgl.vulkan.EXTHdrMetadata;
+import org.lwjgl.vulkan.EXTMemoryBudget;
 import org.lwjgl.vulkan.KHRDynamicRendering;
 import org.lwjgl.vulkan.KHRPortabilitySubset;
 import org.lwjgl.vulkan.KHRPushDescriptor;
@@ -188,6 +189,9 @@ public final class SteinVkDevice extends SteinDevice {
     /** VK_EXT_hdr_metadata: the HDR swapchain tells the system the calibration's light levels. */
     final boolean hdrMetadata;
 
+    /** VK_EXT_memory_budget: the video memory in use goes to the log ({@link SteinVkBudget}). */
+    final boolean memoryBudget;
+
     /** Logical operations on the colour (SteinPipeline.LogicOp): an optional feature. */
     final boolean logicOp;
 
@@ -301,6 +305,9 @@ public final class SteinVkDevice extends SteinDevice {
             hdrMetadata =
                     surface != VK_NULL_HANDLE
                             && devExt.contains(EXTHdrMetadata.VK_EXT_HDR_METADATA_EXTENSION_NAME);
+            memoryBudget =
+                    VK_API_VERSION_MINOR(deviceVersion) >= 1
+                            && devExt.contains(EXTMemoryBudget.VK_EXT_MEMORY_BUDGET_EXTENSION_NAME);
 
             // ---- resources the GPU has ----
             VkPhysicalDeviceDepthClipControlFeaturesEXT clipQ =
@@ -381,6 +388,9 @@ public final class SteinVkDevice extends SteinDevice {
             }
             if (hdrMetadata) {
                 dext.put(stack.UTF8(EXTHdrMetadata.VK_EXT_HDR_METADATA_EXTENSION_NAME));
+            }
+            if (memoryBudget) {
+                dext.put(stack.UTF8(EXTMemoryBudget.VK_EXT_MEMORY_BUDGET_EXTENSION_NAME));
             }
             if (devExt.contains(KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME)) {
                 dext.put(stack.UTF8(KHRPortabilitySubset.VK_KHR_PORTABILITY_SUBSET_EXTENSION_NAME));

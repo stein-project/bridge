@@ -43,7 +43,15 @@ public final class Sys {
         return "2.9.4";
     }
 
+    /**
+     * Opens the link in the system's browser. LWJGL 2 tried xdg-open on Linux, where Desktop alone
+     * fails without GTK (KDE, Wayland): {@link dev.xavier.stein.bridge.core.DesktopOpen} does the
+     * same, off the game thread.
+     */
     public static boolean openURL(String url) {
+        if (!dev.xavier.stein.bridge.engine.GuiFixOptions.VANILLA_OPEN_FOLDER) {
+            return dev.xavier.stein.bridge.core.DesktopOpen.open(url);
+        }
         try {
             if (Desktop.isDesktopSupported()) {
                 Desktop desktop = Desktop.getDesktop();

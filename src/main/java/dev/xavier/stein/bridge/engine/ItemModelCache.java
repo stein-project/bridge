@@ -82,8 +82,13 @@ public final class ItemModelCache {
 
     private static final boolean VANILLA_TINT = EngineOptions.VANILLA_ITEM_TINT;
 
-    /** Above this, new models follow the original path. */
+    /** Above this, new models follow the original path until the lists start over. */
     private static final int MAX_LISTS = 4096;
+
+    /** Shortest time between two start overs, so that a working set too big does not thrash. */
+    private static final long RESTART_INTERVAL_NANOS = 5_000_000_000L;
+
+    private static long restartedAt;
 
     private static final class Entry {
         /** Distinct tint indices of the model's quads; empty = no tint. */
@@ -381,6 +386,27 @@ public final class ItemModelCache {
                             + " | models "
                             + CACHE.size());
         }
+    }
+
+    /**
+     * Once per frame, after the swap: when the fixed geometry ran out of room or the list count
+     * reached its limit, every list starts over. Before, both were permanent until a resource
+     * reload: new items went undrawn on Stein GFX (or down the slow path) for the rest of the
+     * session — the more item variants seen (dyed armour, potions, a texture pack's detail), the
+     * sooner.
+     */
+    public static void frame() {
+        if (listCount < MAX_LISTS && !SteinTessCapture.itemsFull()) {
+            return;
+        }
+        long now = System.nanoTime();
+        if (restartedAt != 0L && now - restartedAt < RESTART_INTERVAL_NANOS) {
+            return;
+        }
+        restartedAt = now;
+        int models = CACHE.size();
+        SteinTessCapture.restartItems(models);
+        clear();
     }
 
     /** After every resource reload: the models are recreated, the old lists are no use. */

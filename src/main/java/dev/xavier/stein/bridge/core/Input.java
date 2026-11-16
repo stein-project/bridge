@@ -213,6 +213,9 @@ public final class Input {
             pendingChar = SWALLOW;
             return;
         }
+        // The key the label names under the player's layout (KeyLayout), as LWJGL 2 gave it: the
+        // code, the held state and Ctrl+letter's control character all follow it.
+        k = KeyLayout.labelKey(k, scancode, action);
         int lwjglKey = Keys.toLwjgl(k);
         boolean down = action != GLFW_RELEASE;
         if (lwjglKey > 0 && lwjglKey < Win.keysDown.length) {

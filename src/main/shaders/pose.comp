@@ -453,7 +453,7 @@ void main() {
         if ((fl & 1u) != 0u) {
             precise float hx = rp[RARM].x;
             if ((fl & 2u) != 0u) {
-                hx = hx + 1.0;   // slim arm: ++rotationPointX during postRender
+                hx = hx + ((fl & 32u) != 0u ? 1.0 : 0.5);   // slim arm: + 0.5 during postRender (1.8.9: + 1)
             }
             precise float hy = rp[RARM].y;
             precise float hz = rp[RARM].z;
@@ -579,6 +579,13 @@ void main() {
 
     // ---- the instance and the command ----
     uint io = instance * 8u;
+    // A command block the CPU could not place (its base is the -1 sentinel) or an index past what is bound: nothing is
+    // written. Without this, a slip on the CPU side became a write anywhere in the ring — a lost device on AMD, silent
+    // corruption on NVIDIA (robust buffer access is off).
+    if (d[d[H_BLOCKS] + d[so + 1u]] == 0xFFFFFFFFu || command >= uint(cmd.length())
+            || io + 8u > uint(inst.length())) {
+        return;
+    }
     inst[io] = r0;
     inst[io + 1u] = r1;
     inst[io + 2u] = r2;

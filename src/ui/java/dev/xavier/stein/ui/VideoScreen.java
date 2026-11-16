@@ -46,6 +46,11 @@ public final class VideoScreen extends GuiScreen {
     /** H (the game's key code; the input shim has no constant for it). */
     private static final int KEY_H = 35;
 
+    /** The arrow keys (LWJGL 2 codes). */
+    private static final int KEY_LEFT = 203;
+
+    private static final int KEY_RIGHT = 205;
+
     private static final long VEIL_MS = 600L;
 
     /** The topic shown, kept between openings. */
@@ -70,6 +75,22 @@ public final class VideoScreen extends GuiScreen {
     private int dragX;
 
     private int dragW = 1;
+
+    /**
+     * Fine drag (Shift held): the track moves {@link #FINE} times slower than the mouse, from where
+     * Shift was pressed. A narrow track has far fewer pixels than some sliders have values (the
+     * frame limit has 600), so a plain drag skipped dozens of values per pixel.
+     */
+    private boolean fine;
+
+    private int fineMouse;
+    private double fineAt;
+
+    private static final double FINE = 10.0;
+
+    /** Fraction step the arrow keys probe with, until the value shown changes. */
+    private static final double PROBE = 0.00025;
+
     private boolean landscape;
 
     /** When the landscape came in (the fade from black). */
@@ -208,7 +229,7 @@ public final class VideoScreen extends GuiScreen {
         hide = Ui.towards(hide, hidden || calibrating >= 0 ? 1.0F : 0.0F, 9.0F, delta);
         calibrate = Ui.towards(calibrate, calibrating >= 0 ? 1.0F : 0.0F, 9.0F, delta);
         if (dragging != null && Mouse.isButtonDown(0)) {
-            dragAt = fraction(mouseX);
+            dragAt = dragFraction(mouseX);
             live(dragging, dragAt);
         }
         if (now - fpsAt >= 500L) {
@@ -357,8 +378,63 @@ public final class VideoScreen extends GuiScreen {
         dragging = e;
         dragX = x;
         dragW = Math.max(1, w);
-        dragAt = fraction(mouseX);
+        fine = false;
+        dragAt = dragFraction(mouseX);
         live(e, dragAt);
+    }
+
+    /** Where the drag is: under the mouse, or, with Shift held, slowed down from where it began. */
+    private double dragFraction(int mouseX) {
+        boolean shift = GuiScreen.isShiftKeyDown();
+        if (shift != fine) {
+            fine = shift;
+            fineMouse = mouseX;
+            fineAt = dragAt;
+        }
+        if (!fine) {
+            return fraction(mouseX);
+        }
+        return Math.max(0, Math.min(1, fineAt + (mouseX - fineMouse) / (dragW * FINE)));
+    }
+
+    /**
+     * The arrow keys over a slider: one value to the left or right — the next fraction whose value
+     * text differs, so it works for every slider without knowing its steps (5 fps for the frame
+     * limit, one chunk for the render distance).
+     */
+    private void step(VideoSettings.Entry e, int dir, boolean sound) {
+        if (e == null || e.kind != VideoSettings.Kind.SLIDER || !e.enabled.getAsBoolean()) {
+            return;
+        }
+        double start = e.fraction.getAsDouble();
+        String now = textAt(e, start);
+        double g = start;
+        for (int k = 0; k < (int) (1 / PROBE) + 1; k++) {
+            g = Math.max(0, Math.min(1, g + dir * PROBE));
+            if (!textAt(e, g).equals(now) || g == 0 || g == 1) {
+                break;
+            }
+        }
+        if (!e.onRelease) {
+            e.setFraction.accept(start); // the probes applied it: back, then the one change
+        }
+        double to = g;
+        apply(() -> e.setFraction.accept(to));
+        if (sound) {
+            click();
+        }
+    }
+
+    /** The value a slider shows at a fraction (a live slider is set there to read it). */
+    private static String textAt(VideoSettings.Entry e, double f) {
+        if (e.preview != null) {
+            return e.preview.apply(f);
+        }
+        if (e.onRelease) {
+            return String.valueOf(Math.round(f * 1000)); // no preview: steps of a thousandth
+        }
+        e.setFraction.accept(f);
+        return e.value.get();
     }
 
     /**
@@ -422,7 +498,13 @@ public final class VideoScreen extends GuiScreen {
         super.handleMouseInput();
         int wheel = Mouse.getEventDWheel();
         if (wheel != 0 && !hidden) {
-            layout.scroll(wheel > 0 ? -1 : 1);
+            // over a slider, the wheel moves it one value (up raises it); elsewhere it scrolls
+            VideoLayout.Hit hit = layout.hit(Ui.mouseX(this), Ui.mouseY(this));
+            if (hit != null && hit.entry != null && hit.entry.kind == VideoSettings.Kind.SLIDER) {
+                step(hit.entry, wheel > 0 ? 1 : -1, false);
+            } else {
+                layout.scroll(wheel > 0 ? -1 : 1);
+            }
         }
     }
 
@@ -444,6 +526,14 @@ public final class VideoScreen extends GuiScreen {
         }
         if (key == KEY_H && calibrating < 0) {
             hidden = !hidden;
+        }
+        if ((key == KEY_LEFT || key == KEY_RIGHT) && !hidden) {
+            int x = Mouse.getX() * width / mc.displayWidth;
+            int y = height - Mouse.getY() * height / mc.displayHeight - 1;
+            VideoLayout.Hit hit = layout.hit(x, y);
+            if (hit != null && hit.entry != null) {
+                step(hit.entry, key == KEY_LEFT ? -1 : 1, true);
+            }
         }
     }
 

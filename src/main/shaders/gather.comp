@@ -26,5 +26,10 @@ void main() {
     if (i >= remap[0] * 8u) {
         return;
     }
-    dst[i] = src[remap[1u + (i >> 3)] * 8u + (i & 7u)];
+    uint from = remap[1u + (i >> 3)] * 8u + (i & 7u);
+    // Out of what is bound, nothing is copied (robust buffer access is off: a bad index would read or write anywhere).
+    if (i >= uint(dst.length()) || from >= uint(src.length())) {
+        return;
+    }
+    dst[i] = src[from];
 }

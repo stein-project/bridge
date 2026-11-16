@@ -111,7 +111,9 @@ final class SteinGlFence extends SteinFence {
             return true;
         }
         int r = GL32.glClientWaitSync(s.sync, GL32.GL_SYNC_FLUSH_COMMANDS_BIT, nanos);
-        s.passed = r == GL32.GL_ALREADY_SIGNALED || r == GL32.GL_CONDITION_SATISFIED;
+        // GL_WAIT_FAILED (the sync is no longer valid) counts as passed: there is nothing left to
+        // wait for, and the waits around fences now loop until the fence passes.
+        s.passed = r != GL32.GL_TIMEOUT_EXPIRED;
         return s.passed;
     }
 

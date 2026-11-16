@@ -45,6 +45,7 @@ listed at the end.
 - `-Dsteinbridge.gfx.vkGlSink=false` (diagnostics): with Vulkan, no hidden OpenGL context absorbs the OpenGL calls of mods that call it directly — such a call then aborts the game, which is how to find one (default: the context exists).
 - `-Dsteinbridge.opt.noVsyncLatencyFix=true`: goes back to the usual VSync instead of adaptive VSync with a GPU fence per frame (default: off, the latency fix is on).
 - `-Dsteinbridge.diag.background=true`: test bench only; the window appears minimized and without focus (default: off).
+- `-Dsteinbridge.diag.offscreen=true`: test bench only; with the background mode, the window goes off the screen instead of minimized, so a Vulkan run builds its swapchain and presents every frame like a player's game does (minimized, it only submits) (default: off).
 - `-Dsteinbridge.gfx.glDebug=true`: asks GLFW for an OpenGL debug context (default: off).
 - `-Dsteinbridge.perf.timeSwap=true`: times the buffer swap and the event queue and prints the worst case and average per second (default: off).
 - `-Dsteinbridge.perf.frameStats=true`: every 5 seconds, prints the frame count, the average, p50 and p99 frame times and the 1% low (the average FPS of the slowest 1% of frames), plus the average of the frames that ran a game tick and of the others, and how many of the slowest frames had a tick, to compare the graphics APIs on the bench (default: off).
@@ -213,10 +214,49 @@ listed at the end.
 - `-Dsteinbridge.opt.vanillaRegionArrays=true`: every chunk build's RegionRenderCache allocates its light and block-state arrays, as the game does (default: each build thread reuses its pair; see `RegionArrays`).
 - `-Dsteinbridge.opt.vanillaClearUpdates=true`: setupTerrain's clearChunkUpdates takes the waiting build tasks out one lock at a time, as the game does (default: all at once; see `ChunkQueue`).
 - `-Dsteinbridge.opt.vanillaPlayerUnload=true`: a chunk unloaded on the integrated server also unloads a player still standing in it, as 1.8.9 does after a long teleport, leaving that player frozen until a dimension change (default: the player stays; see `PlayerUnload`).
+- `-Dsteinbridge.opt.vanillaWorldEdgeLight=true`: an entity above the build limit or below 0 gets no light (drawn black), as in 1.8.9 (default: its column's, as from 1.9).
+- `-Dsteinbridge.opt.vanillaSlimArm=true`: the item in a thin (Alex) arm floats one pixel out, as in 1.8.9 (MC-72397; default: half a pixel, as from 1.9).
+- `-Dsteinbridge.opt.vanillaLook=true`: the local player's look vector follows the head's yaw, a tick behind the camera, as in 1.8.9 (MC-67665; default: the camera's, as from 1.11).
+- `-Dsteinbridge.opt.vanillaMouseHotbar=true`: hotbar keys bound to mouse buttons do nothing in inventories, as in 1.8.9 (default: they move the item, like the keyboard's).
+- `-Dsteinbridge.opt.vanillaPlaceSound=true`: the block placing sound waits for the server's copy, as in 1.8.9 (default: played at once, as from 1.9).
 - `-Dsteinbridge.opt.noWatchdog=true`: turns the freeze watchdog off (default: on).
 - `-Dsteinbridge.watchdog.silenceSec=N`: seconds of silence before the watchdog reports a freeze (default: 20).
 - `-Dsteinbridge.watchdog.tickSec=N`: seconds between the watchdog's checks (default: 10).
+- `-Dsteinbridge.watchdog.frameMs=N`: milliseconds without a frame, in a world, before the watchdog writes the game thread's stack to the log (default: 2000; 0 turns it off).
 - `-Dsteinbridge.diag.sprintLog=true`: every second, prints the ground speed and whether it is sprinting (default: off).
+
+## GuiFixOptions
+
+`dev.xavier.stein.bridge.engine.GuiFixOptions`
+
+- `-Dsteinbridge.opt.vanillaPhysicalKeys=true`: letter and symbol keys take the code of their position on a US keyboard, whatever the layout (default: the code of the key's label, as LWJGL 2 did on Windows and Linux).
+- `-Dsteinbridge.opt.vanillaOpenFolder=true`: links and the resource pack folder open only through Java's Desktop, the pack folder on the game thread (default: xdg-open first on Linux, off the game thread).
+- `-Dsteinbridge.opt.vanillaPackFiles=true`: resource packs taken off the selected list keep their zip open (default: closed, so the file can be moved or deleted).
+- `-Dsteinbridge.opt.vanillaOptionsSave=true`: options screens save only on their Done button, and the chat keeps its old line breaks after a language change (default: saved whenever an options screen closes, chat re-wrapped).
+- `-Dsteinbridge.opt.vanillaKeyResync=true`: keys held while a screen closes are only seen once pressed again (default: re-read on closing, as from 1.12).
+- `-Dsteinbridge.opt.vanillaArmorBreakSound=true`: in multiplayer the player does not hear or see their own armor break (default: they do, as from 1.15).
+- `-Dsteinbridge.opt.vanillaPauseSounds=true`: resuming from the pause menu plays again the sounds that had already ended (default: only the ones the pause stopped, as from 1.14).
+- `-Dsteinbridge.opt.vanillaSoundWarnings=true`: an unknown sound writes its warning to the log every time it plays (default: once per sound).
+- `-Dsteinbridge.opt.vanillaGameOverButtons=true`: the death screen's buttons stay off for good when the window is resized during its first second (default: they come back).
+- `-Dsteinbridge.opt.vanillaPotionLevels=true`: effects above level IV show no level in the inventory and a raw key in the potion tooltip (default: the level, as from 1.13).
+- `-Dsteinbridge.opt.vanillaChatClick=true`: a click just above the open chat's lines can hit a hidden line's link (default: only the visible lines).
+- `-Dsteinbridge.opt.vanillaScreenInput=true`: keys pressed in the same tick as a click that changed the screen go to the old screen (default: to the new one, as from 1.13).
+- `-Dsteinbridge.opt.vanillaCharKeys=true`: a character typed without a key (IME) also counts as the key with its number, so '&lt;' takes a screenshot (default: it does not, as from 1.13).
+- `-Dsteinbridge.opt.vanillaMipmapSlider=true`: the vanilla video screen's mipmap slider reloads every texture at each step of the drag (default: once, on release, as from 1.14).
+- `-Dsteinbridge.opt.vanillaSpectatorPumpkin=true`: a spectator wearing a pumpkin sees its overlay (default: not drawn in spectator mode).
+
+## RenderFixOptions
+
+`dev.xavier.stein.bridge.engine.RenderFixOptions`
+
+- `-Dsteinbridge.opt.vanillaTerrainSeeds=true`: with the camera above the build limit or below 0, the chunk search starts only from the edge layer's chunks whose own box is in view, so the world and its entities vanish when looking level (default: whole columns).
+- `-Dsteinbridge.opt.vanillaBannerSway=true`: the banner sway is computed from the full world time in float, so it stutters and then stops on old worlds (default: the phase, which is the same picture).
+- `-Dsteinbridge.opt.vanillaInvalidTiles=true`: a tile entity already removed from the world keeps being drawn until its chunk is rebuilt (default: not drawn).
+- `-Dsteinbridge.opt.vanillaTagPitch=true`: in the front view (F5 twice) name tags and other camera-facing sprites tilt the wrong way (default: they face the camera).
+- `-Dsteinbridge.opt.vanillaBeaconBeam=true`: the beacon beam is drawn twice while its chunk is in view, brighter than intended (default: once).
+- `-Dsteinbridge.opt.vanillaSkullBlend=true`: heads are drawn without blending, so semi-transparent pixels of a skin's hat come out opaque (default: blended).
+- `-Dsteinbridge.opt.vanillaProjectileAlpha=true`: arrows, the fishing bobber and the fire on burning entities take whatever alpha test the previous draw left, and can come out with black or opaque backgrounds (default: alpha test on while they are drawn).
+- `-Dsteinbridge.opt.vanillaFogLight=true`: the fog colour takes the light of the block at the feet, so it darkens when that block is dark (default: the light at the eyes).
 
 ## HookOptions
 
@@ -235,6 +275,8 @@ listed at the end.
 - `-Dsteinbridge.gfx.recordFrameCheck=true` (diagnostics): on one frame in 300, each command is described at recording and again at replay, compared one by one, and the resources it uses are checked in the driver at replay time (buffer, texture, sampler and framebuffer still exist).
 - `-Dsteinbridge.gfx.frameSubmitStats=true` (diagnostics): submissions to the driver per frame and the reason (and the caller) of each submission outside the end of the frame, every 5 s.
 - `-Dsteinbridge.gfx.passTiming=true`: (diagnostics) measures the CPU time to open and close each pass and prints it periodically (default: off).
+- `-Dsteinbridge.gfx.ringInFlight=N`: closed regions a ring buffer keeps in flight before the CPU waits for the oldest (default 64; 8 before Bridge 0.1.30).
+- `-Dsteinbridge.gfx.itemGeometryMb=N`: the starting size of the item models' fixed geometry on the GPU; when it fills up, it doubles up to 256 MB and the items are recorded again (default: 32; a small value tests that path).
 - `-Dsteinbridge.gfx.chunkFade=...`: turns the chunk fade-in animation on or off (default: on).
 - `-Dsteinbridge.gfx.chunkFadeMs=...`: duration of the chunk fade-in in milliseconds (default 700).
 - `-Dsteinbridge.gfx.deferredDynamic=false`: only model parts in the deferred entities, no dynamic geometry (Tessellator, font, items); only the exact value `false` turns it off (default: on).

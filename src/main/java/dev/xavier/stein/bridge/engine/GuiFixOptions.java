@@ -1,0 +1,119 @@
+/*
+ * This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this
+ * file, You can obtain one at https://mozilla.org/MPL/2.0/.
+ *
+ * Copyright (c) 2026 Breno Xavier
+ */
+
+package dev.xavier.stein.bridge.engine;
+
+import dev.xavier.stein.bridge.core.Opt;
+
+/**
+ * The {@code -D} options of the screen, sound and input fixes: each one brings back the 1.8.9 (or,
+ * for the keyboard and the links, the LWJGL 2 shim's) behaviour of one fix, for A/B and for a
+ * player who wants it.
+ */
+public final class GuiFixOptions {
+
+    private GuiFixOptions() {}
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaPhysicalKeys=true}: letter and symbol keys take the code of
+     * their position on a US keyboard, whatever the layout (default: the code of the key's label,
+     * as LWJGL 2 did on Windows and Linux).
+     */
+    public static final boolean VANILLA_PHYSICAL_KEYS =
+            Opt.flag("steinbridge.opt.vanillaPhysicalKeys");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaOpenFolder=true}: links and the resource pack folder open
+     * only through Java's Desktop, the pack folder on the game thread (default: xdg-open first on
+     * Linux, off the game thread).
+     */
+    public static final boolean VANILLA_OPEN_FOLDER = Opt.flag("steinbridge.opt.vanillaOpenFolder");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaPackFiles=true}: resource packs taken off the selected list
+     * keep their zip open (default: closed, so the file can be moved or deleted).
+     */
+    static final boolean VANILLA_PACK_FILES = Opt.flag("steinbridge.opt.vanillaPackFiles");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaOptionsSave=true}: options screens save only on their Done
+     * button, and the chat keeps its old line breaks after a language change (default: saved
+     * whenever an options screen closes, chat re-wrapped).
+     */
+    static final boolean VANILLA_OPTIONS_SAVE = Opt.flag("steinbridge.opt.vanillaOptionsSave");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaKeyResync=true}: keys held while a screen closes are only
+     * seen once pressed again (default: re-read on closing, as from 1.12).
+     */
+    static final boolean VANILLA_KEY_RESYNC = Opt.flag("steinbridge.opt.vanillaKeyResync");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaArmorBreakSound=true}: in multiplayer the player does not
+     * hear or see their own armor break (default: they do, as from 1.15).
+     */
+    static final boolean VANILLA_ARMOR_BREAK_SOUND =
+            Opt.flag("steinbridge.opt.vanillaArmorBreakSound");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaPauseSounds=true}: resuming from the pause menu plays again
+     * the sounds that had already ended (default: only the ones the pause stopped, as from 1.14).
+     */
+    static final boolean VANILLA_PAUSE_SOUNDS = Opt.flag("steinbridge.opt.vanillaPauseSounds");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaSoundWarnings=true}: an unknown sound writes its warning to
+     * the log every time it plays (default: once per sound).
+     */
+    static final boolean VANILLA_SOUND_WARNINGS = Opt.flag("steinbridge.opt.vanillaSoundWarnings");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaGameOverButtons=true}: the death screen's buttons stay off
+     * for good when the window is resized during its first second (default: they come back).
+     */
+    static final boolean VANILLA_GAME_OVER_BUTTONS =
+            Opt.flag("steinbridge.opt.vanillaGameOverButtons");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaPotionLevels=true}: effects above level IV show no level in
+     * the inventory and a raw key in the potion tooltip (default: the level, as from 1.13).
+     */
+    static final boolean VANILLA_POTION_LEVELS = Opt.flag("steinbridge.opt.vanillaPotionLevels");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaChatClick=true}: a click just above the open chat's lines can
+     * hit a hidden line's link (default: only the visible lines).
+     */
+    static final boolean VANILLA_CHAT_CLICK = Opt.flag("steinbridge.opt.vanillaChatClick");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaScreenInput=true}: keys pressed in the same tick as a click
+     * that changed the screen go to the old screen (default: to the new one, as from 1.13).
+     */
+    static final boolean VANILLA_SCREEN_INPUT = Opt.flag("steinbridge.opt.vanillaScreenInput");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaCharKeys=true}: a character typed without a key (IME) also
+     * counts as the key with its number, so '&lt;' takes a screenshot (default: it does not, as
+     * from 1.13).
+     */
+    static final boolean VANILLA_CHAR_KEYS = Opt.flag("steinbridge.opt.vanillaCharKeys");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaMipmapSlider=true}: the vanilla video screen's mipmap slider
+     * reloads every texture at each step of the drag (default: once, on release, as from 1.14).
+     */
+    static final boolean VANILLA_MIPMAP_SLIDER = Opt.flag("steinbridge.opt.vanillaMipmapSlider");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaSpectatorPumpkin=true}: a spectator wearing a pumpkin sees
+     * its overlay (default: not drawn in spectator mode).
+     */
+    static final boolean VANILLA_SPECTATOR_PUMPKIN =
+            Opt.flag("steinbridge.opt.vanillaSpectatorPumpkin");
+}

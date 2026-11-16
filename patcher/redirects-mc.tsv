@@ -24,3 +24,167 @@ java/util/Set	iterator	()Ljava/util/Iterator;	iterator	dev/xavier/stein/bridge/e
 # in the same tick, before updateEntities moves them, Chunk.onChunkUnload no longer unloads a player who is still in the
 # world (1.8.9 removed them from loadedEntityList and they were never ticked again until a dimension change).
 adm	c	(Ljava/util/Collection;)V	unloadEntities	dev/xavier/stein/bridge/engine/PlayerUnload	static	amy.d()V
+# The local player's look follows the camera (engine/LookFix, MC-67665, as from 1.11): the body of EntityLivingBase.getLook.
+pr	d	(F)Laui;	look	dev/xavier/stein/bridge/engine/LookFix	body
+# Hotbar keys on mouse buttons work in inventories (engine/MouseHotbar): the click GuiScreen.handleMouseInput hands on.
+axu	a	(III)V	mouseClicked	dev/xavier/stein/bridge/engine/MouseHotbar	static	axu.k()V
+# The block placing sound plays at once (engine/PlaceSounds, as from 1.9): the placing items' playSoundEffect, and the
+# server's copy of it skipped once in NetHandlerPlayClient.handleSoundEffect.
+adm	a	(DDDLjava/lang/String;FF)V	placed	dev/xavier/stein/bridge/engine/PlaceSounds	static	yo.a(Lzx;Lwn;Ladm;Lcj;Lcq;FFF)Z
+adm	a	(DDDLjava/lang/String;FF)V	placed	dev/xavier/stein/bridge/engine/PlaceSounds	static	aau.a(Lzx;Lwn;Ladm;Lcj;Lcq;FFF)Z
+adm	a	(DDDLjava/lang/String;FF)V	placed	dev/xavier/stein/bridge/engine/PlaceSounds	static	aau.a(Lzx;Ladm;Lcj;Ljava/lang/Object;)Z
+adm	a	(DDDLjava/lang/String;FF)V	placed	dev/xavier/stein/bridge/engine/PlaceSounds	static	yp.a(Lzx;Lwn;Ladm;Lcj;Lcq;FFF)Z
+adm	a	(DDDLjava/lang/String;FF)V	placed	dev/xavier/stein/bridge/engine/PlaceSounds	static	aav.a(Lzx;Lwn;Ladm;Lcj;Lcq;FFF)Z
+bdb	a	(DDDLjava/lang/String;FFZ)V	received	dev/xavier/stein/bridge/engine/PlaceSounds	static	bcy.a(Lgs;)V
+# An entity above the build limit or below 0 is not drawn black (engine/LightCache.loaded, as from 1.9): the loaded
+# check of Entity.getBrightness asks of the column (getBrightnessForRender's body already does).
+adm	e	(Lcj;)Z	loaded	dev/xavier/stein/bridge/engine/LightCache	static	pk.c(F)F
+# Player model fixes (engine/ModelFixes): the item in the thin (Alex) arm half a pixel out (MC-72397, as from 1.9);
+# the first-person arm not in the riding pose of the last player drawn; depth writes back on after each entity layer
+# (the charged creeper, spider eyes and wither aura on an invisible mob left them off for the rest of the frame).
+bbr	a	(F)V	postRenderArm	dev/xavier/stein/bridge/engine/ModelFixes	body
+bbr	a	(FFFFFFLpk;)V	firstPersonArm	dev/xavier/stein/bridge/engine/ModelFixes	static	bln.b(Lbet;)V
+blb	a	(Lpr;FFFFFFF)V	afterLayer	dev/xavier/stein/bridge/engine/ModelFixes	after	bjl.a(Lpr;FFFFFFF)V
+# Map textures let go when the world changes (engine/MapCleanup): before each Minecraft.loadWorld.
+ave	a	(Lbdb;Ljava/lang/String;)V	worldChanging	dev/xavier/stein/bridge/engine/MapCleanup	before
+# The chunk search's start chunks as whole columns with the camera above the build limit or below 0 (engine/TerrainSeeds,
+# as from about 1.14): the seeding's frustum test in RenderGlobal.setupTerrain, between the queue's creation and the loop.
+com/google/common/collect/Lists	newLinkedList	()Ljava/util/LinkedList;	begin	dev/xavier/stein/bridge/engine/TerrainSeeds	before	bfr.a(Lpk;DLbia;IZ)V
+java/util/Queue	isEmpty	()Z	end	dev/xavier/stein/bridge/engine/TerrainSeeds	before	bfr.a(Lpk;DLbia;IZ)V
+bia	a	(Laug;)Z	inFrustum	dev/xavier/stein/bridge/engine/TerrainSeeds	static	bfr.a(Lpk;DLbia;IZ)V
+# Banners sway from their phase, not the whole world time in float (engine/BannerSway, as from about 1.14): in
+# TileEntityBannerRenderer.renderTileEntityAt, the banner from getWorld and the world time reduced to the period.
+aku	z	()Ladm;	world	dev/xavier/stein/bridge/engine/BannerSway	static	bha.a(Laku;DDDFI)V
+adm	K	()J	time	dev/xavier/stein/bridge/engine/BannerSway	static	bha.a(Laku;DDDFI)V
+# Which tile entities are drawn (engine/TileFixes): none for an invalid (removed) one, the body of
+# TileEntityRendererDispatcher.getSpecialRenderer; the beacon only in the world-wide set, not also in its compiled chunk.
+bhc	b	(Lakw;)Lbhd;	specialRenderer	dev/xavier/stein/bridge/engine/TileFixes	body
+bhq	a	(Lakw;)V	addTileEntity	dev/xavier/stein/bridge/engine/TileFixes	static	bht.b(FFFLbhn;)V
+# Camera-facing pitch negated in the front view (engine/TagPitch, as from 1.9): after RenderManager.cacheActiveRenderInfo.
+biu	a	(Ladm;Lavn;Lpk;Lpk;Lavh;F)V	cached	dev/xavier/stein/bridge/engine/TagPitch	after	bfr.a(Lpk;Lbia;F)V
+# Heads drawn with blending (engine/SkullBlend): around the model's render in TileEntitySkullRenderer.renderSkull.
+bbo	a	(Lpk;FFFFFF)V	before	dev/xavier/stein/bridge/engine/SkullBlend	before	bhk.a(FFFLcq;FILcom/mojang/authlib/GameProfile;I)V
+bbo	a	(Lpk;FFFFFF)V	after	dev/xavier/stein/bridge/engine/SkullBlend	after	bhk.a(FFFLcq;FILcom/mojang/authlib/GameProfile;I)V
+# The alpha test arrows, the fishing bobber and the fire overlay need (engine/ProjectileAlpha): from their pushMatrix to
+# the end of their drawing (Render.doRender for the arrow and the bobber, the fire's popMatrix).
+bfl	E	()V	shotBegin	dev/xavier/stein/bridge/engine/ProjectileAlpha	before	bih.a(Lwq;DDDFF)V
+biv	a	(Lpk;DDDFF)V	shotEnd	dev/xavier/stein/bridge/engine/ProjectileAlpha	before	bih.a(Lwq;DDDFF)V
+bfl	E	()V	shotBegin	dev/xavier/stein/bridge/engine/ProjectileAlpha	before	biz.a(Lur;DDDFF)V
+biv	a	(Lpk;DDDFF)V	shotEnd	dev/xavier/stein/bridge/engine/ProjectileAlpha	before	biz.a(Lur;DDDFF)V
+bfl	E	()V	fireBegin	dev/xavier/stein/bridge/engine/ProjectileAlpha	before	biv.a(Lpk;DDDF)V
+bfl	F	()V	fireEnd	dev/xavier/stein/bridge/engine/ProjectileAlpha	after	biv.a(Lpk;DDDF)V
+# The fog colour's brightness at the eyes, not the feet (engine/FogEye): in EntityRenderer.updateRenderer.
+bdb	o	(Lcj;)F	brightness	dev/xavier/stein/bridge/engine/FogEye	static	bfk.e()V
+# Links and the resource pack folder (engine/PackFiles, core/DesktopOpen): the reflective Desktop.getDesktop/browse of
+# GuiScreenResourcePacks.actionPerformed and GuiScreen.openWebLink go to xdg-open on Linux (Desktop elsewhere), off the game
+# thread; the packs left off the list on Done close their zip (it stayed locked on Windows).
+java/lang/reflect/Method	invoke	(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;	invoke	dev/xavier/stein/bridge/engine/PackFiles	static	azo.a(Lavs;)V
+java/lang/reflect/Method	invoke	(Ljava/lang/Object;[Ljava/lang/Object;)Ljava/lang/Object;	invoke	dev/xavier/stein/bridge/engine/PackFiles	static	axu.a(Ljava/net/URI;)V
+bnm	a	(Ljava/util/List;)V	closeUnselected	dev/xavier/stein/bridge/engine/PackFiles	after	azo.a(Lavs;)V
+# Options saved when an options screen closes (engine/ScreenClose, as from 1.14): the onGuiClosed of displayGuiScreen; the
+# language screen also re-wraps the chat.
+axu	m	()V	onGuiClosed	dev/xavier/stein/bridge/engine/ScreenClose	static	ave.a(Laxu;)V
+# Held keys re-read when a screen closes (engine/KeyResync, as from 1.12): after setIngameFocus grabs the mouse.
+avf	a	()V	focusBack	dev/xavier/stein/bridge/engine/KeyResync	after	ave.n()V
+# Sound fixes (engine/SoundFixes): the pause menu pauses and resumes only the sources that were playing (as from 1.14),
+# and an unknown sound warns once in SoundManager.playSound.
+bpx$a	pause	(Ljava/lang/String;)V	pause	dev/xavier/stein/bridge/engine/SoundFixes	static	bpx.e()V
+bpx$a	play	(Ljava/lang/String;)V	resume	dev/xavier/stein/bridge/engine/SoundFixes	static	bpx.f()V
+org/apache/logging/log4j/Logger	warn	(Lorg/apache/logging/log4j/Marker;Ljava/lang/String;[Ljava/lang/Object;)V	warn	dev/xavier/stein/bridge/engine/SoundFixes	static	bpx.c(Lbpj;)V
+# Death screen buttons back after a resize (engine/GameOverButtons): GuiGameOver.initGui resets its timer, before its first call.
+java/util/List	clear	()V	initGui	dev/xavier/stein/bridge/engine/GameOverButtons	before	axe.b()V
+# Potion levels above IV (engine/PotionLevels, as from 1.13): the inventory's effect names and the potion tooltip.
+pf	c	()I	amplifier	dev/xavier/stein/bridge/engine/PotionLevels	static	ayw.f()V
+avn	a	(Ljava/lang/String;FFI)I	drawString	dev/xavier/stein/bridge/engine/PotionLevels	static	ayw.f()V
+di	a	(Ljava/lang/String;)Ljava/lang/String;	translate	dev/xavier/stein/bridge/engine/PotionLevels	static	aai.a(Lzx;Lwn;Ljava/util/List;Z)V
+# Chat (engine/ChatFixes): GuiNewChat.deleteChatLine past null lines (the click above the lines goes through VanillaHud).
+avt	c	(I)V	deleteChatLine	dev/xavier/stein/bridge/engine/ChatFixes	body
+# Screen input (engine/ScreenInput, as from 1.13): GuiScreen.handleInput stops reading keys once a click replaced the screen,
+# and dispatchKeypresses no longer takes a character without a key (IME) as a key code.
+org/lwjgl/input/Mouse	isCreated	()Z	inputBegin	dev/xavier/stein/bridge/engine/ScreenInput	before	axu.p()V
+org/lwjgl/input/Keyboard	next	()Z	keyboardNext	dev/xavier/stein/bridge/engine/ScreenInput	static	axu.p()V
+org/lwjgl/input/Keyboard	getEventCharacter	()C	dispatchCharacter	dev/xavier/stein/bridge/engine/ScreenInput	static	ave.Z()V
+# Mipmap slider applied on release (engine/MipmapSlider, as from 1.14): GuiOptionSlider's press and drag keep the level
+# pending (and show it), its mouseReleased applies it.
+avh	a	(Lavh$a;F)V	set	dev/xavier/stein/bridge/engine/MipmapSlider	static	awj.b(Lave;II)V
+avh	a	(Lavh$a;F)V	set	dev/xavier/stein/bridge/engine/MipmapSlider	static	awj.c(Lave;II)Z
+avh	c	(Lavh$a;)Ljava/lang/String;	label	dev/xavier/stein/bridge/engine/MipmapSlider	static	awj.b(Lave;II)V
+avh	c	(Lavh$a;)Ljava/lang/String;	label	dev/xavier/stein/bridge/engine/MipmapSlider	static	awj.c(Lave;II)Z
+awj	a	(II)V	mouseReleased	dev/xavier/stein/bridge/engine/MipmapSlider	body
+# No pumpkin overlay in spectator mode (engine/SpectatorPumpkin): renderPumpkinOverlay in renderGameOverlay.
+avo	e	(Lavr;)V	overlay	dev/xavier/stein/bridge/engine/SpectatorPumpkin	static	avo.a(F)V
+# NBT array sizes charged in long (engine/NbtArraySize, as in later versions): the bodies of NBTTagIntArray.read and
+# NBTTagByteArray.read; a huge length wrapped the int product, passed the size tracker and allocated hundreds of MB.
+ds	a	(Ljava/io/DataInput;ILdw;)V	readIntArray	dev/xavier/stein/bridge/engine/NbtArraySize	body
+dl	a	(Ljava/io/DataInput;ILdw;)V	readByteArray	dev/xavier/stein/bridge/engine/NbtArraySize	body
+# Packet counts checked against the bytes left before allocating (engine/PacketCounts): the count of S27 explosion
+# blocks, of S26 bulk chunks and of PacketBuffer.readByteArray; S22, S13 and S34 read other varints in the same method,
+# so their readPacketData bodies are replaced by the same reading with the check.
+em	readInt	()I	explosionBlocks	dev/xavier/stein/bridge/engine/PacketCounts	static	gk.a(Lem;)V
+em	e	()I	bulkChunks	dev/xavier/stein/bridge/engine/PacketCounts	static	gp.a(Lem;)V
+em	e	()I	byteArrayLength	dev/xavier/stein/bridge/engine/PacketCounts	static	em.a()[B
+fz	a	(Lem;)V	multiBlockChange	dev/xavier/stein/bridge/engine/PacketCounts	body
+hb	a	(Lem;)V	destroyEntities	dev/xavier/stein/bridge/engine/PacketCounts	body
+gu	a	(Lem;)V	maps	dev/xavier/stein/bridge/engine/PacketCounts	body
+# Unknown item ids read as an empty slot (engine/UnknownItems, as from 1.11): the body of
+# PacketBuffer.readItemStackFromBuffer; a stack with a null item crashed the tooltip and the slot drawing.
+em	i	()Lzx;	readItemStack	dev/xavier/stein/bridge/engine/UnknownItems	body
+# An entity effect with a potion id 1.8.9 does not have is left out (engine/PotionIds): the addPotionEffect of
+# NetHandlerPlayClient.handleEntityEffect; the next tick read Potion.potionTypes[id] and crashed with "Ticking entity".
+pr	c	(Lpf;)V	add	dev/xavier/stein/bridge/engine/PotionIds	static	bcy.a(Lib;)V
+# The particle count of one S2A packet capped at what EffectRenderer keeps (engine/ParticlePacketCap): both reads of
+# getParticleCount in NetHandlerPlayClient.handleParticles; 2^31 particles froze the game thread for minutes.
+gr	j	()I	count	dev/xavier/stein/bridge/engine/ParticlePacketCap	static	bcy.a(Lgr;)V
+# "Unable to locate sign at" goes to the log, not the chat (engine/SignChat, as from 1.9): handleUpdateSign's
+# addChatMessage.
+bew	a	(Leu;)V	unknownSign	dev/xavier/stein/bridge/engine/SignChat	static	bcy.a(Lhw;)V
+# The game-thread pass of each queued packet (engine/QueuedPackets): skipped for the client's handler once its channel
+# closed (as from 1.14), a player spawned with no tab list entry left out (handleSpawnPlayer threw an NPE), and the
+# plugin message buffer released after handleCustomPayload (only MC|TrList was).
+ff	a	(Lep;)V	process	dev/xavier/stein/bridge/engine/QueuedPackets	static	fh$1.run()V
+# "Error executing task" of Util.runTask with the full trace once per kind of error, then one line per 10 s with the
+# count (engine/TaskErrors): a packet handler failing many times per second flooded the log.
+org/apache/logging/log4j/Logger	fatal	(Ljava/lang/String;Ljava/lang/Throwable;)V	failed	dev/xavier/stein/bridge/engine/TaskErrors	static	g.a(Ljava/util/concurrent/FutureTask;Lorg/apache/logging/log4j/Logger;)Ljava/lang/Object;
+# The network thread group of the server list's compatibility ping (OldServerPinger.tryCompatibilityPing) also goes
+# through engine/Net.lazy, one thread at a time (LazyLoadBase.getValue has no lock; see redirects-mods.tsv).
+no	c	()Ljava/lang/Object;	lazy	dev/xavier/stein/bridge/engine/Net	static	bdg.b(Lbde;)V
+# Server list and address crashes (engine/ServerListFixes): a favicon that is not Base64 (decoded before
+# ServerListEntryNormal.prepareServerIcon's try), a stale LAN index in ServerSelectionList.getListEntry, an address
+# made only of colons (ServerAddress.fromString's empty split), a host IDN.toASCII rejects (ServerAddress.getIP), and
+# the typed address trimmed when the add/edit server screen and direct connect save it.
+io/netty/handler/codec/base64/Base64	decode	(Lio/netty/buffer/ByteBuf;)Lio/netty/buffer/ByteBuf;	iconData	dev/xavier/stein/bridge/engine/ServerListFixes	static	azk.c()V
+java/util/List	get	(I)Ljava/lang/Object;	listEntry	dev/xavier/stein/bridge/engine/ServerListFixes	static	azl.b(I)Lawd$a;
+java/lang/String	split	(Ljava/lang/String;)[Ljava/lang/String;	splitAddress	dev/xavier/stein/bridge/engine/ServerListFixes	static	bdd.a(Ljava/lang/String;)Lbdd;
+java/net/IDN	toASCII	(Ljava/lang/String;)Ljava/lang/String;	asciiHost	dev/xavier/stein/bridge/engine/ServerListFixes	static	bdd.a()Ljava/lang/String;
+avw	b	()Ljava/lang/String;	typedAddress	dev/xavier/stein/bridge/engine/ServerListFixes	static	axi.a(Lavs;)V
+avw	b	()Ljava/lang/String;	directAddress	dev/xavier/stein/bridge/engine/ServerListFixes	static	axg.a(Lavs;)V
+# TextureManager.deleteTexture also removes the texture from the manager (engine/TextureDelete, MC-98707): the deleted
+# textures stayed on the heap and every resource reload loaded them again.
+bmj	c	(Ljy;)V	delete	dev/xavier/stein/bridge/engine/TextureDelete	body
+# One shared panorama background texture for every main menu (engine/MenuBackground): GuiMainMenu.initGui made and
+# registered a new 256x256 DynamicTexture on every open and resize, never freed.
+blz	<init>	(II)V	texture	dev/xavier/stein/bridge/engine/MenuBackground	new	aya.b()V
+bmj	a	(Ljava/lang/String;Lblz;)Ljy;	location	dev/xavier/stein/bridge/engine/MenuBackground	static	aya.b()V
+# BlockRedstoneTorch.toggles becomes a WeakHashMap (engine/TorchToggles, as from 1.13): after the torches are created in
+# Block.registerBlocks; the HashMap kept every single player world a torch toggled in.
+ajd	<init>	(Z)V	weakToggles	dev/xavier/stein/bridge/engine/TorchToggles	after	afh.S()V
+# EnchantmentHelper's static iterators let go of the entities and damage source after each use (engine/EnchantIterators):
+# every applyThornEnchantments, applyArthropodEnchantments and getEnchantmentModifierDamage, under one lock because the
+# client and the integrated server threads share the iterators.
+ack	a	(Lpr;Lpk;)V	thorns	dev/xavier/stein/bridge/engine/EnchantIterators	static
+ack	b	(Lpr;Lpk;)V	arthropods	dev/xavier/stein/bridge/engine/EnchantIterators	static
+ack	a	([Lzx;Low;)I	protection	dev/xavier/stein/bridge/engine/EnchantIterators	static
+# The stopped integrated server leaves MinecraftServer's static instance (engine/ServerRelease, as from 1.9): after
+# systemExitNow at the end of MinecraftServer.run, on the server thread.
+net/minecraft/server/MinecraftServer	z	()V	stopped	dev/xavier/stein/bridge/engine/ServerRelease	after	net/minecraft/server/MinecraftServer.run()V
+# options.txt written to a temporary file and moved over the old one when complete (engine/OptionsWriter): the
+# FileWriter of GameSettings.saveOptions; a crash mid-write left an empty file and every setting reset.
+java/io/FileWriter	<init>	(Ljava/io/File;)V	open	dev/xavier/stein/bridge/engine/OptionsWriter	new	avh.b()V
+# The access token out of the logs (core/TokenLog): the Minecraft constructor logs "(Session ID is token:...)".
+avm	a	()Ljava/lang/String;	hidden	dev/xavier/stein/bridge/core/TokenLog	static	ave.<init>
+# The frame limit up to 1000 fps (engine/FramerateScale): 10-250 by 10, 300-1000 by 50, then unlimited; the slider
+# conversions of GameSettings.Options and the new maximum set before options.txt is read (260, the old unlimited, stays unlimited).
+avh$a	c	(F)F	normalize	dev/xavier/stein/bridge/engine/FramerateScale	body
+avh$a	d	(F)F	denormalize	dev/xavier/stein/bridge/engine/FramerateScale	body
+avh$a	f	(F)F	snap	dev/xavier/stein/bridge/engine/FramerateScale	body
+avh	a	()V	loadOptions	dev/xavier/stein/bridge/engine/FramerateScale	static	avh.<init>(Lave;Ljava/io/File;)V

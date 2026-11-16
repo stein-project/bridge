@@ -16,6 +16,12 @@ import java.util.Map;
  * sky color to its own. Keeps, per chunk position, when it appeared and how many of its layers are
  * alive, so a rebuild of the chunk does not animate it again.
  *
+ * <p>The position is a 16-block section, and a section with no blocks has no geometry: the first
+ * block placed in one (building a tower, 12 blocks above a superflat floor) made it "appear" and
+ * fade in from the fog, as if it had just loaded (testers' report, 16/11/2026). A section whose
+ * column is already on screen, past the fade, appears at once ({@link #SETTLED}); only a column
+ * arriving fades in.
+ *
  * <p>Pipeline: Stein GFX only.
  */
 final class SteinChunkFade {
@@ -45,6 +51,15 @@ final class SteinChunkFade {
 
     private static final Map<Long, long[]> LIVE = new HashMap<>();
 
+    /**
+     * Born long ago: drawn without the animation. Shared, never written ({@link SteinTerrainLayers}
+     * only fills a 0).
+     */
+    private static final float[] SETTLED = {Float.MIN_NORMAL};
+
+    /** Sections in a column (the world is 256 blocks high). */
+    private static final int COLUMN_SECTIONS = 16;
+
     static float now() {
         // 1 instead of 0 at the start: 0 at the origin means "no animation"
         return (System.nanoTime() - CLOCK_ZERO) / 1e9f + 1f;
@@ -71,7 +86,7 @@ final class SteinChunkFade {
         float[] born = BORN.get(key);
         long t = System.nanoTime();
         if (born == null || live[0] == 0 && t - live[1] > REBORN_NS) {
-            born = new float[1];
+            born = columnShown(x, z) ? SETTLED : new float[1];
             BORN.put(key, born);
         }
         live[0]++;
@@ -79,6 +94,27 @@ final class SteinChunkFade {
     }
 
     /** A chunk layer left. */
+    /**
+     * Is another section of the column at (x, z) alive and on screen for longer than the fade? Only
+     * asked when a section is born, so 16 lookups are cheap.
+     */
+    private static boolean columnShown(int x, int z) {
+        float now = now();
+        for (int sy = 0; sy < COLUMN_SECTIONS; sy++) {
+            long key = chunkKey(x, sy << 4, z);
+            long[] live = LIVE.get(key);
+            float[] born = BORN.get(key);
+            if (live != null
+                    && live[0] > 0
+                    && born != null
+                    && born[0] != 0f
+                    && now - born[0] >= FADE_SECONDS) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     static void departure(int x, int y, int z) {
         if (FADE_SECONDS <= 0f) {
             return;
