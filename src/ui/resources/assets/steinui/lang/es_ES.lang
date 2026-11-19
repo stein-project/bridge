@@ -42,3 +42,7 @@ steinui.hdr.calibrate.hint=Cuatro pasos rápidos para ajustar el HDR a tu pantal
 steinui.hdr.black=Negro
 steinui.hdr.dark.title=El negro
 steinui.hdr.dark.text=Dentro del cuadrado negro hay un símbolo muy oscuro. Arrastra hasta que apenas se vea. Si no se ve, los lugares oscuros del juego se vuelven una mancha negra.
+steinui.sync.compatible=Compatible con Stein Sync
+steinui.sync.features=Funciones: %s
+steinui.sync.update=Este servidor tiene un Stein Sync más nuevo: actualiza Stein
+steinui.sync.vanillaMovement=Stein Sync: este servidor se encarga de tu movimiento, así que correr en todas las direcciones y mantener la carrera al golpear quedan desactivados mientras juegas aquí.

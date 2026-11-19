@@ -156,6 +156,12 @@ final class LensConfig {
     boolean oldBlockPose = true;
     boolean oldArmorHurt = true;
 
+    /** Stein Sync's hit marker: a flash at the crosshair for each hit the server confirms. */
+    boolean hitMarker = false;
+
+    /** Stein Sync may join over QUIC when a server offers it (SteinSyncQuic). */
+    boolean steinSyncQuic = true;
+
     void load(File file) {
         if (!file.isFile()) {
             save(file);
@@ -217,6 +223,8 @@ final class LensConfig {
             oldRod = bool(o, "oldRod", oldRod);
             oldBlockPose = bool(o, "oldBlockPose", oldBlockPose);
             oldArmorHurt = bool(o, "oldArmorHurt", oldArmorHurt);
+            hitMarker = bool(o, "hitMarker", hitMarker);
+            steinSyncQuic = bool(o, "steinSyncQuic", steinSyncQuic);
         } catch (Exception e) {
             Log.info("lens", file + " unreadable, using defaults: " + e);
         }
@@ -280,6 +288,8 @@ final class LensConfig {
         o.addProperty("oldRod", oldRod);
         o.addProperty("oldBlockPose", oldBlockPose);
         o.addProperty("oldArmorHurt", oldArmorHurt);
+        o.addProperty("hitMarker", hitMarker);
+        o.addProperty("steinSyncQuic", steinSyncQuic);
         file.getAbsoluteFile().getParentFile().mkdirs();
         try (Writer w =
                 new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8)) {

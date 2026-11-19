@@ -3,6 +3,7 @@
 [versions]
 asm = "9.10.1"
 google-java-format = "1.36.1"
+kwik = "0.12.1"
 lwjgl = "3.4.3"
 mcp-srg = "1.8.9"
 mcp-stable = "22-1.8.9"
@@ -13,6 +14,7 @@ asm = { module = "org.ow2.asm:asm", version.ref = "asm" }
 asm-analysis = { module = "org.ow2.asm:asm-analysis", version.ref = "asm" }
 asm-commons = { module = "org.ow2.asm:asm-commons", version.ref = "asm" }
 asm-tree = { module = "org.ow2.asm:asm-tree", version.ref = "asm" }
+kwik = { module = "tech.kwik:kwik", version.ref = "kwik" }
 mcp-srg = { module = "de.oceanlabs.mcp:mcp", version.ref = "mcp-srg" }
 mcp-stable = { module = "de.oceanlabs.mcp:mcp_stable", version.ref = "mcp-stable" }
 special-source = { module = "net.md-5:SpecialSource", version.ref = "special-source" }

@@ -263,12 +263,63 @@ public interface HookSink {
     default void customPayload(String channel, byte[] data) {}
 
     /**
-     * A multiplayer server list entry (ServerListEntryNormal) has drawn itself, at (x, y) with the
-     * list's width, the mouse at (mouseX, mouseY): to draw over it, or set the screen's hovering
-     * text. Runs on every frame for every visible entry.
+     * Stein Sync: the server confirmed a hit by this player (HitConfirm, only on a connection with
+     * the {@code hits} feature), after armor and effects. Once per damage event, possibly before
+     * the entity's own health or death packets.
+     *
+     * @param targetId the damaged entity's id
+     * @param target that entity in the client's world (Entity), or null when the client lacks it
+     * @param damage the final damage, at least 0
+     * @param critical the hit was critical
+     * @param killed the hit killed the target
+     * @param tick the client tick of the attack the hit answers, or 0 when it matches none
      */
-    default void serverListEntry(
-            Object serverData, int x, int y, int listWidth, int mouseX, int mouseY) {}
+    default void steinSyncHit(
+            int targetId,
+            Object target,
+            float damage,
+            boolean critical,
+            boolean killed,
+            int tick) {}
+
+    /**
+     * Stein Sync: this player took damage, as the server applied it (Damaged, only on a {@code
+     * hits} connection).
+     *
+     * @param attackerId the attacker's entity id, or 0 when there is none or it is not seen
+     * @param attacker that entity in the client's world (Entity), or null
+     * @param damage the final damage, at least 0
+     * @param cause the protocol's damage cause (0 other, 1 melee, 2 projectile, 3 explosion, 4
+     *     fall, 5 fire, 6 void, 7 magic)
+     * @param critical the hit was critical
+     * @param killed the damage killed this player
+     */
+    default void steinSyncDamaged(
+            int attackerId,
+            Object attacker,
+            float damage,
+            int cause,
+            boolean critical,
+            boolean killed) {}
+
+    /**
+     * Stein Sync: an entity this player sees hit another one it sees (CombatSeen, only on a {@code
+     * hits} connection whose server turned it on).
+     *
+     * @param attackerId the attacker's entity id
+     * @param attacker that entity in the client's world (Entity), or null
+     * @param targetId the damaged entity's id
+     * @param target that entity in the client's world (Entity), or null
+     * @param critical the hit was critical
+     * @param killed the hit killed the target
+     */
+    default void steinSyncCombatSeen(
+            int attackerId,
+            Object attacker,
+            int targetId,
+            Object target,
+            boolean critical,
+            boolean killed) {}
 
     /**
      * What the player sends (chat or command), before it goes out.

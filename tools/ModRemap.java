@@ -94,7 +94,7 @@ public final class ModRemap {
         "dev/xavier/stein/",
         "gnu/trove/",
         "org/json/",
-        // Kwik, the Loader's QUIC library (its jars ship next to the Loader's)
+        // Kwik, Stein Sync's QUIC library (its jars ship next to the Bridge's)
         "tech/kwik/"
     };
 

@@ -266,6 +266,19 @@ listed at the end.
 - `-Dsteinbridge.hooks.debug=true`: logs every key, mouse and attack event the hooks deliver (default: off).
 - `-Dsteinbridge.diag.noGhost=true`: does not ask the mods whether an entity is a ghost, only for A/B measuring; the old name `-Dsteinbridge.diag.semFantasma=true` still works (default: off).
 
+## SteinSyncOptions
+
+`dev.xavier.stein.bridge.sync.SteinSyncOptions`
+
+- `-Dsteinbridge.noSteinSync=true`: turns Stein Sync off on this client: no mark in the server list, no marked login and no answer to a Stein Sync proxy's Hello, so every connection stays in the vanilla mode; `-Dsteinloader.noSteinSync=true` does the same (default: off, Stein Sync is on).
+- `-Dsteinbridge.noQuic=true`: never joins over QUIC (stein-sync's docs/protocol.md section 7); every connection is TCP, as before the transport existed (default: off, QUIC is tried when a server offers it). The player's switch in the video settings does the same for good.
+- `-Dsteinbridge.steinSyncSnap=true`: under a Stein Sync proxy's movement authority, a correction moves the picture at once with the player (default: off, a correction of a few centimetres or more is drawn as a short glide over the rest of the tick; the player's state is corrected at once either way).
+- `-Dsteinbridge.diag.syncNudge=D`: test, under a Stein Sync proxy's movement authority, pushes the player D blocks along X once, after the movement of Tick `syncNudgeAtTick`: a divergence the proxy must correct (default: 0, never).
+- `-Dsteinbridge.diag.syncNudgeAtTick=N`: the Tick of `syncNudge` (default 200: ten seconds after the Accept).
+- `-Dsteinbridge.quicTransport=kwik|native`: which QUIC implementation a join over QUIC uses (default: kwik, in Java; native is the Bridge's library, kept to compare the two).
+- `-Dsteinbridge.diag.quicRebindAtSec=N`: test, a QUIC connection moves to a new local port after N seconds of Ticks, as an address change would (default: 0, never).
+- `-Dsteinbridge.debugSteinSync=true`: logs the Stein Sync client messages as they go: each attack put in a Tick, each BlockAction, and each block change held and released (default: off).
+
 ## SteinGfxOptions
 
 `dev.xavier.stein.gfx.SteinGfxOptions`

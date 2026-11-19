@@ -14,6 +14,7 @@ import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.bridge.engine.FrameTime;
 import dev.xavier.stein.bridge.engine.LoadingScreen;
 import dev.xavier.stein.bridge.showcase.Showcase;
+import dev.xavier.stein.bridge.sync.SteinSync;
 import dev.xavier.stein.gfx.SteinGfxSelfTest;
 
 import org.lwjgl.input.Keyboard;
@@ -111,6 +112,12 @@ public final class GameHooks {
     public static void afterStartGame() {
         LoadingScreen.startupEnd();
         SteinGfxSelfTest.runIfRequested();
+        // Before the first server list ping, with or without the Loader.
+        try {
+            SteinSync.install();
+        } catch (Throwable e) {
+            fail("steinSync.install", e);
+        }
         if (SINK != null) {
             try {
                 SINK.afterStartGame();
@@ -132,6 +139,14 @@ public final class GameHooks {
                 fail("tickEnd", e);
             }
             BenchZones.end(BenchZones.MODS_TICK);
+        }
+        // Stein Sync after the mods, as when it lived in the Loader.
+        if (SteinSync.ENABLED) {
+            try {
+                SteinSync.tick();
+            } catch (Throwable e) {
+                fail("steinSync.tick", e);
+            }
         }
         // the benchmark's camera and route, after the mods (only with -Dsteinbridge.bench)
         Bench.tick();
@@ -315,22 +330,23 @@ public final class GameHooks {
 
     /**
      * The Stein Sync offer the last server list ping of this ServerData found (the server's status
-     * claims it), or null: for the Loader's server list badge.
+     * claims it), or null: for the server list badge.
      */
     public static SteinSyncOffer steinSyncOffer(Object serverData) {
         return GameHooksServers.offer(serverData);
     }
 
     /**
-     * The listener of the Stein Sync client messages (the Loader's), or null: then every Stein Sync
-     * hook below does exactly what the game does.
+     * The listener of the Stein Sync client messages (the Bridge's Stein Sync client, bridge.sync,
+     * once a proxy negotiated its features), or null: then every Stein Sync hook below does exactly
+     * what the game does.
      */
     public static volatile SteinSyncHooks steinSync;
 
     /**
-     * The listener of the Stein Sync server list and login hooks (the Loader's), or null: then the
-     * status JSON is not searched for the Stein Sync offer and logins go out as the game writes
-     * them.
+     * The listener of the Stein Sync server list and login hooks (the Bridge's Stein Sync client,
+     * unless turned off with -Dsteinbridge.noSteinSync), or null: then the status JSON is not
+     * searched for the Stein Sync offer and logins go out as the game writes them.
      */
     public static volatile SteinSyncLoginHooks steinSyncLogin;
 
@@ -374,19 +390,22 @@ public final class GameHooks {
         return GameHooksSync.blockChange(world, pos, state);
     }
 
-    /** See {@link GameHooksSync#pickYaw}. */
-    public static float syncPickYaw(Object player) {
-        return GameHooksSync.pickYaw(player);
+    /** See {@link GameHooksSync#hit}. */
+    public static void steinSyncHit(
+            int targetId, float damage, boolean critical, boolean killed, int tick) {
+        GameHooksSync.hit(targetId, damage, critical, killed, tick);
     }
 
-    /** See {@link GameHooksSync#serverSneaking}. */
-    public static boolean syncServerSneaking(Object player) {
-        return GameHooksSync.serverSneaking(player);
+    /** See {@link GameHooksSync#damaged}. */
+    public static void steinSyncDamaged(
+            int attackerId, float damage, int cause, boolean critical, boolean killed) {
+        GameHooksSync.damaged(attackerId, damage, cause, critical, killed);
     }
 
-    /** See {@link GameHooksSync#serverSprinting}. */
-    public static boolean syncServerSprinting(Object player) {
-        return GameHooksSync.serverSprinting(player);
+    /** See {@link GameHooksSync#combatSeen}. */
+    public static void steinSyncCombatSeen(
+            int attackerId, int targetId, boolean critical, boolean killed) {
+        GameHooksSync.combatSeen(attackerId, targetId, critical, killed);
     }
 
     /** See {@link GameHooksNet#sendChat}. */

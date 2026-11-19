@@ -42,3 +42,7 @@ steinui.hdr.calibrate.hint=Four quick steps to fit HDR to your screen: the brigh
 steinui.hdr.black=Black
 steinui.hdr.dark.title=The black
 steinui.hdr.dark.text=There is a very dark symbol inside the black square. Drag until it just shows. If it cannot be seen, dark places in the game turn into a black blot.
+steinui.sync.compatible=Compatible with Stein Sync
+steinui.sync.features=Features: %s
+steinui.sync.update=This server has a newer Stein Sync: update Stein
+steinui.sync.vanillaMovement=Stein Sync: this server moves you itself, so sprinting in every direction and sprint through hits stay off while you play here.

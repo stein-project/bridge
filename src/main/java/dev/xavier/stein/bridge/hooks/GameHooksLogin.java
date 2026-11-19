@@ -16,9 +16,9 @@ import net.minecraft.util.IChatComponent;
 /**
  * The login refusal side of {@link GameHooks} (stein-sync's docs/protocol.md section 6.2): a Stein
  * Sync proxy that requires the Stein client refuses an unmarked login with a reason that carries
- * its Stein Sync offer next to the text, and the Loader joins again at once with the marker (and
- * over QUIC when the offer says so), so the player never sees the refusal. Without a listener both
- * hooks do exactly what the game does.
+ * its Stein Sync offer next to the text, and the Stein Sync client joins again at once with the
+ * marker (and over QUIC when the offer says so), so the player never sees the refusal. Without a
+ * listener both hooks do exactly what the game does.
  */
 final class GameHooksLogin {
 

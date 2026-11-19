@@ -106,6 +106,9 @@ val shaderc: Configuration = configurations.create("shaderc") { isTransitive = f
 val mcp: Configuration = configurations.create("mcp") { isTransitive = false }
 val specialSource: Configuration = configurations.create("specialSource") { isTransitive = false }
 val sdkTools: Configuration = configurations.create("sdkTools")
+// Kwik (QUIC in Java, LGPL-3.0, with agent15, hkdf and siphash): Stein Sync's default QUIC transport. Not packed into
+// the Bridge jar: its jars go next to it on the game's classpath, unchanged, as LGPL asks of a library linked this way.
+val kwik: Configuration = configurations.create("kwik")
 
 dependencies {
     val v = libs.versions.lwjgl.get()
@@ -130,6 +133,7 @@ dependencies {
     mcp(variantOf(libs.mcp.stable) { artifactType("zip") })
     specialSource(variantOf(libs.special.source) { classifier("shaded") })
     sdkTools("dev.xavier.stein:stein-sdk")
+    kwik(libs.kwik)
 }
 
 // ---- source sets ----
@@ -257,6 +261,7 @@ dependencies {
     compileOnly(files(openGame.map { it.outputs.files.singleFile }))
     compileOnly(files(lwjgl))
     compileOnly(files(provider { gameLibraries(patched = false) }))
+    compileOnly(files(kwik))
     "lensCompileOnly"(files(mcSrg.map { it.outputs.files.singleFile }))
     "lensCompileOnly"(files(lwjgl))
     "lensCompileOnly"(files(provider { gameLibraries(patched = false) }))
@@ -550,13 +555,14 @@ val coverage = tasks.register<JavaExec>("coverage") {
     }
 }
 
-/** The classpath the game runs with: the Bridge, the patched game, its libraries and LWJGL 3. */
+/** The classpath the game runs with: the Bridge, the patched game, its libraries, LWJGL 3 and Kwik. */
 fun gameClasspath(): FileCollection = files(
     bridgeJar,
     patchGame,
     provider { gameLibraries(patched = true) },
     lwjgl,
     lwjglNatives,
+    kwik,
 ).builtBy(patchSound)
 
 // The static initializers of the optimizations look up game members; a wrong name or visibility would only show up
@@ -596,6 +602,18 @@ val syncReplayTest = tasks.register<JavaExec>("syncReplayTest") {
     description = "Checks the Stein Sync reconciliation's ring and replay driver (engine/SyncReplay)."
     classpath = gameClasspath() + sourceSets.test.get().output
     mainClass = "dev.xavier.stein.bridge.engine.SyncReplayTest"
+}
+
+// bridge.sync (the Stein Sync client): its readers and writers against hostile bytes, the Tick encoding, the login
+// marker, the route choice and the block hold, without a game running.
+for ((name, main) in listOf("steinSyncTest" to "dev.xavier.stein.bridge.sync.SteinSyncTest",
+    "steinSyncClientTest" to "dev.xavier.stein.bridge.sync.SteinSyncClientTest")) {
+    tasks.register<JavaExec>(name) {
+        group = "verification"
+        description = "Runs $main."
+        classpath = gameClasspath() + sourceSets.test.get().output
+        mainClass = main
+    }
 }
 
 // docs/OPTIONS.md: every -D option, from the Javadoc of the *Options classes (tools/OptionsDoc.java).
@@ -665,7 +683,10 @@ gpuProgram("vkSelfTest", "dev.xavier.stein.gfx.vk.SteinVkSelfTest",
     "The Stein GFX API tests on the experimental Vulkan backend, offscreen.")
 
 tasks.assemble { dependsOn(bridgeJar, patchGame, patchSound, gameRuntime) }
-tasks.check { dependsOn(coverage, preflight, sanityTest, optionsCheck, syncMoveTest, syncReplayTest) }
+tasks.check {
+    dependsOn(coverage, preflight, sanityTest, optionsCheck, syncMoveTest, syncReplayTest, "steinSyncTest",
+        "steinSyncClientTest")
+}
 
 // ---- running the game ----
 
@@ -823,12 +844,14 @@ tasks.register<Sync>("devLibs") {
     into(layout.buildDirectory.dir("dev-libs"))
 }
 
-// What the installer ships next to the Bridge (../installer): LWJGL 3 with the natives of every system, and ASM for
-// the Patcher. Copied out of the Gradle cache so the installer build reads plain files.
+// What the installer ships next to the Bridge (../installer): LWJGL 3 with the natives of every system, ASM for the
+// Patcher, and Kwik for Stein Sync's QUIC (separate jars, unchanged: see NOTICE). Copied out of the Gradle cache so the
+// installer build reads plain files.
 tasks.register<Sync>("runtimeLibs") {
     group = "build"
-    description = "Copies LWJGL 3 (all natives) and ASM into build/runtime-libs, for the installer."
+    description = "Copies LWJGL 3 (all natives), ASM and Kwik into build/runtime-libs, for the installer."
     into(layout.buildDirectory.dir("runtime-libs"))
     from(files(lwjgl, lwjglNatives)) { into("lwjgl") }
     from(asm) { into("asm") }
+    from(kwik) { into("kwik") }
 }

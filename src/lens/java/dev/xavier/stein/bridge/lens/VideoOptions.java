@@ -36,8 +36,8 @@ import java.util.function.Supplier;
 /**
  * All the image options on a single screen: the game's own Video Settings, reorganized by topic —
  * General, Camera, Light and shadows, Sky and weather, Textures, Players and items, 1.7 animations,
- * Performance. The game's options and Stein's sit side by side in the topic they belong to; there
- * is no separate screen or button. "Graphics" becomes the Fast and Fancy selector ({@link
+ * Stein Sync, Performance. The game's options and Stein's sit side by side in the topic they belong
+ * to; there is no separate screen or button. "Graphics" becomes the Fast and Fancy selector ({@link
  * GraphicsSlider}), and "3D Anaglyph" is gone (it is not in the list, and {@link Lens} turns it off
  * if it is on).
  *
@@ -133,6 +133,7 @@ final class VideoOptions {
         buildTextures();
         buildPlayers();
         buildAnimations();
+        buildSteinSync();
         buildPerformance();
         flush();
     }
@@ -315,6 +316,17 @@ final class VideoOptions {
                 () -> c.oldArmorHurt,
                 () -> c.oldArmorHurt = !c.oldArmorHurt,
                 old);
+    }
+
+    /** Stein Sync: the hit marker, and whether a join may go over QUIC. */
+    private void buildSteinSync() {
+        header("steinSync");
+        toggle("steinlens.hitMarker", () -> c.hitMarker, () -> c.hitMarker = !c.hitMarker, null);
+        toggle(
+                "steinlens.steinSyncQuic",
+                () -> c.steinSyncQuic,
+                () -> c.steinSyncQuic = !c.steinSyncQuic,
+                null);
     }
 
     private void buildPerformance() {

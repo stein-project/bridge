@@ -9,10 +9,9 @@
 package dev.xavier.stein.bridge.hooks;
 
 import dev.xavier.stein.bridge.diag.SyncReplayCheck;
-import dev.xavier.stein.bridge.engine.LookFix;
 
 import net.minecraft.block.state.IBlockState;
-import net.minecraft.client.entity.EntityPlayerSP;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.WorldClient;
 import net.minecraft.client.network.NetHandlerPlayClient;
 import net.minecraft.network.Packet;
@@ -21,8 +20,9 @@ import net.minecraft.util.BlockPos;
 /**
  * The Stein Sync side of {@link GameHooks}: the call sites where the client's movement, attack and
  * block packets leave, and where the server's block changes are applied, handed to the {@link
- * SteinSyncHooks} listener (patcher/redirects-mods.tsv). The teleport confirmation has no hook: it
- * stays vanilla (stein-sync docs/protocol.md 5.5).
+ * SteinSyncHooks} listener (patcher/redirects-mods.tsv), and the Stein Sync events the Bridge's
+ * client hands to the {@link HookSink} listeners. The teleport confirmation has no hook: it stays
+ * vanilla (stein-sync docs/protocol.md 5.5).
  *
  * <p>Every hook does what the game does when there is no listener, the listener answers false or it
  * throws: on a server without Stein Sync the packets and their order stay exactly the game's.
@@ -110,21 +110,57 @@ final class GameHooksSync {
     }
 
     /**
-     * The yaw of the local player's pick ray right now: Minecraft.runTick picks with partial ticks
-     * 1.0 before it handles the clicks, and getLook then takes the camera's yaw (LookFix) or, with
-     * 1.8.9's look, the head's.
+     * A HitConfirm the Stein Sync client read (bridge.sync.SteinSync): to every listener, with the
+     * target as this client's world has it.
      */
-    static float pickYaw(Object player) {
-        return LookFix.pickYaw(player);
+    static void hit(int targetId, float damage, boolean critical, boolean killed, int tick) {
+        if (GameHooks.SINK != null) {
+            try {
+                GameHooks.SINK.steinSyncHit(
+                        targetId, entity(targetId), damage, critical, killed, tick);
+            } catch (Throwable e) {
+                GameHooks.fail("steinSyncHit", e);
+            }
+        }
     }
 
-    /** The sneak state EntityPlayerSP last told the server (its serverSneakState). */
-    static boolean serverSneaking(Object player) {
-        return ((EntityPlayerSP) player).serverSneakState;
+    /** A Damaged the Stein Sync client read: to every listener. */
+    static void damaged(int attackerId, float damage, int cause, boolean critical, boolean killed) {
+        if (GameHooks.SINK != null) {
+            try {
+                GameHooks.SINK.steinSyncDamaged(
+                        attackerId,
+                        attackerId == 0 ? null : entity(attackerId),
+                        damage,
+                        cause,
+                        critical,
+                        killed);
+            } catch (Throwable e) {
+                GameHooks.fail("steinSyncDamaged", e);
+            }
+        }
     }
 
-    /** The sprint state EntityPlayerSP last told the server (its serverSprintState). */
-    static boolean serverSprinting(Object player) {
-        return ((EntityPlayerSP) player).serverSprintState;
+    /** A CombatSeen the Stein Sync client read: to every listener. */
+    static void combatSeen(int attackerId, int targetId, boolean critical, boolean killed) {
+        if (GameHooks.SINK != null) {
+            try {
+                GameHooks.SINK.steinSyncCombatSeen(
+                        attackerId,
+                        entity(attackerId),
+                        targetId,
+                        entity(targetId),
+                        critical,
+                        killed);
+            } catch (Throwable e) {
+                GameHooks.fail("steinSyncCombatSeen", e);
+            }
+        }
+    }
+
+    /** The entity with this id in the client's world, or null. */
+    private static Object entity(int id) {
+        WorldClient world = Minecraft.getMinecraft().theWorld;
+        return world == null ? null : world.getEntityByID(id);
     }
 }

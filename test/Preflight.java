@@ -80,6 +80,8 @@ public final class Preflight {
                                                         || n.startsWith(
                                                                 "dev/xavier/stein/bridge/hooks/")
                                                         || n.startsWith(
+                                                                "dev/xavier/stein/bridge/sync/")
+                                                        || n.startsWith(
                                                                 "dev/xavier/stein/loader/")))
                         .map(n -> n.substring(0, n.length() - 6).replace('/', '.'))
                         .forEach(classes::add);

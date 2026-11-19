@@ -21,6 +21,7 @@ import dev.xavier.stein.bridge.hooks.GameHooks;
 import dev.xavier.stein.bridge.hooks.HookSink;
 import dev.xavier.stein.bridge.showcase.Showcase;
 import dev.xavier.stein.bridge.showcase.VideoSettings;
+import dev.xavier.stein.bridge.sync.SteinSync;
 import dev.xavier.stein.gfx.SteinHdr;
 import dev.xavier.stein.gfx.SteinPostFx;
 import dev.xavier.stein.gfx.SteinRenderScale;
@@ -447,7 +448,7 @@ public final class Lens implements HookSink {
 
     /**
      * The options the engine applies (brightness, nametags, armor, angles, fog, clouds, chunks,
-     * rain, 1.7 animations).
+     * rain, 1.7 animations, Stein Sync).
      */
     private void applyVisuals() {
         Visuals.setGlint(config.glint, config.glintNearBlocks);
@@ -475,6 +476,7 @@ public final class Lens implements HookSink {
         ChunkKeep.setMode(config.keepChunks, config.keepChunksMb);
         Rain.setHidden(!config.rain);
         OldAnimations.set(config.oldAnimations, oldAnimationParts(config));
+        SteinSync.configure(config.hitMarker, config.steinSyncQuic);
     }
 
     /** The enabled parts of the 1.7 animations, in OldAnimations' bits. */

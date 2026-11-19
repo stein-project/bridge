@@ -13,6 +13,8 @@ import dev.xavier.stein.bridge.bench.BenchZones;
 import dev.xavier.stein.bridge.engine.FrameTime;
 import dev.xavier.stein.bridge.engine.LoadingScreen;
 import dev.xavier.stein.bridge.showcase.Showcase;
+import dev.xavier.stein.bridge.sync.SteinSync;
+import dev.xavier.stein.bridge.sync.SyncView;
 import dev.xavier.stein.gfx.SteinDevice;
 import dev.xavier.stein.gfx.SteinGfxOptions;
 import dev.xavier.stein.gfx.SteinRenderScale;
@@ -93,6 +95,13 @@ final class GameHooksHud {
                 GameHooks.fail("overlay", e);
             }
             BenchZones.end(BenchZones.MODS_HUD);
+        }
+        if (SteinSync.ENABLED) {
+            try {
+                SyncView.overlay();
+            } catch (Throwable e) {
+                GameHooks.fail("steinSync.overlay", e);
+            }
         }
         VanillaHud.endFrame(); // the side scoreboard's objective belongs to this frame only
     }

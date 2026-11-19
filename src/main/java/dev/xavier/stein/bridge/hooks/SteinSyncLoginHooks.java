@@ -10,9 +10,9 @@ package dev.xavier.stein.bridge.hooks;
 
 /**
  * The listener of the Stein Sync server list and login hooks ({@link GameHooks#steinSyncLogin}),
- * installed by the Loader. Without one (no Loader, or Stein Sync turned off with {@code
- * -Dsteinloader.noSteinSync}) the status JSON is not even searched for the {@code steinSync} field
- * and every handshake goes out exactly as the game writes it.
+ * installed by the Bridge's Stein Sync client (bridge.sync.SteinSyncJoin). Without one (Stein Sync
+ * turned off with {@code -Dsteinbridge.noSteinSync}) the status JSON is not even searched for the
+ * {@code steinSync} field and every handshake goes out exactly as the game writes it.
  */
 public interface SteinSyncLoginHooks {
 

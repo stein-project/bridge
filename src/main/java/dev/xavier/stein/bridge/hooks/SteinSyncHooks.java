@@ -10,10 +10,10 @@ package dev.xavier.stein.bridge.hooks;
 
 /**
  * The listener of the Stein Sync client messages (stein-sync's docs/protocol.md, section 5): the
- * one object (the Stein Loader's) that may take over the player's movement, attack and block
- * packets on a connection where a Stein Sync proxy negotiated it. Set in {@link
- * GameHooks#steinSync}; while it is null, or it answers false, every hook does exactly what the
- * game does.
+ * one object (the Bridge's Stein Sync client, bridge.sync.SteinSyncClient) that may take over the
+ * player's movement, attack and block packets on a connection where a Stein Sync proxy negotiated
+ * it. Set in {@link GameHooks#steinSync}; while it is null, or it answers false, every hook does
+ * exactly what the game does.
  *
  * <p>Everything is called on the game thread. Each method runs once per packet the game sends (a
  * few per tick), so an implementation answers quickly and without allocating when its connection is

@@ -9,6 +9,7 @@
 package dev.xavier.stein.bridge.hooks;
 
 import dev.xavier.stein.bridge.core.Log;
+import dev.xavier.stein.bridge.sync.SteinSync;
 
 import io.netty.buffer.ByteBuf;
 
@@ -56,15 +57,32 @@ final class GameHooksNet {
     static void customPayload(Object packet, Object handler, Object listener) {
         PacketThreadUtil.checkThreadAndEnqueue(
                 (Packet) packet, (INetHandler) handler, (IThreadListener) listener);
+        if (GameHooks.SINK == null && !SteinSync.ENABLED) {
+            return;
+        }
+        S3FPacketCustomPayload payload = (S3FPacketCustomPayload) packet;
+        String channel = payload.getChannelName();
+        byte[] data;
+        try {
+            ByteBuf buf = payload.getBufferData();
+            data = new byte[buf.readableBytes()];
+            // getBytes by index: reads without advancing the cursor, and the game still reads the
+            // packet afterwards.
+            buf.getBytes(buf.readerIndex(), data);
+        } catch (Throwable e) {
+            GameHooks.fail("customPayload", e);
+            return;
+        }
+        // The Stein Sync client first: its events reach the listeners before the raw packet does.
+        if (SteinSync.ENABLED) {
+            try {
+                SteinSync.received(channel, data);
+            } catch (Throwable e) {
+                GameHooks.fail("steinSync.received", e);
+            }
+        }
         if (GameHooks.SINK != null) {
             try {
-                S3FPacketCustomPayload payload = (S3FPacketCustomPayload) packet;
-                String channel = payload.getChannelName();
-                ByteBuf buf = payload.getBufferData();
-                byte[] data = new byte[buf.readableBytes()];
-                // getBytes by index: reads without advancing the cursor, and the game still reads
-                // the packet afterwards.
-                buf.getBytes(buf.readerIndex(), data);
                 GameHooks.SINK.customPayload(channel, data);
             } catch (Throwable e) {
                 GameHooks.fail("customPayload", e);

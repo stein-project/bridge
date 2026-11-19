@@ -373,6 +373,7 @@ final class VideoDrawing {
             case "textures" -> "grid";
             case "players" -> "users";
             case "animations" -> "sword";
+            case "steinSync" -> "ping";
             case "performance" -> "gauge";
             case "credits" -> "heart";
             default -> "gear";

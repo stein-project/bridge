@@ -30,6 +30,24 @@ Fonts in src/ui/resources/assets/steinui/fonts (Cinzel, EB Garamond, JetBrains M
   SIL Open Font License 1.1 (the OFL-*.txt files next to them).
 
 -------------------------------------------------------------------------------
+Third-party software used next to steinbridge.jar (not inside it)
+-------------------------------------------------------------------------------
+Stein Sync's default QUIC transport. These jars are not packed into steinbridge.jar: wherever they are distributed
+they go, unchanged, as separate files on the game's classpath beside it, together with this notice and the licence
+texts below, so they can be replaced by any compatible version (LGPL-3.0, section 4). Without them the Bridge falls
+back to TCP.
+
+Kwik 0.12.1 (https://github.com/ptrd/kwik)
+  Copyright (c) Peter Doornbosch. GNU Lesser General Public License v3 (licenses/kwik-lgpl-3.0.txt, which
+  supplements the GNU General Public License v3 in licenses/kwik-gpl-3.0.txt). Source: the URL above.
+Agent15 4.0 (https://github.com/ptrd/agent15)
+  Copyright (c) Peter Doornbosch. GNU Lesser General Public License v3 (same texts as Kwik). Source: the URL above.
+HKDF 2.0.0 (https://github.com/patrickfav/hkdf)
+  Copyright (c) Patrick Favre-Bulle. Apache License 2.0 (licenses/hkdf-license.txt).
+SipHash 2.0.1, io7m repackage (https://github.com/io7m-com/siphash-java)
+  Copyright (c) 2016 Isaac Whitfield. MIT License (licenses/siphash-license.txt).
+
+-------------------------------------------------------------------------------
 Compatibility code
 -------------------------------------------------------------------------------
 The classes under org.lwjgl in src/main/java implement the part of the LWJGL 2 public API the game

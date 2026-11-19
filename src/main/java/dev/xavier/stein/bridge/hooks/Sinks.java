@@ -493,13 +493,48 @@ final class Sinks implements HookSink {
     }
 
     @Override
-    public void serverListEntry(
-            Object serverData, int x, int y, int listWidth, int mouseX, int mouseY) {
+    public void steinSyncHit(
+            int targetId, Object target, float damage, boolean critical, boolean killed, int tick) {
         for (int i = 0; i < sinks.length; i++) {
             try {
-                sinks[i].serverListEntry(serverData, x, y, listWidth, mouseX, mouseY);
+                sinks[i].steinSyncHit(targetId, target, damage, critical, killed, tick);
             } catch (Throwable e) {
-                fail(i, "serverListEntry", e);
+                fail(i, "steinSyncHit", e);
+            }
+        }
+    }
+
+    @Override
+    public void steinSyncDamaged(
+            int attackerId,
+            Object attacker,
+            float damage,
+            int cause,
+            boolean critical,
+            boolean killed) {
+        for (int i = 0; i < sinks.length; i++) {
+            try {
+                sinks[i].steinSyncDamaged(attackerId, attacker, damage, cause, critical, killed);
+            } catch (Throwable e) {
+                fail(i, "steinSyncDamaged", e);
+            }
+        }
+    }
+
+    @Override
+    public void steinSyncCombatSeen(
+            int attackerId,
+            Object attacker,
+            int targetId,
+            Object target,
+            boolean critical,
+            boolean killed) {
+        for (int i = 0; i < sinks.length; i++) {
+            try {
+                sinks[i].steinSyncCombatSeen(
+                        attackerId, attacker, targetId, target, critical, killed);
+            } catch (Throwable e) {
+                fail(i, "steinSyncCombatSeen", e);
             }
         }
     }

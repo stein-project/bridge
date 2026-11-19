@@ -42,7 +42,7 @@ import java.util.function.Supplier;
  *   <li><b>Light and shadows</b>, <b>Image</b> (bloom, edges, filters, the render resolution) and
  *       <b>Screen and HDR</b>;
  *   <li><b>World</b> (sky, weather, particles) and <b>Textures</b>;
- *   <li><b>Camera and players</b>, <b>1.7 animations</b> and <b>Performance</b>.
+ *   <li><b>Camera and players</b>, <b>1.7 animations</b>, <b>Stein Sync</b> and <b>Performance</b>.
  * </ul>
  *
  * <p>"3D Anaglyph" is not offered ({@link Lens} turns it off if it is on). Every track applies
@@ -111,6 +111,7 @@ final class VideoModel implements VideoSettings.Source {
         textures();
         camera();
         animations();
+        steinSync();
         performance();
         List<Section> out = sections;
         sections = null;
@@ -592,6 +593,20 @@ final class VideoModel implements VideoSettings.Source {
                 () -> c.oldArmorHurt,
                 () -> c.oldArmorHurt = !c.oldArmorHurt,
                 old);
+    }
+
+    /**
+     * Stein Sync (only on servers that offer it): the hit marker, and whether a join may go over
+     * QUIC.
+     */
+    private void steinSync() {
+        topic("steinSync");
+        toggle("steinlens.hitMarker", () -> c.hitMarker, () -> c.hitMarker = !c.hitMarker, null);
+        toggle(
+                "steinlens.steinSyncQuic",
+                () -> c.steinSyncQuic,
+                () -> c.steinSyncQuic = !c.steinSyncQuic,
+                null);
     }
 
     private void performance() {

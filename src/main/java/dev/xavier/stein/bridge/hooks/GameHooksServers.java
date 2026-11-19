@@ -11,6 +11,8 @@ package dev.xavier.stein.bridge.hooks;
 import com.google.gson.Gson;
 
 import dev.xavier.stein.bridge.core.Log;
+import dev.xavier.stein.bridge.sync.SteinSync;
+import dev.xavier.stein.bridge.sync.SyncView;
 
 import io.netty.buffer.Unpooled;
 
@@ -199,8 +201,8 @@ final class GameHooksServers {
 
     /**
      * In place of IGuiListEntry.drawEntry in GuiListExtended.drawSlot: the entry draws itself, then
-     * the listeners draw over a multiplayer server entry. Every list goes through here; the others
-     * only pay an instanceof.
+     * the Stein Sync badge goes over a multiplayer server entry. Every list goes through here; the
+     * others only pay an instanceof.
      */
     static void drawEntry(
             Object entry,
@@ -214,9 +216,9 @@ final class GameHooksServers {
             boolean selected) {
         ((GuiListExtended.IGuiListEntry) entry)
                 .drawEntry(slot, x, y, listWidth, slotHeight, mouseX, mouseY, selected);
-        if (GameHooks.SINK != null && entry instanceof ServerListEntryNormal) {
+        if (SteinSync.ENABLED && entry instanceof ServerListEntryNormal) {
             try {
-                GameHooks.SINK.serverListEntry(
+                SyncView.serverListEntry(
                         ((ServerListEntryNormal) entry).getServerData(),
                         x,
                         y,
