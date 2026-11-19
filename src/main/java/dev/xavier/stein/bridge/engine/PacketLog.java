@@ -13,6 +13,7 @@ import static java.lang.invoke.MethodType.methodType;
 import dev.xavier.stein.bridge.core.Log;
 import dev.xavier.stein.bridge.core.SteinLog;
 import dev.xavier.stein.bridge.core.SteinLog.Topic;
+import dev.xavier.stein.bridge.net.SyncApplied;
 
 import net.minecraft.network.INetHandler;
 import net.minecraft.network.Packet;
@@ -90,6 +91,7 @@ public final class PacketLog {
     @SuppressWarnings({"rawtypes", "unchecked"})
     public static void in(Object packet, Object handler) {
         Watchdog.packetIn();
+        SyncApplied.arrived(packet, handler);
         if (SteinLog.on(Topic.NET)) {
             countQuietly(IN, packet);
         }

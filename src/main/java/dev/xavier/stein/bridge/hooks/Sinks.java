@@ -493,6 +493,18 @@ final class Sinks implements HookSink {
     }
 
     @Override
+    public void serverListEntry(
+            Object serverData, int x, int y, int listWidth, int mouseX, int mouseY) {
+        for (int i = 0; i < sinks.length; i++) {
+            try {
+                sinks[i].serverListEntry(serverData, x, y, listWidth, mouseX, mouseY);
+            } catch (Throwable e) {
+                fail(i, "serverListEntry", e);
+            }
+        }
+    }
+
+    @Override
     public String sendChat(String message) {
         for (int i = 0; i < sinks.length && message != null; i++) {
             try {

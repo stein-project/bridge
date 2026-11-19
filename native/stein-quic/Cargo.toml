@@ -1,0 +1,29 @@
+[package]
+name = "stein-quic"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.95"
+license = "MPL-2.0"
+publish = false
+description = "Client side of the Stein Sync QUIC transport: the game's byte stream over one QUIC stream, Ticks as redundant datagrams, the proxy's certificate pinned from the server list."
+
+[dependencies]
+# rustls-ring: the same TLS stack and crypto provider as the proxy; no
+# platform verifier (the certificate is pinned, never checked against a CA)
+# and no `log` (the Stein standard is `tracing`).
+quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
+rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
+ring = "0.17"
+socket2 = "0.6"
+tokio = { version = "1.54", features = ["rt-multi-thread", "net", "io-util", "time", "sync", "macros"] }
+tracing = "0.1"
+bytes = "1"
+
+[lints.rust]
+missing_docs = "warn"
+unsafe_op_in_unsafe_fn = "deny"
+
+[lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
+undocumented_unsafe_blocks = "warn"

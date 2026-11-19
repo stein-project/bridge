@@ -186,6 +186,7 @@ public final class ChunkKeep {
         Integer kept = KEPT.remove(key);
         if (kept != null) {
             keptBytes -= kept;
+            SyncMove.released(x, z);
         }
         if (load) {
             if (kept != null) {
@@ -212,6 +213,7 @@ public final class ChunkKeep {
         }
         int bytes = estimate(chunk);
         KEPT.put(key, bytes);
+        SyncMove.kept(x, z);
         keptBytes += bytes;
         trim(w);
     }
@@ -320,6 +322,7 @@ public final class ChunkKeep {
     private static void switchWorld(WorldClient w) {
         world = w;
         KEPT.clear();
+        SyncMove.releasedAll();
         keptBytes = 0;
         dir = null;
         dirResolved = false;
@@ -367,6 +370,7 @@ public final class ChunkKeep {
                 break;
             }
             keptBytes -= KEPT.remove(k);
+            SyncMove.released(keyX(k), keyZ(k));
             release(w, k);
         }
     }
@@ -376,6 +380,7 @@ public final class ChunkKeep {
             release(w, k);
         }
         KEPT.clear();
+        SyncMove.releasedAll();
         keptBytes = 0;
     }
 
@@ -552,6 +557,7 @@ public final class ChunkKeep {
         w.markBlockRangeForRenderUpdate(x << 4, 0, z << 4, (x << 4) + 15, 256, (z << 4) + 15);
         int bytes = estimate(chunk);
         KEPT.put(key, bytes);
+        SyncMove.kept(x, z);
         keptBytes += bytes;
     }
 

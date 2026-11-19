@@ -27,6 +27,16 @@ public final class LookFix {
 
     private static final boolean VANILLA = EngineOptions.VANILLA_LOOK;
 
+    /**
+     * The yaw getLook(1.0) uses for the local player: the camera's, or the head's with 1.8.9's
+     * look. Stein Sync reports it as the rotation of an attack's pick (the click is handled after a
+     * pick with partial ticks 1.0).
+     */
+    public static float pickYaw(Object player) {
+        EntityLivingBase e = (EntityLivingBase) player;
+        return !VANILLA && e instanceof EntityPlayerSP ? e.rotationYaw : e.rotationYawHead;
+    }
+
     /** EntityLivingBase.getLook(partialTicks): the same float operations in the same order. */
     public static Object look(Object self, float partialTicks) {
         EntityLivingBase e = (EntityLivingBase) self;

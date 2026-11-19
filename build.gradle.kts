@@ -581,6 +581,23 @@ val sanityTest = tasks.register<JavaExec>("sanityTest") {
 
 dependencies { testCompileOnly(files(bridgeJar)) }
 
+// engine/SyncMove (Stein Sync move): its column set and box rules, against the patched game (the class names the Bridge
+// jar refers to).
+val syncMoveTest = tasks.register<JavaExec>("syncMoveTest") {
+    group = "verification"
+    description = "Checks the Stein Sync move world's kept-column set and chest/anvil box rules (engine/SyncMove)."
+    classpath = gameClasspath() + sourceSets.test.get().output
+    mainClass = "dev.xavier.stein.bridge.engine.SyncMoveTest"
+}
+
+// engine/SyncReplay (Stein Sync reconciliation): the ring, the replay order and its refusals, against a model player.
+val syncReplayTest = tasks.register<JavaExec>("syncReplayTest") {
+    group = "verification"
+    description = "Checks the Stein Sync reconciliation's ring and replay driver (engine/SyncReplay)."
+    classpath = gameClasspath() + sourceSets.test.get().output
+    mainClass = "dev.xavier.stein.bridge.engine.SyncReplayTest"
+}
+
 // docs/OPTIONS.md: every -D option, from the Javadoc of the *Options classes (tools/OptionsDoc.java).
 tasks.register<JavaExec>("options") {
     group = "documentation"
@@ -648,7 +665,7 @@ gpuProgram("vkSelfTest", "dev.xavier.stein.gfx.vk.SteinVkSelfTest",
     "The Stein GFX API tests on the experimental Vulkan backend, offscreen.")
 
 tasks.assemble { dependsOn(bridgeJar, patchGame, patchSound, gameRuntime) }
-tasks.check { dependsOn(coverage, preflight, sanityTest, optionsCheck) }
+tasks.check { dependsOn(coverage, preflight, sanityTest, optionsCheck, syncMoveTest, syncReplayTest) }
 
 // ---- running the game ----
 

@@ -43,6 +43,12 @@ public final class Sprint {
     /** With {@link #onHit}: the hit does not brake either (the 0.6 of the speed). */
     private static volatile boolean noSlow;
 
+    /**
+     * The server moves the player itself (Stein Sync's {@code move}): the options above keep what
+     * was asked, but none of them acts, so the client moves exactly as the server simulates.
+     */
+    private static volatile boolean vanillaMovement;
+
     private Sprint() {}
 
     /**
@@ -85,7 +91,11 @@ public final class Sprint {
      * the game.
      */
     public static void sprintOnHit(Object player, boolean value) {
-        if (onHit && !value && player instanceof EntityPlayerSP) {
+        if (!value) {
+            // The hit's slowdown, for the Stein Sync reconciliation's history.
+            SyncReplay.hitSlowdown(player);
+        }
+        if (onHit && !vanillaMovement && !value && player instanceof EntityPlayerSP) {
             if (noSlow) {
                 // The hit has just done motionX *= 0.6 and motionZ *= 0.6 (the two lines before
                 // this call).
@@ -101,6 +111,20 @@ public final class Sprint {
     /** Turns it on or off (through the Loader API {@code Gameplay}). */
     public static void setAllDirections(boolean on) {
         allDirections = on;
+    }
+
+    /**
+     * Holds every option of this class off while the server moves the player (the Loader, for a
+     * Stein Sync connection that negotiated {@code move}), and lets them act again after; what the
+     * mods asked for is kept meanwhile.
+     */
+    public static void setVanillaMovement(boolean on) {
+        vanillaMovement = on;
+    }
+
+    /** Is any option of this class asked for (whether or not it acts right now)? */
+    public static boolean anyOption() {
+        return allDirections || onHit;
     }
 
     /**
@@ -120,7 +144,7 @@ public final class Sprint {
      * tick.
      */
     public static void beforeLivingUpdate() {
-        if (allDirections && !broken) {
+        if (allDirections && !vanillaMovement && !broken) {
             sprintAll();
         }
         if (LOG) {

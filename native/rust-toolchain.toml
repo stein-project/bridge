@@ -1,0 +1,7 @@
+[toolchain]
+# The same pinned release as the Stein Sync proxy (whose tests and bench
+# build stein-quic as a path dependency), so both ends of the QUIC link come
+# out of one compiler.
+channel = "1.95.0"
+profile = "minimal"
+components = ["clippy", "rustfmt"]

@@ -38,8 +38,9 @@ import java.util.ServiceLoader;
  * <p>This class is the stable face the patcher and the Loader call: the method names and
  * descriptors are frozen. The lifecycle and input hooks are implemented here; the rest delegate to
  * {@link GameHooksHud} (screens and HUD), {@link GameHooksRender} (camera, atlas, models), {@link
- * GameHooksNet} (player actions, packets) and {@link GameHooksEntity} (hidden and ghost entities,
- * health), each holding the obfuscated handles of its area.
+ * GameHooksNet} (player actions, packets), {@link GameHooksServers} (the server list) and {@link
+ * GameHooksEntity} (hidden and ghost entities, health), each holding the obfuscated handles of its
+ * area.
  */
 public final class GameHooks {
 
@@ -285,6 +286,107 @@ public final class GameHooks {
     public static void customPayload(Object packet, Object handler, Object listener)
             throws Throwable {
         GameHooksNet.customPayload(packet, handler, listener);
+    }
+
+    /** See {@link GameHooksServers#statusJson}. */
+    public static Object statusJson(Object gson, Object json, Object type) {
+        return GameHooksServers.statusJson(gson, json, type);
+    }
+
+    /** See {@link GameHooksServers#serverInfo}. */
+    public static void serverInfo(Object packet, Object handler) {
+        GameHooksServers.serverInfo(packet, handler);
+    }
+
+    /** See {@link GameHooksServers#drawEntry}. */
+    public static void drawListEntry(
+            Object entry,
+            int slot,
+            int x,
+            int y,
+            int listWidth,
+            int slotHeight,
+            int mouseX,
+            int mouseY,
+            boolean selected) {
+        GameHooksServers.drawEntry(
+                entry, slot, x, y, listWidth, slotHeight, mouseX, mouseY, selected);
+    }
+
+    /**
+     * The Stein Sync offer the last server list ping of this ServerData found (the server's status
+     * claims it), or null: for the Loader's server list badge.
+     */
+    public static SteinSyncOffer steinSyncOffer(Object serverData) {
+        return GameHooksServers.offer(serverData);
+    }
+
+    /**
+     * The listener of the Stein Sync client messages (the Loader's), or null: then every Stein Sync
+     * hook below does exactly what the game does.
+     */
+    public static volatile SteinSyncHooks steinSync;
+
+    /**
+     * The listener of the Stein Sync server list and login hooks (the Loader's), or null: then the
+     * status JSON is not searched for the Stein Sync offer and logins go out as the game writes
+     * them.
+     */
+    public static volatile SteinSyncLoginHooks steinSyncLogin;
+
+    /** See {@link GameHooksServers#connectPacket}. */
+    public static void connectPacket(Object networkManager, Object packet) {
+        GameHooksServers.connectPacket(networkManager, packet);
+    }
+
+    /** See {@link GameHooksLogin#refusalReason}. */
+    public static Object loginRefusalReason(Object buffer) throws java.io.IOException {
+        return GameHooksLogin.refusalReason(buffer);
+    }
+
+    /** See {@link GameHooksLogin#failedScreen}. */
+    public static void loginFailedScreen(Object mc, Object screen) {
+        GameHooksLogin.failedScreen(mc, screen);
+    }
+
+    /** See {@link GameHooksSync#playerPacket}. */
+    public static void syncPlayerPacket(Object handler, Object packet) {
+        GameHooksSync.playerPacket(handler, packet);
+    }
+
+    /** See {@link GameHooksSync#playerWalked}. */
+    public static void syncPlayerWalked() {
+        GameHooksSync.playerWalked();
+    }
+
+    /** See {@link GameHooksSync#attackPacket}. */
+    public static void syncAttackPacket(Object handler, Object packet) {
+        GameHooksSync.attackPacket(handler, packet);
+    }
+
+    /** See {@link GameHooksSync#blockPacket}. */
+    public static void syncBlockPacket(Object handler, Object packet) {
+        GameHooksSync.blockPacket(handler, packet);
+    }
+
+    /** See {@link GameHooksSync#blockChange}. */
+    public static boolean syncBlockChange(Object world, Object pos, Object state) {
+        return GameHooksSync.blockChange(world, pos, state);
+    }
+
+    /** See {@link GameHooksSync#pickYaw}. */
+    public static float syncPickYaw(Object player) {
+        return GameHooksSync.pickYaw(player);
+    }
+
+    /** See {@link GameHooksSync#serverSneaking}. */
+    public static boolean syncServerSneaking(Object player) {
+        return GameHooksSync.serverSneaking(player);
+    }
+
+    /** See {@link GameHooksSync#serverSprinting}. */
+    public static boolean syncServerSprinting(Object player) {
+        return GameHooksSync.serverSprinting(player);
     }
 
     /** See {@link GameHooksNet#sendChat}. */

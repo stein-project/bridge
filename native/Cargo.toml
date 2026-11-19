@@ -1,0 +1,17 @@
+# Native code of the Stein Bridge: the client side of the Stein Sync QUIC
+# transport (stein-sync's docs/protocol.md section 7).
+#
+# - stein-quic: the transport itself, a plain Rust library (the Stein Sync
+#   tests and bench use it as a path dependency, so they measure the code
+#   the game runs);
+# - stein-quic-ffi: the C ABI the Bridge calls through Java's foreign
+#   function API (java.lang.foreign), built as the shared library the game
+#   loads.
+[workspace]
+resolver = "2"
+members = ["stein-quic", "stein-quic-ffi"]
+
+[profile.release]
+strip = "symbols"
+lto = "thin"
+codegen-units = 1

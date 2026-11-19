@@ -113,6 +113,7 @@ listed at the end.
 - `-Dsteinbridge.diag.graphicsAtSec=S:1,S:0...`: switches Fancy (1) or Fast (0) graphics at second S (default: none).
 - `-Dsteinbridge.diag.citAtSec=N`: runs the custom-item-textures scene N seconds after startup (default: off).
 - `-Dsteinbridge.diag.thirdPerson=N`: keeps the third-person view, 1 from behind or 2 from the front (default 0: off).
+- `-Dsteinbridge.diag.syncReplayCheck=D`: with `singleplayer`, checks the Stein Sync reconciliation (engine/SyncReplay) on a lane it builds: exact identity replays, and one push of D blocks corrected by a replay (default: off).
 
 ## EngineOptions
 

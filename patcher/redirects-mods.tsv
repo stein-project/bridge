@@ -110,9 +110,80 @@ bet	m	()V	beforeLivingUpdate	dev/xavier/stein/bridge/engine/Sprint	before	bew.m(
 bjl	a	(Lpr;)Z	canRenderName	dev/xavier/stein/bridge/engine/Visuals	static	bjl.b(Lpr;DDD)V
 # LayerArmorBase.doRenderLayer (bkn.a(Lpr;FFFFFFF)V): each worn piece (hidden armor).
 bkn	a	(Lpr;FFFFFFFI)V	renderArmorPiece	dev/xavier/stein/bridge/engine/Visuals	static	bkn.a(Lpr;FFFFFFF)V
-# MathHelper.sin/cos (ns.a, ns.b): the game's own table, or the compact one with the "compact angles" option.
-ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	body
-ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	body
+# MathHelper.sin/cos (ns.a, ns.b) in drawing code only: model animations (client/model), particles, entity, layer and
+# tile entity renderers, the view bobbing and camera of EntityRenderer and the hand and item of ItemRenderer go through
+# AngleTable (the game's table, or the compact one with the "compact angles" option). Movement, physics and every
+# other piece of game logic keep calling the game's own MathHelper untouched, so the option never changes where a
+# player steps. One rule per calling method (the call sites were listed from the game jar by class package).
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bav.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	baw.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	baw.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bay.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bba.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bbc.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bbe.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bbe.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bbf.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bbg.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bbg.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bbh.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bbh.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bbj.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bbj.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bbp.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bbt.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bbu.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bby.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bby.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bcd.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bcd.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bce.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bce.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bci.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bcj.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bcj.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bck.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bck.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bcl.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bcl.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bcm.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bcn.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bcn.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bdq$a.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bdz.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bea.<init>
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bec.b
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bec.b
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bfk.d
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bfk.e
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bfk.e
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bfk.f
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bfk.f
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bfk.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bfk.i
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bfn.c
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bfn.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bfn.d
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bfn.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bfn.b
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bha.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bhf.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bih.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bii.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bik.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bim.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bio.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	biq.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bir.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bir.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	biw.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	biz.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	biz.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bjf.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bjm.a
+ns	a	(F)F	sin	dev/xavier/stein/bridge/engine/AngleTable	static	bkp.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	bkp.a
+ns	b	(F)F	cos	dev/xavier/stein/bridge/engine/AngleTable	static	blj.a
 # EntityRenderer.setupFog (bfk.a(IF)V): start and end recorded (setFogStart/End, bfl.b/c) and, after
 # enableFog (bfl.m), the terrain fog from the option. getRenderViewEntity (ave.ac) is the first call.
 ave	ac	()Lpk;	fogBegin	dev/xavier/stein/bridge/engine/Visuals	before	bfk.a(IF)V
@@ -238,6 +309,93 @@ bfl	n	()V	renderWorld	dev/xavier/stein/bridge/hooks/GameHooks	after	bfk.a(IFJ)V
 # NetHandlerPlayClient.handleCustomPayload (bcy.a(Lgg;)V): PacketThreadUtil.checkThreadAndEnqueue (fh.a) goes through the
 # Bridge, which calls it and hands the channel and the bytes to the mods already on the game thread.
 fh	a	(Lff;Lep;Lod;)V	customPayload	dev/xavier/stein/bridge/hooks/GameHooks	static	bcy.a(Lgg;)V
+# Stein Sync in the server list (hooks/GameHooksServers): the Gson parse of the status JSON in
+# S00PacketServerInfo.readPacketData (jr.a(Lem;)V) also reads the "steinSync" offer, kept on the ServerStatusResponse (js); the body of
+# S00PacketServerInfo.processPacket (jr.a(Ljp;)V) copies it to the ServerData (bde) the pinger's handler is pinging; and
+# after each IGuiListEntry.drawEntry of GuiListExtended.drawSlot (awd.a(IIIIII)V) the listeners draw over a server entry.
+js	sbSteinSync	Ljava/lang/Object;	-	-	field
+bde	sbSteinSync	Ljava/lang/Object;	-	-	field
+com/google/gson/Gson	fromJson	(Ljava/lang/String;Ljava/lang/Class;)Ljava/lang/Object;	statusJson	dev/xavier/stein/bridge/hooks/GameHooks	static	jr.a(Lem;)V
+jr	a	(Ljp;)V	serverInfo	dev/xavier/stein/bridge/hooks/GameHooks	body
+awd$a	a	(IIIIIIIZ)V	drawListEntry	dev/xavier/stein/bridge/hooks/GameHooks	static	awd.a(IIIIII)V
+# Stein Sync login marker (hooks/GameHooksServers.connectPacket, stein-sync docs/protocol.md section 6): the
+# NetworkManager.sendPacket (ek.a(Lff;)V) calls of GuiConnecting's connection thread (awz$1.run) go through the Bridge,
+# which hands the login handshake's address to the Loader; without the Loader's listener the packet goes out as made.
+ek	a	(Lff;)V	connectPacket	dev/xavier/stein/bridge/hooks/GameHooks	static	awz$1.run()V
+# Stein Sync QUIC transport (engine/Net.loginConnect, stein-sync docs/protocol.md section 7): GuiConnecting's
+# NetworkManager.createNetworkManagerAndConnect (ek.a(Ljava/net/InetAddress;IZ)Lek;) is marked as a join, so a listener
+# of engine/Net can take a join over QUIC while server list pings (the same function, from OldServerPinger) stay TCP.
+ek	a	(Ljava/net/InetAddress;IZ)Lek;	loginConnect	dev/xavier/stein/bridge/engine/Net	static	awz$1.run()V
+# A transport inside the JVM (Kwik's QUIC: a Netty LocalChannel to the Loader's link) carries a real server's compressed
+# stream: NetworkManager.isLocalChannel (ek.c) where the client turns compression on (NetHandlerLoginClient's
+# handleEnableCompression bcx.a(Lji;)V, NetHandlerPlayClient's handleSetCompressionLevel bcy.a(Lgl;)V) answers false
+# for it (engine/Net.isLocalChannel); the integrated server's channel stays local.
+ek	c	()Z	isLocalChannel	dev/xavier/stein/bridge/engine/Net	static	bcx.a(Lji;)V
+ek	c	()Z	isLocalChannel	dev/xavier/stein/bridge/engine/Net	static	bcy.a(Lgl;)V
+# Stein Sync Tick's `applied` (net/SyncApplied, stein-sync docs/protocol.md section 5.5): each task
+# PacketThreadUtil.checkThreadAndEnqueue (fh.a) hands to the game thread (IThreadListener.addScheduledTask, od.a) is numbered with
+# its packet, and the packet's processPacket (ff.a) in that task (fh$1.run) counts it as handled. The arrival count is in
+# engine/PacketLog.in.
+od	a	(Ljava/lang/Runnable;)Lcom/google/common/util/concurrent/ListenableFuture;	enqueue	dev/xavier/stein/bridge/net/SyncApplied	static	fh.a(Lff;Lep;Lod;)V
+ff	a	(Lep;)V	run	dev/xavier/stein/bridge/net/SyncApplied	static	fh$1.run()V
+# Stein Sync login refusal hint (hooks/GameHooksServers, protocol section 6.2): the reason of a login Disconnect
+# (S00PacketDisconnect.readPacketData, jj.a(Lem;)V, PacketBuffer.readChatComponent em.d) is shown to the Loader, and the screen
+# NetHandlerLoginClient.onDisconnect (bcx.a(Leu;)V) shows for it goes through the Loader, which may join again at once
+# instead (a server that requires Stein, joined without the server list's offer).
+em	d	()Leu;	loginRefusalReason	dev/xavier/stein/bridge/hooks/GameHooks	static	jj.a(Lem;)V
+ave	a	(Laxu;)V	loginFailedScreen	dev/xavier/stein/bridge/hooks/GameHooks	static	bcx.a(Leu;)V
+# Stein Sync client messages (hooks/GameHooksSync, the Loader's SteinSyncClient; stein-sync docs/protocol.md section 5): the
+# packets EntityPlayerSP.onUpdate (bew.t_) and onUpdateWalkingPlayer (bew.p) send through NetHandlerPlayClient.addToSendQueue
+# (bcy.a(Lff;)V), and the end of onUpdateWalkingPlayer; the attack PlayerControllerMP.attackEntity (bda.a(Lwn;Lpk;)V) sends;
+# the C07/C08 of clickBlock (bda.b(Lcj;Lcq;)Z), onPlayerDamageBlock (bda.c(Lcj;Lcq;)Z), resetBlockRemoving (bda.c()V) and
+# onPlayerRightClick (bda.a(Lbew;...)Z); and WorldClient.invalidateRegionAndSetBlock (bdb.b(Lcj;Lalz;)Z) in handleBlockChange
+# (bcy.a(Lfv;)V) and handleMultiBlockChange (bcy.a(Lfz;)V). Without a Stein Sync connection each one does what the game does.
+bcy	a	(Lff;)V	syncPlayerPacket	dev/xavier/stein/bridge/hooks/GameHooks	static	bew.p()V
+bcy	a	(Lff;)V	syncPlayerPacket	dev/xavier/stein/bridge/hooks/GameHooks	static	bew.t_()V
+bew	p	()V	syncPlayerWalked	dev/xavier/stein/bridge/hooks/GameHooks	after	bew.t_()V
+bcy	a	(Lff;)V	syncAttackPacket	dev/xavier/stein/bridge/hooks/GameHooks	static	bda.a(Lwn;Lpk;)V
+bcy	a	(Lff;)V	syncBlockPacket	dev/xavier/stein/bridge/hooks/GameHooks	static	bda.b(Lcj;Lcq;)Z
+bcy	a	(Lff;)V	syncBlockPacket	dev/xavier/stein/bridge/hooks/GameHooks	static	bda.c(Lcj;Lcq;)Z
+bcy	a	(Lff;)V	syncBlockPacket	dev/xavier/stein/bridge/hooks/GameHooks	static	bda.c()V
+bcy	a	(Lff;)V	syncBlockPacket	dev/xavier/stein/bridge/hooks/GameHooks	static	bda.a(Lbew;Lbdb;Lzx;Lcj;Lcq;Laui;)Z
+bdb	b	(Lcj;Lalz;)Z	syncBlockChange	dev/xavier/stein/bridge/hooks/GameHooks	static	bcy.a(Lfv;)V
+bdb	b	(Lcj;Lalz;)Z	syncBlockChange	dev/xavier/stein/bridge/hooks/GameHooks	static	bcy.a(Lfz;)V
+# Stein Sync move (engine/SyncMove, stein-sync docs/protocol.md 5.5 and physics-spec.md 15.6, 15.7, 18): while the Loader says a
+# Stein Sync proxy runs the player's movement, the client collides with the blocks the proxy's physics uses; otherwise each hook
+# does what the game does. In World.getCollidingBoundingBoxes (adm.a(Lpk;Laug;)Ljava/util/List;) each Block.addCollisionBoxesToList
+# (afh.a) goes through it: a chest or anvil adds the box of its own state, never the kind's shared bounds (drawing, outline and
+# crosshair keep those). The World.getBlockState (adm.p) of the movement code reads a column the extended distance keeps (the server
+# dropped it) as air: the collision gathering, Entity.moveEntity (pk.d), doBlockCollisions (pk.Q), EntityLivingBase's
+# moveEntityWithHeading (pr.g) and isOnLadder (pr.k_), World.handleMaterialAcceleration (adm.a(Laug;Larm;Lpk;)Z), isAABBInMaterial
+# (adm.b(Laug;Larm;)Z), isMaterialInBB (adm.a(Laug;Larm;)Z), isAnyLiquid (adm.d(Laug;)Z) and EntityPlayerSP.isOpenBlockSpace
+# (bew.e(Lcj;)Z); and Chunk.isLoaded (amy.o) in moveEntityWithHeading, the gravity of a column not received, answers false for it.
+afh	a	(Ladm;Lcj;Lalz;Laug;Ljava/util/List;Lpk;)V	collisionBoxes	dev/xavier/stein/bridge/engine/SyncMove	static	adm.a(Lpk;Laug;)Ljava/util/List;
+adm	p	(Lcj;)Lalz;	movementBlock	dev/xavier/stein/bridge/engine/SyncMove	static	adm.a(Lpk;Laug;)Ljava/util/List;
+adm	p	(Lcj;)Lalz;	movementBlock	dev/xavier/stein/bridge/engine/SyncMove	static	pk.d(DDD)V
+adm	p	(Lcj;)Lalz;	movementBlock	dev/xavier/stein/bridge/engine/SyncMove	static	pk.Q()V
+adm	p	(Lcj;)Lalz;	movementBlock	dev/xavier/stein/bridge/engine/SyncMove	static	pr.g(FF)V
+adm	p	(Lcj;)Lalz;	movementBlock	dev/xavier/stein/bridge/engine/SyncMove	static	pr.k_()Z
+adm	p	(Lcj;)Lalz;	movementBlock	dev/xavier/stein/bridge/engine/SyncMove	static	adm.a(Laug;Larm;Lpk;)Z
+adm	p	(Lcj;)Lalz;	movementBlock	dev/xavier/stein/bridge/engine/SyncMove	static	adm.b(Laug;Larm;)Z
+adm	p	(Lcj;)Lalz;	movementBlock	dev/xavier/stein/bridge/engine/SyncMove	static	adm.a(Laug;Larm;)Z
+adm	p	(Lcj;)Lalz;	movementBlock	dev/xavier/stein/bridge/engine/SyncMove	static	adm.d(Laug;)Z
+adm	p	(Lcj;)Lalz;	movementBlock	dev/xavier/stein/bridge/engine/SyncMove	static	bew.e(Lcj;)Z
+amy	o	()Z	columnLoaded	dev/xavier/stein/bridge/engine/SyncMove	static	pr.g(FF)V
+# Stein Sync reconciliation (engine/SyncReplay, stein-sync docs/protocol.md milestone 7): while the Loader says a Stein Sync
+# proxy holds the authority over the player's movement, each tick's input and state are kept, and a Correction restores a tick and
+# runs the ticks after it again with the game's own movement code. Off (no such connection) each hook does what the game does.
+# Before World.isBlockLoaded (adm.e) at the start of EntityPlayerSP.onUpdate (bew.t_): the changes since the last tick (teleport,
+# velocity, hits). MovementInput.updatePlayerMoveState (beu.a) and KeyBinding.isKeyDown (avb.d, the sprint key) in
+# EntityPlayerSP.onLivingUpdate (bew.m): the tick's input is noted, or given back in a replay. In a replay the player's sounds
+# (World.playSound, adm.a, in EntityPlayerSP.playSound, bew.a(Ljava/lang/String;FF)V) and the splash particles
+# (World.spawnParticle, adm.a, in Entity.resetHeight, pk.X) are dropped. Entity.setVelocity (pk.i) in
+# NetHandlerPlayClient.handleEntityVelocity (bcy.a(Lhm;)V): the server's velocity for the player is noted as a value set.
+adm	e	(Lcj;)Z	preTick	dev/xavier/stein/bridge/engine/SyncReplay	before	bew.t_()V
+beu	a	()V	moveState	dev/xavier/stein/bridge/engine/SyncReplay	static	bew.m()V
+avb	d	()Z	sprintKey	dev/xavier/stein/bridge/engine/SyncReplay	static	bew.m()V
+adm	a	(DDDLjava/lang/String;FFZ)V	playerSound	dev/xavier/stein/bridge/engine/SyncReplay	static	bew.a(Ljava/lang/String;FF)V
+adm	a	(Lcy;DDDDDD[I)V	splashParticle	dev/xavier/stein/bridge/engine/SyncReplay	static	pk.X()V
+pk	i	(DDD)V	velocity	dev/xavier/stein/bridge/engine/SyncReplay	static	bcy.a(Lhm;)V
 # GuiScreen.sendChatMessage(String, boolean) (axu.b): EntityPlayerSP.sendChatMessage (bew.e) goes through the mods — chat
 # and command, before going to the server (Forge's ClientChatEvent; client-only commands).
 bew	e	(Ljava/lang/String;)V	sendChat	dev/xavier/stein/bridge/hooks/GameHooks	static	axu.b(Ljava/lang/String;Z)V
@@ -266,6 +424,15 @@ blb	b	()Z	combineTextures	dev/xavier/stein/bridge/engine/OldAnimations	static	bj
 # Minecraft.sendClickBlockToController (ave.b(Z)V): the isUsingItem that makes it return without mining; while using an item with attack
 # held on a block, the hand swings on screen only (no mining and no packet).
 bew	bS	()Z	usingItem	dev/xavier/stein/bridge/engine/OldAnimations	static	ave.b(Z)V
+# Physics trace (diag/PhysicsTrace, only with -Dsteinbridge.diag.physicsTrace): the player's state right before and right
+# after each runTick (s) of runGameLoop (av), for Stein Sync's clean-room physics replay.
+ave	s	()V	tickBegin	dev/xavier/stein/bridge/diag/PhysicsTrace	before	ave.av
+ave	s	()V	tickEnd	dev/xavier/stein/bridge/diag/PhysicsTrace	after	ave.av
+# The trace's attack and block-action records (same class; each call goes on to the game's own method, the record is
+# written only with the property): EntityPlayer.attackTargetEntityWithCurrentItem (wn.f) in PlayerControllerMP.attackEntity
+# (bda.a), and World.addBlockEvent (on WorldClient, bdb.c) in NetHandlerPlayClient.handleBlockAction (bcy.a(Lfu;)V).
+wn	f	(Lpk;)V	attackTarget	dev/xavier/stein/bridge/diag/PhysicsTrace	static	bda.a(Lwn;Lpk;)V
+bdb	c	(Lcj;Lafh;II)V	blockEvent	dev/xavier/stein/bridge/diag/PhysicsTrace	static	bcy.a(Lfu;)V
 # The benchmark's CPU zones: the end of each zone, after every other rule of the same call (the begins are at the top
 # of redirects-opt.tsv).
 ave	s	()V	tickEnd	dev/xavier/stein/bridge/bench/BenchZones	after	ave.av

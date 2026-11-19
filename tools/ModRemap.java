@@ -93,7 +93,9 @@ public final class ModRemap {
         "net/minecraft/launchwrapper/",
         "dev/xavier/stein/",
         "gnu/trove/",
-        "org/json/"
+        "org/json/",
+        // Kwik, the Loader's QUIC library (its jars ship next to the Loader's)
+        "tech/kwik/"
     };
 
     private ModRemap() {}

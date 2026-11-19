@@ -375,6 +375,13 @@ final class DiagOptions {
     static final int THIRD_PERSON = Opt.integer("steinbridge.diag.thirdPerson", 0);
 
     /**
+     * {@code -Dsteinbridge.diag.syncReplayCheck=D}: with {@code singleplayer}, checks the Stein
+     * Sync reconciliation (engine/SyncReplay) on a lane it builds: exact identity replays, and one
+     * push of D blocks corrected by a replay (default: off).
+     */
+    static final String SYNC_REPLAY_CHECK = Opt.text("steinbridge.diag.syncReplayCheck", null);
+
+    /**
      * A list option: empty when the property is unset or empty, otherwise the value split at {@code
      * regex}.
      */

@@ -11,7 +11,8 @@ package dev.xavier.stein.bridge.engine;
 import net.minecraft.util.MathHelper;
 
 /**
- * Sine and cosine of MathHelper (sin and cos), with the option of a compact table.
+ * Sine and cosine of MathHelper (sin and cos) for the drawing code, with the option of a compact
+ * table.
  *
  * <p>The game looks up a table of 65,536 floats (256 KB), thousands of times per frame, in the
  * model animations (arms, legs and head of every player and mob). With "compact angles" (Visuals,
@@ -19,6 +20,11 @@ import net.minecraft.util.MathHelper;
  * of 0.09 degrees instead of 0.0055. The difference in the animations is small, but the image is
  * not identical — hence it is an option. When off, the lookup is the game's own, in its own table
  * (SIN_TABLE), and the result is bit-for-bit the same.
+ *
+ * <p>Only the drawing code calls here (model animations, particles, renderers, view bobbing, the
+ * hand and the held item: patcher rules per call site, redirects-mods.tsv). Movement and every
+ * other piece of game logic call the game's MathHelper itself, so the option never changes where
+ * the player steps or what the server sees.
  */
 public final class AngleTable {
 
@@ -44,6 +50,19 @@ public final class AngleTable {
 
     public static void setCompact(boolean on) {
         compact = on;
+    }
+
+    /**
+     * Kept for callers from before the table was limited to drawing: the movement never used it
+     * since, so there is nothing to hold off. Does nothing.
+     *
+     * @param on ignored
+     */
+    public static void setVanillaMovement(boolean on) {}
+
+    /** Is the compact table on? */
+    public static boolean compactRequested() {
+        return compact;
     }
 
     /** The table in use right now (the game's, 65536, or the compact one, 4096): read-only. */

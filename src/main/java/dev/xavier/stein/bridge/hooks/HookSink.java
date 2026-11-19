@@ -263,6 +263,14 @@ public interface HookSink {
     default void customPayload(String channel, byte[] data) {}
 
     /**
+     * A multiplayer server list entry (ServerListEntryNormal) has drawn itself, at (x, y) with the
+     * list's width, the mouse at (mouseX, mouseY): to draw over it, or set the screen's hovering
+     * text. Runs on every frame for every visible entry.
+     */
+    default void serverListEntry(
+            Object serverData, int x, int y, int listWidth, int mouseX, int mouseY) {}
+
+    /**
      * What the player sends (chat or command), before it goes out.
      *
      * @return the message (the same or another), or null to not send it
