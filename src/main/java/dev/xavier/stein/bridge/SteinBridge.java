@@ -12,7 +12,7 @@ package dev.xavier.stein.bridge;
 public final class SteinBridge {
 
     public static final String NAME = "Stein Bridge";
-    public static final String VERSION = "0.1.30";
+    public static final String VERSION = "0.1.31";
     public static final String VENDOR = "X4vieer";
 
     private SteinBridge() {}
