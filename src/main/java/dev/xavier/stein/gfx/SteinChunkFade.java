@@ -24,15 +24,37 @@ import java.util.Map;
  *
  * <p>Pipeline: Stein GFX only.
  */
-final class SteinChunkFade {
+public final class SteinChunkFade {
     private SteinChunkFade() {}
 
     /**
-     * Duration of the animation in seconds ({@code -Dsteinbridge.gfx.chunkFade=false} turns it off;
-     * the time in {@code steinbridge.gfx.chunkFadeMs}, default 700).
+     * The player's choice (Video settings, World): off draws every chunk at once. The bookkeeping
+     * goes on either way, so turning it back on does not fade in what is already on screen.
      */
-    static final float FADE_SECONDS =
-            SteinGfxOptions.CHUNK_FADE ? Math.max(0, SteinGfxOptions.CHUNK_FADE_MS) / 1000f : 0f;
+    private static volatile boolean enabled = true;
+
+    /** Turns the fade-in on or off (Stein Lens). */
+    public static void setEnabled(boolean on) {
+        enabled = on;
+    }
+
+    /** The fade's duration this frame, in seconds: 0 draws the chunks without it. */
+    static float seconds() {
+        return enabled ? Duration.SECONDS : 0f;
+    }
+
+    /**
+     * Duration of the animation in seconds ({@code -Dsteinbridge.gfx.chunkFade=false} turns it off;
+     * the time in {@code steinbridge.gfx.chunkFadeMs}, default 700). In a holder of its own:
+     * SteinGfxOptions may only load once the window exists, and Lens calls {@link #setEnabled}
+     * before that.
+     */
+    private static final class Duration {
+        static final float SECONDS =
+                SteinGfxOptions.CHUNK_FADE
+                        ? Math.max(0, SteinGfxOptions.CHUNK_FADE_MS) / 1000f
+                        : 0f;
+    }
 
     /**
      * A chunk that disappears and returns within this does not animate again: a rebuild (broken
@@ -78,7 +100,7 @@ final class SteinChunkFade {
      * at it, not when it arrived.
      */
     static float[] arrival(int x, int y, int z) {
-        if (FADE_SECONDS <= 0f) {
+        if (Duration.SECONDS <= 0f) {
             return null;
         }
         long key = chunkKey(x, y, z);
@@ -108,7 +130,7 @@ final class SteinChunkFade {
                     && live[0] > 0
                     && born != null
                     && born[0] != 0f
-                    && now - born[0] >= FADE_SECONDS) {
+                    && now - born[0] >= Duration.SECONDS) {
                 return true;
             }
         }
@@ -116,7 +138,7 @@ final class SteinChunkFade {
     }
 
     static void departure(int x, int y, int z) {
-        if (FADE_SECONDS <= 0f) {
+        if (Duration.SECONDS <= 0f) {
             return;
         }
         long[] live = LIVE.get(chunkKey(x, y, z));

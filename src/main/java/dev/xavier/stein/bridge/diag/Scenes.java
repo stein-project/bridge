@@ -56,6 +56,7 @@ public final class Scenes {
         DiagScreenScenes.soundOptionsFrame();
         DiagSingleplayerScene.frame();
         DiagWorldScenes.thirdPersonFrame();
+        DiagWorldScenes.turnFrame();
         DiagClickScenes.pickTestFrame();
         DiagClickScenes.serverClicksFrame();
         DiagScreenScenes.serverListFrame();

@@ -171,6 +171,10 @@ public final class SteinPostFx {
     private static long frame;
 
     private static long worldFrame = -1;
+
+    /** The frame whose hand was drawn on its own depth (the clear before it happened). */
+    private static long handFrame = -1;
+
     private static final SteinBloom BLOOM = new SteinBloom();
 
     private static final String[] DOWN_NAMES = names("post bloom down ");
@@ -212,7 +216,16 @@ public final class SteinPostFx {
      * hand, the world's depth is copied for the edge smoothing.
      */
     public static void worldClear(int mask) {
-        if (mask == GL11.GL_DEPTH_BUFFER_BIT && edges && !noDepth && !scaledHdr() && available()) {
+        if (mask == GL11.GL_DEPTH_BUFFER_BIT && available()) {
+            handFrame = frame;
+            SteinMotionBlur.captureCamera();
+        }
+        boolean depthWanted = edges || SteinMotionBlur.wantsDepth();
+        if (mask == GL11.GL_DEPTH_BUFFER_BIT
+                && depthWanted
+                && !noDepth
+                && !scaledHdr()
+                && available()) {
             try {
                 SteinDevice dev = SteinDevice.get();
                 SteinRenderTarget game = dev.gameTarget();
@@ -256,11 +269,28 @@ public final class SteinPostFx {
         // with HDR and the scale this runs at the window's size: the world's depth is not
         boolean smooth = edges && !noDepth && !scaledHdr();
         boolean hdr = SteinHdr.active();
-        if (!available() || level == BLOOM_OFF && !smooth && !hdr && sharpen == 0) {
+        boolean post = level != BLOOM_OFF || smooth || hdr || sharpen != 0;
+        boolean blur = SteinMotionBlur.active();
+        if (!available() || !post && !blur) {
             return;
         }
         try {
-            run(level, smooth, hdr, worldFrame == thisFrame);
+            if (post) {
+                run(level, smooth, hdr, worldFrame == thisFrame);
+            }
+            if (blur) {
+                // last: it blurs the finished image
+                SteinDevice dev = SteinDevice.get();
+                SteinRenderTarget game = dev.gameTarget();
+                boolean direct = SteinGfxOptions.VULKAN && game.depth() != null;
+                SteinMotionBlur.apply(
+                        dev,
+                        game,
+                        direct ? colorOnly(dev, game) : game,
+                        !direct,
+                        worldFrame == thisFrame ? worldDepth : null,
+                        handFrame == thisFrame);
+            }
         } catch (RuntimeException | LinkageError e) {
             failed = true;
             Log.warn("gfx", "post-processing turned off for this session: " + e);
@@ -275,7 +305,9 @@ public final class SteinPostFx {
         SteinRenderTarget game = dev.gameTarget();
         int w = game.width();
         int h = game.height();
-        boolean depth = smooth;
+        // the motion blur keeps the world's depth too (copied before the hand): not thrown away
+        // here
+        boolean depth = smooth || SteinMotionBlur.wantsDepth() && !noDepth && !scaledHdr();
         sceneSize(dev, w, h, depth);
         // on Vulkan the game's depth is a texture: read in place instead of copied (OpenGL's is not
         // ours to read)

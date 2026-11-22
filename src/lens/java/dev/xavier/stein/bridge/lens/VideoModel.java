@@ -446,6 +446,11 @@ final class VideoModel implements VideoSettings.Source {
                 () -> c.fog = (c.fog + 2) % 3,
                 null);
         toggle("steinlens.rain", () -> c.rain, () -> c.rain = !c.rain, null);
+        toggle(
+                "steinlens.chunkFade",
+                () -> c.chunkFade,
+                () -> c.chunkFade = !c.chunkFade,
+                SteinPostFx::available);
         toggleText(
                 "steinlens.customSky",
                 () -> c.customSky,
@@ -506,6 +511,27 @@ final class VideoModel implements VideoSettings.Source {
                 true);
     }
 
+    /**
+     * The motion blur (SteinMotionBlur, only where Stein GFX draws): off, the camera's motion or
+     * the trail, and its strength.
+     */
+    private void motionBlur() {
+        BooleanSupplier post = SteinPostFx::available;
+        choice(
+                "steinlens.motionBlur",
+                () -> tr("steinlens.motionBlur." + (post.getAsBoolean() ? c.motionBlur : 0)),
+                () -> c.motionBlur = (c.motionBlur + 1) % 3,
+                () -> c.motionBlur = (c.motionBlur + 2) % 3,
+                post);
+        steps(
+                "steinlens.motionBlurStrength",
+                new int[] {1, 2, 3, 4, 5, 6, 7, 8, 9, 10},
+                () -> c.motionBlurStrength,
+                v -> c.motionBlurStrength = v,
+                String::valueOf,
+                () -> post.getAsBoolean() && c.motionBlur != 0);
+    }
+
     /** The camera, then how the other players and their names are shown. */
     private void camera() {
         topic("camera");
@@ -528,6 +554,7 @@ final class VideoModel implements VideoSettings.Source {
                 () -> c.dynamicFov,
                 () -> c.dynamicFov = !c.dynamicFov,
                 null);
+        motionBlur();
         toggleText(
                 "steinlens.zoom",
                 () -> c.zoom,

@@ -705,7 +705,7 @@ public final class SteinTerrain {
             MemoryUtil.memPutFloat(p + FRAME_FOG_ON, fog ? 1f : 0f);
             MemoryUtil.memPutFloat(p + FRAME_TEXTURE_ON, SteinGameState.texture2D(0) ? 1f : 0f);
             MemoryUtil.memPutFloat(p + FRAME_TIME, SteinChunkFade.now());
-            MemoryUtil.memPutFloat(p + FRAME_FADE_SECONDS, SteinChunkFade.FADE_SECONDS);
+            MemoryUtil.memPutFloat(p + FRAME_FADE_SECONDS, SteinChunkFade.seconds());
             MemoryUtil.memPutFloat(
                     p + FRAME_SUPERSAMPLE, SteinTextureFilter.supersample() ? 1f : 0f);
             MemoryUtil.memPutFloat(p + FRAME_ANISOTROPY, SteinTextureFilter.anisotropy());

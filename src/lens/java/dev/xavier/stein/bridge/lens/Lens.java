@@ -21,7 +21,9 @@ import dev.xavier.stein.bridge.hooks.GameHooks;
 import dev.xavier.stein.bridge.hooks.HookSink;
 import dev.xavier.stein.bridge.showcase.Showcase;
 import dev.xavier.stein.bridge.showcase.VideoSettings;
+import dev.xavier.stein.gfx.SteinChunkFade;
 import dev.xavier.stein.gfx.SteinHdr;
+import dev.xavier.stein.gfx.SteinMotionBlur;
 import dev.xavier.stein.gfx.SteinPostFx;
 import dev.xavier.stein.gfx.SteinRenderScale;
 import dev.xavier.stein.gfx.SteinTextureFilter;
@@ -447,7 +449,7 @@ public final class Lens implements HookSink {
 
     /**
      * The options the engine applies (brightness, nametags, armor, angles, fog, clouds, chunks,
-     * rain, 1.7 animations).
+     * rain, chunk fade-in, 1.7 animations).
      */
     private void applyVisuals() {
         Visuals.setGlint(config.glint, config.glintNearBlocks);
@@ -457,6 +459,7 @@ public final class Lens implements HookSink {
         CustomSky.setEnabled(config.customSky);
         // the bloom stays off until it is refined (the saved choice is kept for then)
         SteinPostFx.configure(SteinPostFx.BLOOM_OFF, config.smoothEdges, config.sharpen);
+        SteinMotionBlur.configure(config.motionBlur, config.motionBlurStrength);
         SteinTextureFilter.configure(config.anisotropy, config.supersample);
         SteinRenderScale.configure(config.renderScale);
         SteinHdr.configure(
@@ -474,6 +477,7 @@ public final class Lens implements HookSink {
         ChunkPace.setWaitNeighbors(config.waitNeighbors);
         ChunkKeep.setMode(config.keepChunks, config.keepChunksMb);
         Rain.setHidden(!config.rain);
+        SteinChunkFade.setEnabled(config.chunkFade);
         OldAnimations.set(config.oldAnimations, oldAnimationParts(config));
     }
 

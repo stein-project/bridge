@@ -76,6 +76,12 @@ final class LensConfig {
     /** Sharpening, 0 (off) to 3 (SteinPostFx). */
     int sharpen = 0;
 
+    /** Motion blur: 0 off, 1 the camera's motion, 2 the trail (SteinMotionBlur). */
+    int motionBlur = 0;
+
+    /** The motion blur's strength, 1 to 10. */
+    int motionBlurStrength = 4;
+
     /**
      * The world's resolution, in percent of the window's (SteinRenderScale); 0 is automatic: the
      * window's own, as the game does.
@@ -145,6 +151,9 @@ final class LensConfig {
      */
     boolean rain = true;
 
+    /** Chunks fade in from the fog the first time they appear (SteinChunkFade). */
+    boolean chunkFade = true;
+
     /** 1.7 animations (OldAnimations): the master switch and each part. */
     boolean oldAnimations = true;
 
@@ -190,6 +199,8 @@ final class LensConfig {
             anisotropy = integer(o, "anisotropy", anisotropy, 1, 16);
             supersample = bool(o, "supersample", supersample);
             sharpen = integer(o, "sharpen", sharpen, 0, 3);
+            motionBlur = integer(o, "motionBlur", motionBlur, 0, 2);
+            motionBlurStrength = integer(o, "motionBlurStrength", motionBlurStrength, 1, 10);
             renderScale = integer(o, "renderScale", renderScale, 0, 200);
             if (renderScale != 0 && renderScale < 30) {
                 renderScale = 30;
@@ -209,6 +220,7 @@ final class LensConfig {
             keepChunks = integer(o, "keepChunks", keepChunks, 0, 2);
             keepChunksMb = integer(o, "keepChunksMB", keepChunksMb, 64, 8192);
             rain = bool(o, "rain", rain);
+            chunkFade = bool(o, "chunkFade", chunkFade);
             oldAnimations = bool(o, "oldAnimations", oldAnimations);
             oldBlockHit = bool(o, "oldBlockHit", oldBlockHit);
             oldItems = bool(o, "oldItems", oldItems);
@@ -256,6 +268,8 @@ final class LensConfig {
         o.addProperty("anisotropy", anisotropy);
         o.addProperty("supersample", supersample);
         o.addProperty("sharpen", sharpen);
+        o.addProperty("motionBlur", motionBlur);
+        o.addProperty("motionBlurStrength", motionBlurStrength);
         o.addProperty("renderScale", renderScale);
         o.addProperty("hdr", hdr);
         o.addProperty("hdrWhite", hdrWhite);
@@ -272,6 +286,7 @@ final class LensConfig {
         o.addProperty("keepChunks", keepChunks);
         o.addProperty("keepChunksMB", keepChunksMb);
         o.addProperty("rain", rain);
+        o.addProperty("chunkFade", chunkFade);
         o.addProperty("oldAnimations", oldAnimations);
         o.addProperty("oldBlockHit", oldBlockHit);
         o.addProperty("oldItems", oldItems);

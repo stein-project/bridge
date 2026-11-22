@@ -313,6 +313,31 @@ final class DiagWorldScenes {
         }
     }
 
+    private static long turnLast;
+
+    /**
+     * {@code -Dsteinbridge.diag.turnAtSec}: turns the player's view by the frame's share of the
+     * speed, through Entity.setAngles as the mouse does (the turn and the previous turn together:
+     * smooth at any frame rate).
+     */
+    static void turnFrame() {
+        if (DiagOptions.TURN_AT < 0) {
+            return;
+        }
+        long now = System.nanoTime();
+        long since = Scenes.elapsed() - DiagOptions.TURN_AT * 1_000_000_000L;
+        long last = turnLast;
+        turnLast = now;
+        if (since < 0 || since > DiagOptions.TURN_FOR * 1_000_000_000L || last == 0) {
+            return;
+        }
+        EntityPlayerSP p = Minecraft.getMinecraft().thePlayer;
+        if (p != null) {
+            float degrees = DiagOptions.TURN_DEGREES * (now - last) / 1e9f;
+            p.setAngles(degrees / 0.15f, 0f); // setAngles takes mouse units (x 0.15 degrees)
+        }
+    }
+
     static void citFrame() {
         if (DiagOptions.CIT_AT >= 0
                 && !citDone
