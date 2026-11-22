@@ -322,6 +322,53 @@ final class GameHooksEntity {
     }
 
     /**
+     * In place of getColorMultiplier in RendererLivingEntity.setBrightness: the tint the entity is
+     * drawn with (the creeper's flash; the damage red comes after it, in the game's code). Where
+     * the game has none, the listener may give one; the game's own always wins.
+     *
+     * <p>The listener's alpha is how strong the tint is; the game's is the opposite (setBrightness
+     * blends {@code 1 - alpha} of the color), so it is turned around here.
+     */
+    @SuppressWarnings("unchecked")
+    static int entityColor(Object renderer, Object entity, float brightness, float partialTicks) {
+        int color =
+                ((RendererLivingEntity<EntityLivingBase>) renderer)
+                        .getColorMultiplier((EntityLivingBase) entity, brightness, partialTicks);
+        if (GameHooks.SINK == null || color >>> 24 != 0) {
+            return color;
+        }
+        try {
+            return toGame(GameHooks.SINK.entityColor(entity, color));
+        } catch (Throwable e) {
+            GameHooks.fail("entityColor", e);
+            return color;
+        }
+    }
+
+    /** A listener's color (alpha = strength) as getColorMultiplier's (alpha = 1 - strength). */
+    private static int toGame(int color) {
+        int strength = Math.min(254, color >>> 24);
+        return strength == 0 ? 0 : (255 - strength) << 24 | color & 0xFFFFFF;
+    }
+
+    /**
+     * The listener's tint for an entity the game itself would not tint (a player: their renderer
+     * has no color of its own), for the new renderer's player path, which draws without the game's
+     * setBrightness. The alpha is the strength.
+     */
+    static int tint(Object entity) {
+        if (GameHooks.SINK == null) {
+            return 0;
+        }
+        try {
+            return GameHooks.SINK.entityColor(entity, 0);
+        } catch (Throwable e) {
+            GameHooks.fail("entityColor", e);
+            return 0;
+        }
+    }
+
+    /**
      * In place of getDisplayName() in RendererLivingEntity.renderName: the name above the head,
      * which the listener can change.
      */

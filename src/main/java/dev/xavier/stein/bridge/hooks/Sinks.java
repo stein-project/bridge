@@ -459,6 +459,18 @@ final class Sinks implements HookSink {
     }
 
     @Override
+    public int entityColor(Object entity, int color) {
+        for (int i = 0; i < sinks.length; i++) {
+            try {
+                color = sinks[i].entityColor(entity, color);
+            } catch (Throwable e) {
+                fail(i, "entityColor", e);
+            }
+        }
+        return color;
+    }
+
+    @Override
     public Object nametag(Object entity, Object name) {
         for (int i = 0; i < sinks.length; i++) {
             try {
