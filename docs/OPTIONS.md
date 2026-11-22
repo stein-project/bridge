@@ -275,7 +275,8 @@ listed at the end.
 - `-Dsteinbridge.steinSyncSnap=true`: under a Stein Sync proxy's movement authority, a correction moves the picture at once with the player (default: off, a correction of a few centimetres or more is drawn as a short glide over the rest of the tick; the player's state is corrected at once either way).
 - `-Dsteinbridge.diag.syncNudge=D`: test, under a Stein Sync proxy's movement authority, pushes the player D blocks along X once, after the movement of Tick `syncNudgeAtTick`: a divergence the proxy must correct (default: 0, never).
 - `-Dsteinbridge.diag.syncNudgeAtTick=N`: the Tick of `syncNudge` (default 200: ten seconds after the Accept).
-- `-Dsteinbridge.quicTransport=kwik|native`: which QUIC implementation a join over QUIC uses (default: kwik, in Java; native is the Bridge's library, kept to compare the two).
+- `-Dsteinbridge.quicTransport=native|kwik`: forces the QUIC implementation a join over QUIC uses (default: auto, the Bridge's native library, or Kwik in Java when the library cannot be loaded or fails to start on this system).
+- `-Dsteinbridge.quicRepeat=false`: the native QUIC transport stops sending each Tick datagram a second time, 20 ms later, while the connection is losing packets (default: on; a connection without loss never sends the copies).
 - `-Dsteinbridge.diag.quicRebindAtSec=N`: test, a QUIC connection moves to a new local port after N seconds of Ticks, as an address change would (default: 0, never).
 - `-Dsteinbridge.debugSteinSync=true`: logs the Stein Sync client messages as they go: each attack put in a Tick, each BlockAction, and each block change held and released (default: off).
 

@@ -45,9 +45,10 @@ import javax.net.ssl.X509TrustManager;
 
 /**
  * A QUIC connection to a Stein Sync proxy with Kwik (pure Java, LGPL, loaded from its own jars next
- * to the Bridge): the default transport of stein-sync's docs/protocol.md section 7. No native
- * library to build, sign and ship per platform, and the connection lives on the Java 25 the game
- * already runs on.
+ * to the Bridge): the fallback transport of stein-sync's docs/protocol.md section 7, for a system
+ * where the Bridge's native library cannot be used (none built for it, blocked by a security tool,
+ * failed to start; {@link SteinSyncConnect}). It needs no native code: the connection lives on the
+ * Java 25 the game already runs on, at the price of more CPU and garbage than the native one.
  *
  * <p>The game's Netty 4.0 is not touched: its connection is a Netty LocalChannel to a {@link
  * LocalServerChannel} of this link, inside the JVM (no loopback port another process could take).

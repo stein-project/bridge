@@ -34,6 +34,13 @@ public final class SteinSyncClientTest {
         packing();
         datagramWindows();
         modRoute();
+        quicTiming();
+        try {
+            failures += dev.xavier.stein.bridge.net.SteinQuicLibraryTest.run();
+        } catch (java.io.IOException e) {
+            failures++;
+            System.out.println("FAILED native QUIC library: " + e);
+        }
         if (failures > 0) {
             System.exit(1);
         }
@@ -355,6 +362,48 @@ public final class SteinSyncClientTest {
                 "no route, a ping: the game's own connection",
                 "" + SteinSyncRoute.DIRECT,
                 "" + SteinSyncRoute.choose(null, false));
+    }
+
+    /** How long a QUIC join waits, from the server list ping (protocol.md 7.6). */
+    private static void quicTiming() {
+        SteinSyncConnect.Timing none = SteinSyncConnect.Timing.fromPing(0);
+        check(
+                "no ping: 1.2 s to answer, no hint",
+                "1200 6000 1200 0",
+                none.answerMs + " " + none.limitMs + " " + none.kwikMs + " " + none.rttHintMs);
+        SteinSyncConnect.Timing near = SteinSyncConnect.Timing.fromPing(40);
+        check(
+                "a near server keeps the floors",
+                "1200 4000 1280 40",
+                near.answerMs + " " + near.limitMs + " " + near.kwikMs + " " + near.rttHintMs);
+        SteinSyncConnect.Timing far = SteinSyncConnect.Timing.fromPing(800);
+        check(
+                "800 ms: four round trips to answer, eight to finish",
+                "3700 8400 5300 800",
+                far.answerMs + " " + far.limitMs + " " + far.kwikMs + " " + far.rttHintMs);
+        SteinSyncConnect.Timing worst = SteinSyncConnect.Timing.fromPing(3000);
+        check(
+                "the waits are capped",
+                "5000 12000 10000",
+                worst.answerMs + " " + worst.limitMs + " " + worst.kwikMs);
+        check(
+                "a failed native connect: silence, slowness and a bad pin are told apart",
+                SteinSyncCodec.QUIC_TIMEOUT
+                        + " "
+                        + SteinSyncCodec.QUIC_SLOW
+                        + " "
+                        + SteinSyncCodec.QUIC_HANDSHAKE_FAILED
+                        + " "
+                        + SteinSyncCodec.QUIC_UNSUPPORTED,
+                SteinSyncConnect.outcomeOf(dev.xavier.stein.bridge.net.SteinQuic.TIMEOUT)
+                        + " "
+                        + SteinSyncConnect.outcomeOf(dev.xavier.stein.bridge.net.SteinQuic.SLOW)
+                        + " "
+                        + SteinSyncConnect.outcomeOf(
+                                dev.xavier.stein.bridge.net.SteinQuic.HANDSHAKE_FAILED)
+                        + " "
+                        + SteinSyncConnect.outcomeOf(
+                                dev.xavier.stein.bridge.net.SteinQuic.LOCAL_ERROR));
     }
 
     private static void check(String name, String expected, String got) {

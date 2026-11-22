@@ -20,6 +20,8 @@ import net.minecraft.client.multiplayer.GuiConnecting;
 import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.client.resources.I18n;
 
+import java.io.File;
+import java.nio.file.Path;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -105,6 +107,21 @@ final class SteinSyncJoin implements SteinSyncLoginHooks {
         return offer != null
                 ? offer
                 : ((SteinSyncJoin) listener).offers.get(SteinSyncAddress.key(server.serverIP));
+    }
+
+    /**
+     * The round trip the server list ping measured for the server being joined, in ms; 0 when it
+     * was never pinged (a quick join) or the ping failed.
+     */
+    static long currentPingMs() {
+        ServerData server = Minecraft.getMinecraft().getCurrentServerData();
+        return server == null ? 0 : Math.max(0, server.pingToServer);
+    }
+
+    /** The game's folder (where the Bridge keeps its files). */
+    static Path gameDir() {
+        File dir = Minecraft.getMinecraft().mcDataDir;
+        return (dir != null ? dir : new File(".")).toPath();
     }
 
     @Override

@@ -1,0 +1,52 @@
+# cargo deny policy of the Bridge's native crates (the Stein Sync QUIC
+# library shipped inside steinbridge.jar): what may be compiled into it.
+# `cargo deny check` from this folder.
+
+[graph]
+# Every platform the library is built for (build.gradle.kts, nativeQuic).
+targets = [
+    { triple = "x86_64-pc-windows-msvc" },
+    { triple = "x86_64-unknown-linux-gnu" },
+    { triple = "aarch64-unknown-linux-gnu" },
+    { triple = "x86_64-apple-darwin" },
+    { triple = "aarch64-apple-darwin" },
+]
+all-features = true
+
+[advisories]
+yanked = "deny"
+ignore = []
+
+[licenses]
+# Permissive licences only: the library ships inside the MPL-2.0 Bridge jar
+# with the notices in licenses/stein-quic-third-party.txt. The Bridge's own
+# crates are MPL-2.0.
+allow = [
+    "Apache-2.0",
+    "BSD-3-Clause",
+    "ISC",
+    "MIT",
+    "MPL-2.0",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.93
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+allow-wildcard-paths = true
+
+[[bans.deny]]
+crate = "openssl-sys"
+reason = "TLS stays on rustls with ring, the proxy's stack."
+
+[[bans.deny]]
+crate = "native-tls"
+reason = "Same as openssl-sys."
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+allow-git = []

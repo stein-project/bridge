@@ -106,8 +106,9 @@ val shaderc: Configuration = configurations.create("shaderc") { isTransitive = f
 val mcp: Configuration = configurations.create("mcp") { isTransitive = false }
 val specialSource: Configuration = configurations.create("specialSource") { isTransitive = false }
 val sdkTools: Configuration = configurations.create("sdkTools")
-// Kwik (QUIC in Java, LGPL-3.0, with agent15, hkdf and siphash): Stein Sync's default QUIC transport. Not packed into
-// the Bridge jar: its jars go next to it on the game's classpath, unchanged, as LGPL asks of a library linked this way.
+// Kwik (QUIC in Java, LGPL-3.0, with agent15, hkdf and siphash): Stein Sync's fallback QUIC transport (the default is
+// the native library, nativeQuic). Not packed into the Bridge jar: its jars go next to it on the game's classpath,
+// unchanged, as LGPL asks of a library linked this way.
 val kwik: Configuration = configurations.create("kwik")
 
 dependencies {
@@ -485,6 +486,98 @@ val bridgeClasses = tasks.register<Sync>("bridgeClasses") {
     duplicatesStrategy = DuplicatesStrategy.FAIL
 }
 
+// ---- Stein Sync's native QUIC library ----
+
+/** This system's folder name for the native library, as net/SteinQuicLibrary.platform names it; null for others. */
+val quicPlatform: String? = run {
+    val arch = System.getProperty("os.arch").lowercase()
+    val cpu = when (arch) {
+        "amd64", "x86_64" -> "x64"
+        "aarch64", "arm64" -> "arm64"
+        else -> null
+    }
+    when {
+        cpu == null -> null
+        os.isWindows -> if (cpu == "x64") "windows-x64" else null
+        os.isMacOsX -> "macos-$cpu"
+        os.isLinux -> "linux-$cpu"
+        else -> null
+    }
+}
+
+/** The library's file name per platform folder. */
+fun quicLibName(platform: String) = when {
+    platform.startsWith("windows") -> "stein_quic.dll"
+    platform.startsWith("macos") -> "libstein_quic.dylib"
+    else -> "libstein_quic.so"
+}
+
+/**
+ * The native QUIC transport of Stein Sync (native/stein-quic-ffi, Rust, quinn) for the Bridge jar: each library in
+ * build/native-quic/<platform>/ next to its SHA-256, which the Bridge checks before loading the copy it makes.
+ *
+ * By default cargo builds it for this system (Windows x64, Linux x64/arm64, macOS x64/arm64). A release carries all
+ * of them: -Pstein.nativeDir=<dir> packs the prebuilt <dir>/<platform>/<file> instead (a CI job per system builds
+ * its own with `cargo build --release --locked -p stein-quic-ffi` and the release job gathers them). Without cargo,
+ * or with -Pstein.noNative=true, the jar has no library and the client falls back to Kwik.
+ */
+val nativeQuic = tasks.register("nativeQuic") {
+    group = "build"
+    description = "Builds Stein Sync's native QUIC library into build/native-quic (or packs -Pstein.nativeDir)."
+    val out = layout.buildDirectory.dir("native-quic")
+    val prebuilt = providers.gradleProperty("stein.nativeDir")
+    val prebuiltDir = prebuilt.map { file(it) }
+    val skip = providers.gradleProperty("stein.noNative").map { it.toBoolean() }.orElse(false)
+    val nativeDir = file("native")
+    inputs.files(fileTree(nativeDir) { exclude("target/**") }).withPropertyName("sources")
+    inputs.property("prebuilt", prebuilt.orElse(""))
+    inputs.property("skip", skip)
+    inputs.property("platform", quicPlatform ?: "none")
+    outputs.dir(out)
+    doLast {
+        val dest = out.get().asFile
+        fileOps.delete { delete(dest) }
+        dest.mkdirs()
+        fun pack(platform: String, lib: File) {
+            val dir = File(dest, platform).apply { mkdirs() }
+            val copy = File(dir, lib.name)
+            lib.copyTo(copy, overwrite = true)
+            val sha = MessageDigest.getInstance("SHA-256").digest(copy.readBytes())
+                .joinToString("") { "%02x".format(it) }
+            File(dir, "${lib.name}.sha256").writeText(sha + "\n")
+            logger.lifecycle("nativeQuic: $platform/${lib.name} sha256 $sha")
+        }
+        if (skip.get()) {
+            logger.warn("nativeQuic: skipped (-Pstein.noNative); the jar has no native QUIC library")
+            return@doLast
+        }
+        val from = prebuiltDir.orNull
+        if (from != null) {
+            for (platform in listOf("windows-x64", "linux-x64", "linux-arm64", "macos-x64", "macos-arm64")) {
+                val lib = from.resolve(platform).resolve(quicLibName(platform))
+                if (lib.isFile) pack(platform, lib)
+            }
+            return@doLast
+        }
+        val platform = quicPlatform
+        if (platform == null) {
+            logger.warn("nativeQuic: no native QUIC library for this system; the client will use Kwik")
+            return@doLast
+        }
+        val home = File(System.getProperty("user.home"), ".cargo/bin/" + if (os.isWindows) "cargo.exe" else "cargo")
+        val cargo = System.getenv("CARGO") ?: if (home.isFile) home.path else "cargo"
+        val build = try {
+            ProcessBuilder(cargo, "build", "--release", "--locked", "-p", "stein-quic-ffi")
+                .directory(nativeDir).inheritIO().start().waitFor()
+        } catch (e: java.io.IOException) {
+            logger.warn("nativeQuic: cargo not found ($e); the jar has no native QUIC library, the client uses Kwik")
+            return@doLast
+        }
+        check(build == 0) { "nativeQuic: cargo build failed ($build)" }
+        pack(platform, nativeDir.resolve("target/release/" + quicLibName(platform)))
+    }
+}
+
 // The java plugin's own jar would hold the classes as compiled (readable names): the Bridge jar is this one.
 tasks.jar { enabled = false }
 val bridgeJar = tasks.register<Jar>("bridgeJar") {
@@ -498,6 +591,8 @@ val bridgeJar = tasks.register<Jar>("bridgeJar") {
     // The licence and the third-party notices travel with the jar (LWJGL 2 code and LWJGL 3 are in it or with it).
     from(files("LICENSE", "NOTICE")) { into("META-INF") }
     from(fileTree("licenses")) { into("META-INF/licenses") }
+    // Stein Sync's native QUIC library for the systems built (net/SteinQuicLibrary copies it out and checks it).
+    from(nativeQuic) { into("steinbridge/natives/stein-quic") }
     archiveFileName = "steinbridge.jar"
     // Same bytes for the same sources: no timestamps, fixed order.
     isPreserveFileTimestamps = false
@@ -613,6 +708,8 @@ for ((name, main) in listOf("steinSyncTest" to "dev.xavier.stein.bridge.sync.Ste
         description = "Runs $main."
         classpath = gameClasspath() + sourceSets.test.get().output
         mainClass = main
+        // SteinSyncClientTest loads the bundled native QUIC library through the foreign function API.
+        jvmArgs("--enable-native-access=ALL-UNNAMED")
     }
 }
 

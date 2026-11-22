@@ -15,8 +15,7 @@ import java.net.InetSocketAddress;
 
 /**
  * A QUIC connection through the Bridge's native library ({@link SteinQuic}, quinn behind a loopback
- * port): the transport before Kwik, kept so the two can be compared on the bench ({@code
- * -Dsteinbridge.quicTransport=native}).
+ * port): the default transport ({@link SteinSyncConnect}).
  */
 final class SteinSyncNativeLink implements SteinSyncLink {
 

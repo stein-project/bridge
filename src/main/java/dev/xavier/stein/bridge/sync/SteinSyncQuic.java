@@ -28,12 +28,14 @@ import java.util.concurrent.ConcurrentHashMap;
  * then travel as datagrams, so a lost packet no longer holds back the player's movement, and the
  * session survives a change of the player's address.
  *
- * <p>Only a join (GuiConnecting) to a server whose server list entry announced QUIC, with the
- * native library present and the player's setting on, tries it; a server list ping, a vanilla
- * server, or a server without QUIC goes out exactly as before. A failed attempt falls back to TCP
- * at once, which is today's mode, and is remembered for a while so the next join does not wait
- * again. What happened is reported to the proxy after the Accept (the Transport message), which is
- * how a server learns how many of its Stein players cannot use UDP.
+ * <p>Only a join (GuiConnecting) to a server whose server list entry announced QUIC, with a QUIC
+ * transport on this system and the player's setting on, tries it; a server list ping, a vanilla
+ * server, or a server without QUIC goes out exactly as before. Which transport and how long to wait
+ * is {@link SteinSyncConnect}'s choice (the native library, else Kwik; the wait from the server
+ * list ping). A failed attempt falls back to TCP at once, which is today's mode, and is remembered
+ * for a while so the next join does not wait again. What happened is reported to the proxy after
+ * the Accept (the Transport message), which is how a server learns how many of its Stein players
+ * cannot use UDP.
  *
  * <p>It takes the Bridge's connection hooks (engine/Net). A mod's own route (the Connect mod, a
  * SOCKS proxy) still applies: a connection its route diverts (it gives an address for it) takes the
@@ -45,11 +47,14 @@ final class SteinSyncQuic implements Net.Proxy {
     /** The player's setting (the video settings, {@code steinSyncQuic}); on by default. */
     static volatile boolean allowed = true;
 
-    /** How long each announced port may take to answer. */
-    private static final int ATTEMPT_MS = 1200;
-
     /** How long a failed attempt keeps the next joins to that server on TCP without trying. */
     private static final long FAILURE_MEMORY_MS = 10 * 60 * 1000L;
+
+    /**
+     * The same after an attempt that reached the server over UDP but could not finish in time: the
+     * path works, it was only slow or lossy then, so it is tried again sooner.
+     */
+    private static final long SLOW_MEMORY_MS = 2 * 60 * 1000L;
 
     /** Servers remembered at most (a list never has this many; a flood cannot grow it). */
     private static final int MAX_REMEMBERED = 256;
@@ -85,14 +90,6 @@ final class SteinSyncQuic implements Net.Proxy {
         static Attempt tcp(int outcome) {
             return new Attempt(outcome, 0, null);
         }
-    }
-
-    /**
-     * The transport of a QUIC join ({@code -Dsteinbridge.quicTransport}): {@code kwik} (default,
-     * Java) or {@code native} (the Bridge's library, kept for comparison).
-     */
-    static boolean nativeTransport() {
-        return "native".equals(SteinSyncOptions.QUIC_TRANSPORT);
     }
 
     private SteinSyncQuic() {}
@@ -218,23 +215,27 @@ final class SteinSyncQuic implements Net.Proxy {
         if (!allowed) {
             return Attempt.tcp(SteinSyncCodec.QUIC_DISABLED);
         }
-        boolean nativeLib = nativeTransport();
-        if (nativeLib ? !SteinQuic.available() : !kwikAvailable()) {
-            return Attempt.tcp(SteinSyncCodec.QUIC_UNSUPPORTED);
-        }
         String key = destination.getHostAddress();
         Long until = failedUntil.get(key);
         long now = System.currentTimeMillis();
         if (until != null && until > now) {
             return Attempt.tcp(SteinSyncCodec.QUIC_SKIPPED);
         }
+        // The library is copied out under the game's folder (once, on the first QUIC join).
+        SteinQuic.cacheRoot(SteinSyncJoin.gameDir());
+        long ping = SteinSyncJoin.currentPingMs();
+        SteinSyncConnect.Timing timing = SteinSyncConnect.Timing.fromPing(ping);
         long started = System.nanoTime();
         int[] outcome = new int[1];
         SteinSyncLink link =
-                nativeLib
-                        ? connectNative(destination, offer, outcome)
-                        : SteinSyncKwik.connect(
-                                destination, offer.quicPorts, offer.quicPin, ATTEMPT_MS, outcome);
+                SteinSyncConnect.connect(
+                        destination,
+                        offer.quicPorts,
+                        offer.quicPin,
+                        timing,
+                        SteinSyncOptions.QUIC_TRANSPORT,
+                        kwikAvailable(),
+                        outcome);
         int millis = (int) ((System.nanoTime() - started) / 1_000_000);
         if (link != null) {
             failedUntil.remove(key);
@@ -244,19 +245,32 @@ final class SteinSyncQuic implements Net.Proxy {
                             + link.kind()
                             + ", "
                             + millis
-                            + " ms to connect)");
+                            + " ms to connect, ping "
+                            + ping
+                            + " ms)");
             return new Attempt(SteinSyncCodec.QUIC_CONNECTED, millis, link);
         }
-        if (failedUntil.size() >= MAX_REMEMBERED) {
-            failedUntil.clear();
+        // A system without any QUIC transport is not this server's fault: nothing to remember.
+        if (outcome[0] != SteinSyncCodec.QUIC_UNSUPPORTED) {
+            if (failedUntil.size() >= MAX_REMEMBERED) {
+                failedUntil.clear();
+            }
+            long memory =
+                    outcome[0] == SteinSyncCodec.QUIC_SLOW ? SLOW_MEMORY_MS : FAILURE_MEMORY_MS;
+            failedUntil.put(key, now + memory);
         }
-        failedUntil.put(key, now + FAILURE_MEMORY_MS);
         Log.info(
                 "steinsync",
                 "Stein Sync: QUIC failed (outcome "
                         + outcome[0]
                         + " after "
                         + millis
+                        + " ms, ping "
+                        + ping
+                        + " ms, waits "
+                        + timing.answerMs
+                        + "/"
+                        + timing.limitMs
                         + " ms); joining over TCP");
         return new Attempt(outcome[0], millis, null);
     }
@@ -275,29 +289,6 @@ final class SteinSyncQuic implements Net.Proxy {
         } catch (ClassNotFoundException | LinkageError e) {
             return false;
         }
-    }
-
-    /** The native library's connection (the comparison transport). */
-    private static SteinSyncLink connectNative(
-            InetAddress destination, SteinSyncOffer offer, int[] outcome) {
-        int[] localPort = new int[1];
-        long handle =
-                SteinQuic.connect(
-                        destination.getAddress(),
-                        offer.quicPorts,
-                        offer.quicPin,
-                        ATTEMPT_MS,
-                        localPort);
-        if (handle > 0) {
-            return new SteinSyncNativeLink(handle, localPort[0]);
-        }
-        outcome[0] =
-                handle == SteinQuic.TIMEOUT
-                        ? SteinSyncCodec.QUIC_TIMEOUT
-                        : handle == SteinQuic.HANDSHAKE_FAILED
-                                ? SteinSyncCodec.QUIC_HANDSHAKE_FAILED
-                                : SteinSyncCodec.QUIC_UNSUPPORTED;
-        return null;
     }
 
     /**

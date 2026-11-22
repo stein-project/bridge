@@ -8,6 +8,8 @@
 
 package dev.xavier.stein.bridge.net;
 
+import dev.xavier.stein.bridge.core.Opt;
+
 import net.minecraft.client.network.NetHandlerPlayClient;
 import net.minecraft.network.INetHandler;
 import net.minecraft.network.Packet;
@@ -35,8 +37,8 @@ import java.util.concurrent.atomic.AtomicLong;
  *
  * <p>Each ring slot also keeps the packet it numbers (cleared once its task ran), so a task the
  * game never ran cannot shift every later number by one: the next task finds its own slot again.
- * With {@code -Dsteinloader.noSteinSync} (the Loader's kill switch for all of Stein Sync) nothing
- * is counted at all.
+ * With {@code -Dsteinbridge.noSteinSync} (the kill switch for all of Stein Sync; its old name
+ * {@code -Dsteinloader.noSteinSync} still works) nothing is counted at all.
  */
 public final class SyncApplied {
 
@@ -49,9 +51,11 @@ public final class SyncApplied {
     private static final int RESYNC = 256;
 
     /**
-     * The Loader's kill switch for Stein Sync: the game then runs exactly as without this class.
+     * The kill switch for Stein Sync, under both of its names (as {@code SteinSyncOptions} reads
+     * it): the game then runs exactly as without this class.
      */
-    private static final boolean OFF = Boolean.getBoolean("steinloader.noSteinSync");
+    private static final boolean OFF =
+            Opt.flag("steinbridge.noSteinSync") || Opt.flag("steinloader.noSteinSync");
 
     /** The packet of each task, by task order, until its task ran. */
     private static final Object[] PACKETS = new Object[RING];

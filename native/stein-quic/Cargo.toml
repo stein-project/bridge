@@ -12,6 +12,9 @@ description = "Client side of the Stein Sync QUIC transport: the game's byte str
 # platform verifier (the certificate is pinned, never checked against a CA)
 # and no `log` (the Stein standard is `tracing`).
 quinn = { version = "0.11", default-features = false, features = ["runtime-tokio", "rustls-ring"] }
+# Only for the congestion controller's trait signature (RttEstimator, which quinn does not re-export);
+# the same crate quinn already builds.
+quinn-proto = { version = "0.11", default-features = false }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std"] }
 ring = "0.17"
 socket2 = "0.6"

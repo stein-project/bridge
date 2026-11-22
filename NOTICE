@@ -29,13 +29,18 @@ and never redistributed.
 Fonts in src/ui/resources/assets/steinui/fonts (Cinzel, EB Garamond, JetBrains Mono)
   SIL Open Font License 1.1 (the OFL-*.txt files next to them).
 
+Stein Sync's native QUIC library (steinbridge/natives/stein-quic in the jar, built from native/)
+  Compiled from this repository's MPL-2.0 crates and third-party Rust crates, among them quinn
+  (MIT OR Apache-2.0), rustls (Apache-2.0 OR ISC OR MIT), ring (Apache-2.0 AND ISC) and tokio (MIT).
+  The full list with each crate's licence text is in licenses/stein-quic-third-party.txt.
+
 -------------------------------------------------------------------------------
 Third-party software used next to steinbridge.jar (not inside it)
 -------------------------------------------------------------------------------
-Stein Sync's default QUIC transport. These jars are not packed into steinbridge.jar: wherever they are distributed
-they go, unchanged, as separate files on the game's classpath beside it, together with this notice and the licence
-texts below, so they can be replaced by any compatible version (LGPL-3.0, section 4). Without them the Bridge falls
-back to TCP.
+Stein Sync's fallback QUIC transport, for systems where the native library cannot be used. These jars are not packed
+into steinbridge.jar: wherever they are distributed they go, unchanged, as separate files on the game's classpath
+beside it, together with this notice and the licence texts below, so they can be replaced by any compatible version
+(LGPL-3.0, section 4). Without them (and without the native library) the Bridge falls back to TCP.
 
 Kwik 0.12.1 (https://github.com/ptrd/kwik)
   Copyright (c) Peter Doornbosch. GNU Lesser General Public License v3 (licenses/kwik-lgpl-3.0.txt, which

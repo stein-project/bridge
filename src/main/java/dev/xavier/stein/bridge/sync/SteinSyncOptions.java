@@ -60,11 +60,20 @@ final class SteinSyncOptions {
                     Opt.integer("steinloader.diag.syncNudgeAtTick", 200));
 
     /**
-     * {@code -Dsteinbridge.quicTransport=kwik|native}: which QUIC implementation a join over QUIC
-     * uses (default: kwik, in Java; native is the Bridge's library, kept to compare the two).
+     * {@code -Dsteinbridge.quicTransport=native|kwik}: forces the QUIC implementation a join over
+     * QUIC uses (default: auto, the Bridge's native library, or Kwik in Java when the library
+     * cannot be loaded or fails to start on this system).
      */
     static final String QUIC_TRANSPORT =
-            Opt.text("steinbridge.quicTransport", Opt.text("steinloader.quicTransport", "kwik"));
+            Opt.text("steinbridge.quicTransport", Opt.text("steinloader.quicTransport", "auto"));
+
+    /**
+     * {@code -Dsteinbridge.quicRepeat=false}: the native QUIC transport stops sending each Tick
+     * datagram a second time, 20 ms later, while the connection is losing packets (default: on; a
+     * connection without loss never sends the copies).
+     */
+    static final boolean QUIC_REPEAT =
+            Opt.flag("steinbridge.quicRepeat", Opt.flag("steinloader.quicRepeat", true));
 
     /**
      * {@code -Dsteinbridge.diag.quicRebindAtSec=N}: test, a QUIC connection moves to a new local

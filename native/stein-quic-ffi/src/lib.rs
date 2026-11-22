@@ -28,11 +28,20 @@ use std::{
     time::Duration,
 };
 
-use stein_quic::{ConnectError, Link, LinkConfig};
+use stein_quic::{ConnectError, ConnectOptions, Link, LinkConfig};
 use tokio::runtime::Runtime;
 
 /// The version of this ABI; the Bridge refuses a library with another.
-pub const ABI_VERSION: i32 = 2;
+/// 3: `stein_quic_connect` takes the handshake limit, the round-trip hint
+/// and flags, may answer -6 (slow), and the stats have 8 values.
+pub const ABI_VERSION: i32 = 3;
+
+/// `flags` bit of [`stein_quic_connect`]: send each Tick datagram a second
+/// time while the path loses packets.
+pub const FLAG_REPEAT_DATAGRAMS: i32 = 1;
+
+/// The number of values [`stein_quic_stats`] writes.
+const STATS: usize = 8;
 
 /// The most ports a connect call tries.
 const MAX_PORTS: usize = 4;
@@ -44,6 +53,7 @@ const ERR_HANDSHAKE: i64 = -2;
 const ERR_IO: i64 = -3;
 const ERR_ARGUMENT: i64 = -4;
 const ERR_PANIC: i64 = -5;
+const ERR_SLOW: i64 = -6;
 
 fn runtime() -> Option<&'static Runtime> {
     static RUNTIME: OnceLock<Option<Runtime>> = OnceLock::new();
@@ -80,11 +90,16 @@ pub extern "C" fn stein_quic_abi_version() -> i32 {
 
 /// Connects to the proxy at `ip` (4 or 16 bytes) on the first of `ports`
 /// that completes the handshake with the certificate whose SHA-256 is the
-/// 32 bytes at `pin`. On success writes the loopback port the game must
-/// connect to into `out_local_port` and returns the link's handle (> 0);
-/// otherwise a negative error: -1 nothing answered in time, -2 the
+/// 32 bytes at `pin`. Each port gets `attempt_ms` to answer at all; one
+/// that answered gets up to `limit_ms` in all to finish the handshake (a
+/// slow path is not a missing one). `rtt_hint_ms` is the server list
+/// ping's round trip (0: unknown), quinn's first estimate. `flags`:
+/// [`FLAG_REPEAT_DATAGRAMS`]. On success writes the loopback port the game
+/// must connect to into `out_local_port` and returns the link's handle
+/// (> 0); otherwise a negative error: -1 nothing answered in time, -2 the
 /// handshake failed, -3 a local socket failed, -4 bad arguments, -5 an
-/// internal error. Blocks for at most `ports` x `attempt_ms`.
+/// internal error, -6 it answered but the handshake did not finish within
+/// `limit_ms`. Blocks for at most `ports` x `limit_ms`.
 ///
 /// # Safety
 ///
@@ -92,6 +107,7 @@ pub extern "C" fn stein_quic_abi_version() -> i32 {
 /// `pin` to 32 bytes and `out_local_port` to one writable i32, all valid
 /// for the duration of the call.
 #[no_mangle]
+#[allow(clippy::too_many_arguments)]
 pub unsafe extern "C" fn stein_quic_connect(
     ip: *const u8,
     ip_len: i32,
@@ -99,6 +115,9 @@ pub unsafe extern "C" fn stein_quic_connect(
     port_count: i32,
     pin: *const u8,
     attempt_ms: i32,
+    limit_ms: i32,
+    rtt_hint_ms: i32,
+    flags: i32,
     out_local_port: *mut i32,
 ) -> i64 {
     if ip.is_null() || ports.is_null() || pin.is_null() || out_local_port.is_null() {
@@ -107,7 +126,12 @@ pub unsafe extern "C" fn stein_quic_connect(
     let Ok(port_count) = usize::try_from(port_count) else {
         return ERR_ARGUMENT;
     };
-    if port_count == 0 || port_count > MAX_PORTS || !(100..=10_000).contains(&attempt_ms) {
+    if port_count == 0
+        || port_count > MAX_PORTS
+        || !(100..=10_000).contains(&attempt_ms)
+        || !(100..=30_000).contains(&limit_ms)
+        || !(0..=10_000).contains(&rtt_hint_ms)
+    {
         return ERR_ARGUMENT;
     }
     let ip_len = match ip_len {
@@ -142,13 +166,20 @@ pub unsafe extern "C" fn stein_quic_connect(
         attempt_timeout: Duration::from_millis(attempt_ms.unsigned_abs().into()),
         bind: None,
     };
+    let options = ConnectOptions {
+        handshake_limit: Some(Duration::from_millis(limit_ms.unsigned_abs().into())),
+        rtt_hint: (rtt_hint_ms > 0)
+            .then(|| Duration::from_millis(rtt_hint_ms.unsigned_abs().into())),
+        repeat_datagrams: flags & FLAG_REPEAT_DATAGRAMS != 0,
+    };
     let result = catch_unwind(AssertUnwindSafe(|| {
         let runtime = runtime()?;
-        Some(runtime.block_on(Link::connect(&config)))
+        Some(runtime.block_on(Link::connect_with(&config, &options)))
     }));
     let link = match result {
         Ok(Some(Ok(link))) => link,
         Ok(Some(Err(ConnectError::Timeout))) => return ERR_TIMEOUT,
+        Ok(Some(Err(ConnectError::Slow))) => return ERR_SLOW,
         Ok(Some(Err(ConnectError::Handshake(_)))) => return ERR_HANDSHAKE,
         Ok(Some(Err(ConnectError::Io(_)))) => return ERR_IO,
         Ok(Some(Err(ConnectError::NoServers))) => return ERR_ARGUMENT,
@@ -227,14 +258,15 @@ pub unsafe extern "C" fn stein_quic_send_datagram(
     .map_or(0, i32::from)
 }
 
-/// Writes the link's counters into the 6 values at `out`: round-trip time
+/// Writes the link's counters into the 8 values at `out`: round-trip time
 /// (microseconds), QUIC packets sent, QUIC packets lost, Tick datagrams
-/// sent, Tick datagrams refused, and 1 if the connection is closed.
-/// Returns 1, or 0 for an unknown handle.
+/// sent, Tick datagrams refused, 1 if the connection is closed, second
+/// copies sent on a lossy path, and 1 if the connection skipped the Retry
+/// with a token. Returns 1, or 0 for an unknown handle.
 ///
 /// # Safety
 ///
-/// `out` points to 6 writable i64 valid during the call.
+/// `out` points to 8 writable i64 valid during the call.
 #[no_mangle]
 pub unsafe extern "C" fn stein_quic_stats(handle: i64, out: *mut i64) -> i32 {
     if out.is_null() {
@@ -245,16 +277,18 @@ pub unsafe extern "C" fn stein_quic_stats(handle: i64, out: *mut i64) -> i32 {
     })) else {
         return 0;
     };
-    let values = [
+    let values: [u64; STATS] = [
         stats.rtt_us,
         stats.sent_packets,
         stats.lost_packets,
         stats.datagrams,
         stats.datagrams_refused,
         u64::from(closed),
+        stats.repeats,
+        u64::from(stats.used_token),
     ];
     for (i, value) in values.into_iter().enumerate() {
-        // SAFETY: the caller guarantees 6 writable values at `out`.
+        // SAFETY: the caller guarantees 8 writable values at `out`.
         unsafe { out.add(i).write(i64::try_from(value).unwrap_or(i64::MAX)) };
     }
     1

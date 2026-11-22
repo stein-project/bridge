@@ -23,7 +23,7 @@ use std::{
     io,
     net::{Ipv4Addr, Ipv6Addr, SocketAddr},
     sync::{
-        atomic::{AtomicU64, Ordering},
+        atomic::{AtomicBool, AtomicU64, Ordering},
         Arc, Mutex,
     },
     time::Duration,
@@ -41,7 +41,11 @@ use tokio::{
 use tracing::debug;
 
 use crate::{
+    congestion::FlooredCubic,
     pin::{Fingerprint, PinnedVerifier},
+    repeat::Repeater,
+    tokens::ServerTokens,
+    udp::AnsweringSocket,
     wire::{TickRing, WindowBuilder, ALPN, SERVER_NAME},
 };
 
@@ -79,12 +83,33 @@ pub struct LinkConfig {
     pub servers: Vec<SocketAddr>,
     /// The certificate fingerprint the status announced.
     pub pin: Fingerprint,
-    /// How long each address may take to complete the handshake.
+    /// How long each address may take to answer at all (with
+    /// [`Link::connect`], to complete the handshake).
     pub attempt_timeout: Duration,
     /// The local UDP address; `None` for any address of the server's
     /// family.
     pub bind: Option<SocketAddr>,
 }
+
+/// How patient a connect is, and what the link does once up
+/// ([`Link::connect_with`]).
+#[derive(Debug, Clone, Default)]
+pub struct ConnectOptions {
+    /// Once an address answered (UDP gets through), how long its
+    /// handshake may take in all; `None` (or anything shorter than
+    /// `attempt_timeout`) keeps `attempt_timeout` as the whole limit.
+    pub handshake_limit: Option<Duration>,
+    /// The round trip the server list ping measured, as quinn's first
+    /// estimate (its default, 333 ms, makes it resend late on a short
+    /// path and early on a long one).
+    pub rtt_hint: Option<Duration>,
+    /// Send each Tick datagram a second time while the path loses
+    /// packets ([`crate::repeat`]).
+    pub repeat_datagrams: bool,
+}
+
+/// The first round-trip estimates accepted from a hint.
+const RTT_HINT_RANGE: (Duration, Duration) = (Duration::from_millis(5), Duration::from_secs(3));
 
 /// Why no QUIC connection came up.
 #[derive(Debug)]
@@ -92,6 +117,9 @@ pub enum ConnectError {
     /// No address answered in time: UDP blocked on the way, or no QUIC
     /// listener there.
     Timeout,
+    /// An address answered, so UDP gets through, but its handshake did
+    /// not finish within the limit (a very long or very lossy path).
+    Slow,
     /// An address answered but the handshake failed (another
     /// certificate, another protocol version).
     Handshake(String),
@@ -105,6 +133,7 @@ impl std::fmt::Display for ConnectError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ConnectError::Timeout => f.write_str("no answer over UDP"),
+            ConnectError::Slow => f.write_str("UDP answers but the handshake is too slow"),
             ConnectError::Handshake(why) => write!(f, "handshake failed: {why}"),
             ConnectError::Io(err) => write!(f, "local socket: {err}"),
             ConnectError::NoServers => f.write_str("no address to try"),
@@ -113,6 +142,35 @@ impl std::fmt::Display for ConnectError {
 }
 
 impl std::error::Error for ConnectError {}
+
+impl ConnectError {
+    /// How much the error says about the server, for keeping the most
+    /// telling of several addresses: a slow path (UDP gets through, so the
+    /// server is tried again sooner) over a failed handshake, over
+    /// silence, over a local socket error. Silence wins over a local
+    /// socket error: the Bridge tries its Java QUIC after a local error
+    /// (a socket that implementation may open), and when the other ports
+    /// went unanswered (UDP blocked) that would only make the player wait
+    /// a second time before TCP.
+    fn weight(&self) -> u8 {
+        match self {
+            ConnectError::Slow => 4,
+            ConnectError::Handshake(_) => 3,
+            ConnectError::Timeout => 2,
+            ConnectError::Io(_) => 1,
+            ConnectError::NoServers => 0,
+        }
+    }
+
+    /// Keeps the more telling of `self` and `other`.
+    fn keep(self, other: ConnectError) -> ConnectError {
+        if other.weight() > self.weight() {
+            other
+        } else {
+            self
+        }
+    }
+}
 
 /// Counters of one link, for logs and the transport report.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -127,6 +185,11 @@ pub struct LinkStats {
     pub datagrams: u64,
     /// Tick datagrams the connection refused (closed, or too large).
     pub datagrams_refused: u64,
+    /// Second copies of datagrams sent on a lossy path.
+    pub repeats: u64,
+    /// Whether the connection skipped the Retry with a token from an
+    /// earlier one.
+    pub used_token: bool,
 }
 
 struct Shared {
@@ -136,6 +199,8 @@ struct Shared {
     local: SocketAddr,
     datagrams: AtomicU64,
     datagrams_refused: AtomicU64,
+    repeater: Option<Arc<Repeater>>,
+    used_token: bool,
 }
 
 /// A connected QUIC link; dropping every clone leaves the connection to
@@ -155,14 +220,20 @@ impl std::fmt::Debug for Link {
 }
 
 /// The client's transport settings (`docs/protocol.md` section 7.4).
-fn transport() -> TransportConfig {
+fn transport(rtt_hint: Option<Duration>) -> TransportConfig {
     let mut transport = TransportConfig::default();
+    if let Some(rtt) = rtt_hint {
+        transport.initial_rtt(rtt.clamp(RTT_HINT_RANGE.0, RTT_HINT_RANGE.1));
+    }
     // In range by construction (30 s is far below the QUIC maximum).
     if let Ok(idle) = IdleTimeout::try_from(IDLE_TIMEOUT) {
         transport.max_idle_timeout(Some(idle));
     }
     transport
         .keep_alive_interval(Some(KEEP_ALIVE))
+        // The game's uplink is never throttled by its own window
+        // ([`crate::congestion`]).
+        .congestion_controller_factory(Arc::new(FlooredCubic))
         // The proxy never opens a stream toward the client.
         .max_concurrent_bidi_streams(VarInt::from_u32(0))
         .max_concurrent_uni_streams(VarInt::from_u32(0))
@@ -173,7 +244,10 @@ fn transport() -> TransportConfig {
     transport
 }
 
-fn client_config(pin: Fingerprint) -> Result<ClientConfig, ConnectError> {
+fn client_config(
+    pin: Fingerprint,
+    rtt_hint: Option<Duration>,
+) -> Result<ClientConfig, ConnectError> {
     let provider = Arc::new(rustls::crypto::ring::default_provider());
     let mut tls = rustls::ClientConfig::builder_with_provider(provider.clone())
         .with_protocol_versions(&[&rustls::version::TLS13])
@@ -185,14 +259,15 @@ fn client_config(pin: Fingerprint) -> Result<ClientConfig, ConnectError> {
     let crypto =
         QuicClientConfig::try_from(tls).map_err(|err| ConnectError::Handshake(err.to_string()))?;
     let mut config = ClientConfig::new(Arc::new(crypto));
-    config.transport_config(Arc::new(transport()));
+    config.transport_config(Arc::new(transport(rtt_hint)));
     Ok(config)
 }
 
-/// A client endpoint on `bind`.
-fn endpoint(bind: SocketAddr) -> io::Result<Endpoint> {
-    let socket = std::net::UdpSocket::bind(bind)?;
-    Endpoint::new(
+/// A client endpoint on `bind` whose socket sets `answered` when anything
+/// arrives.
+fn endpoint(bind: SocketAddr, answered: Arc<AtomicBool>) -> io::Result<Endpoint> {
+    let socket = AnsweringSocket::wrap(std::net::UdpSocket::bind(bind)?, answered)?;
+    Endpoint::new_with_abstract_socket(
         EndpointConfig::default(),
         None,
         socket,
@@ -209,33 +284,63 @@ fn any_address_for(server: SocketAddr) -> SocketAddr {
 
 impl Link {
     /// Connects to the first address of `config` that completes the
-    /// handshake and opens the loopback port the game connects to. Must
-    /// run inside a Tokio runtime, which then carries the link.
+    /// handshake within `attempt_timeout` and opens the loopback port the
+    /// game connects to. Must run inside a Tokio runtime, which then
+    /// carries the link.
     pub async fn connect(config: &LinkConfig) -> Result<Link, ConnectError> {
-        let client = client_config(config.pin)?;
+        Self::connect_with(config, &ConnectOptions::default()).await
+    }
+
+    /// [`Link::connect`] with `options`: an address that answers within
+    /// `attempt_timeout` gets up to `handshake_limit` to finish, so a slow
+    /// path is not mistaken for one without UDP. A token from an earlier
+    /// connection to the same proxy skips its Retry ([`crate::tokens`]).
+    pub async fn connect_with(
+        config: &LinkConfig,
+        options: &ConnectOptions,
+    ) -> Result<Link, ConnectError> {
+        let client = client_config(config.pin, options.rtt_hint)?;
+        let mut limit = options
+            .handshake_limit
+            .unwrap_or(config.attempt_timeout)
+            .max(config.attempt_timeout);
         let mut last = ConnectError::NoServers;
         for &server in &config.servers {
             let bind = config.bind.unwrap_or_else(|| any_address_for(server));
-            let endpoint = endpoint(bind).map_err(ConnectError::Io)?;
-            let connecting = match endpoint.connect_with(client.clone(), server, SERVER_NAME) {
-                Ok(connecting) => connecting,
+            let answered = Arc::new(AtomicBool::new(false));
+            // A socket of one family may fail (no IPv6 on the host) while
+            // the next address is of the other: tried on.
+            let endpoint = match endpoint(bind, answered.clone()) {
+                Ok(endpoint) => endpoint,
                 Err(err) => {
-                    last = ConnectError::Handshake(err.to_string());
+                    last = last.keep(ConnectError::Io(err));
                     continue;
                 }
             };
-            match tokio::time::timeout(config.attempt_timeout, connecting).await {
-                Ok(Ok(conn)) => return Self::start(endpoint, conn).await,
-                Ok(Err(err)) => {
-                    debug!(%server, %err, "QUIC handshake failed");
-                    last = match err {
-                        quinn::ConnectionError::TimedOut => ConnectError::Timeout,
-                        other => ConnectError::Handshake(other.to_string()),
-                    };
+            let used_token = Arc::new(AtomicBool::new(false));
+            let mut for_server = client.clone();
+            for_server.token_store(Arc::new(ServerTokens::new(server, used_token.clone())));
+            let connecting = match endpoint.connect_with(for_server, server, SERVER_NAME) {
+                Ok(connecting) => connecting,
+                Err(err) => {
+                    last = last.keep(ConnectError::Handshake(err.to_string()));
+                    continue;
                 }
-                Err(_) => {
-                    debug!(%server, "QUIC handshake timed out");
-                    last = ConnectError::Timeout;
+            };
+            match handshake(connecting, config.attempt_timeout, limit, &answered).await {
+                Ok(conn) => {
+                    let used = used_token.load(Ordering::Relaxed);
+                    return Self::start(endpoint, conn, options, used).await;
+                }
+                Err(err) => {
+                    debug!(%server, %err, "QUIC connect failed");
+                    if matches!(err, ConnectError::Slow) {
+                        // One slow path had the long wait: the other
+                        // addresses get the short one, so the join waits
+                        // about one limit, not one per address.
+                        limit = config.attempt_timeout;
+                    }
+                    last = last.keep(err);
                 }
             }
             endpoint.close(VarInt::from_u32(0), b"");
@@ -243,11 +348,17 @@ impl Link {
         Err(last)
     }
 
-    async fn start(endpoint: Endpoint, conn: Connection) -> Result<Link, ConnectError> {
+    async fn start(
+        endpoint: Endpoint,
+        conn: Connection,
+        options: &ConnectOptions,
+        used_token: bool,
+    ) -> Result<Link, ConnectError> {
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0))
             .await
             .map_err(ConnectError::Io)?;
         let local = listener.local_addr().map_err(ConnectError::Io)?;
+        let repeater = options.repeat_datagrams.then(|| Arc::new(Repeater::new()));
         let shared = Arc::new(Shared {
             endpoint,
             conn,
@@ -255,7 +366,12 @@ impl Link {
             local,
             datagrams: AtomicU64::new(0),
             datagrams_refused: AtomicU64::new(0),
+            repeater: repeater.clone(),
+            used_token,
         });
+        if let Some(repeater) = repeater {
+            tokio::spawn(repeater.run(shared.conn.clone()));
+        }
         tokio::spawn(bridge(listener, shared.conn.clone()));
         Ok(Link { shared })
     }
@@ -314,9 +430,14 @@ impl Link {
     }
 
     fn send(&self, datagram: Bytes) -> bool {
+        // Kept for the repeat: a clone shares the bytes.
+        let copy = self.shared.repeater.as_ref().map(|_| datagram.clone());
         match self.shared.conn.send_datagram(datagram) {
             Ok(()) => {
                 self.shared.datagrams.fetch_add(1, Ordering::Relaxed);
+                if let (Some(repeater), Some(copy)) = (&self.shared.repeater, copy) {
+                    repeater.sent(&self.shared.conn, &copy);
+                }
                 true
             }
             Err(err) => {
@@ -346,6 +467,12 @@ impl Link {
             lost_packets: stats.path.lost_packets,
             datagrams: self.shared.datagrams.load(Ordering::Relaxed),
             datagrams_refused: self.shared.datagrams_refused.load(Ordering::Relaxed),
+            repeats: self
+                .shared
+                .repeater
+                .as_ref()
+                .map_or(0, |r| r.repeats.load(Ordering::Relaxed)),
+            used_token: self.shared.used_token,
         }
     }
 
@@ -358,6 +485,33 @@ impl Link {
     pub fn close(&self) {
         self.shared.conn.close(VarInt::from_u32(0), b"");
     }
+}
+
+/// Waits for `connecting`: `answer` for the address to answer at all, and
+/// once it has, until `limit` in all for the handshake to finish.
+async fn handshake(
+    connecting: quinn::Connecting,
+    answer: Duration,
+    limit: Duration,
+    answered: &AtomicBool,
+) -> Result<Connection, ConnectError> {
+    let started = tokio::time::Instant::now();
+    tokio::pin!(connecting);
+    let outcome = match tokio::time::timeout(answer, &mut connecting).await {
+        Ok(outcome) => outcome,
+        // Silence: nothing came back, UDP does not get through.
+        Err(_) if !answered.load(Ordering::Relaxed) => return Err(ConnectError::Timeout),
+        // It answers, only slowly: give it the rest of the limit.
+        Err(_) => match tokio::time::timeout_at(started + limit, &mut connecting).await {
+            Ok(outcome) => outcome,
+            Err(_) => return Err(ConnectError::Slow),
+        },
+    };
+    outcome.map_err(|err| match err {
+        quinn::ConnectionError::TimedOut if answered.load(Ordering::Relaxed) => ConnectError::Slow,
+        quinn::ConnectionError::TimedOut => ConnectError::Timeout,
+        other => ConnectError::Handshake(other.to_string()),
+    })
 }
 
 /// Carries the game's socket over the QUIC stream until either side ends,
@@ -404,5 +558,30 @@ async fn carry(tcp: TcpStream, conn: &Connection) -> io::Result<()> {
     tokio::select! {
         result = up => result.map(drop),
         result = down => result.map(drop),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ConnectError;
+
+    #[test]
+    fn the_most_telling_error_of_several_addresses_is_kept() {
+        // Port 1 answered but was slow, port 2 was silent: still slow, so
+        // the Bridge tries the server again in 2 minutes, not 10.
+        let kept = ConnectError::NoServers
+            .keep(ConnectError::Slow)
+            .keep(ConnectError::Timeout);
+        assert!(matches!(kept, ConnectError::Slow));
+        // One port could not open a local socket, the others were silent:
+        // UDP is blocked, no second wait for the Java QUIC.
+        let kept = ConnectError::Timeout.keep(ConnectError::Io(std::io::Error::other("no v6")));
+        assert!(matches!(kept, ConnectError::Timeout));
+        let kept = ConnectError::Io(std::io::Error::other("no v6")).keep(ConnectError::Timeout);
+        assert!(matches!(kept, ConnectError::Timeout));
+        let kept = ConnectError::NoServers.keep(ConnectError::Io(std::io::Error::other("down")));
+        assert!(matches!(kept, ConnectError::Io(_)));
+        let kept = ConnectError::Handshake("pin".into()).keep(ConnectError::Timeout);
+        assert!(matches!(kept, ConnectError::Handshake(_)));
     }
 }

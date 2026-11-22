@@ -10,10 +10,9 @@ package dev.xavier.stein.bridge.sync;
 
 /**
  * One QUIC connection to a Stein Sync proxy (stein-sync's docs/protocol.md section 7), whichever
- * transport runs it: {@link SteinSyncKwik} (Kwik, in Java: the default) or {@link
- * SteinSyncNativeLink} (the Bridge's native library, kept for comparison). The game's own Netty
- * connection reaches it through {@link #gameAddress}; the Ticks leave as datagrams through {@link
- * #sendDatagram}.
+ * transport runs it: {@link SteinSyncNativeLink} (the Bridge's native library: the default) or
+ * {@link SteinSyncKwik} (Kwik, in Java: the fallback). The game's own Netty connection reaches it
+ * through {@link #gameAddress}; the Ticks leave as datagrams through {@link #sendDatagram}.
  */
 interface SteinSyncLink {
 

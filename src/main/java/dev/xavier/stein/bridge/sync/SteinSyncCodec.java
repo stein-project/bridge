@@ -73,6 +73,9 @@ final class SteinSyncCodec {
     static final int QUIC_HANDSHAKE_FAILED = 5;
     static final int QUIC_SKIPPED = 6;
 
+    /** The server answered over UDP, but the handshake did not finish within the limit. */
+    static final int QUIC_SLOW = 7;
+
     /** Hit confirmation, attacks in the Tick, Damaged and CombatSeen (sections 3.2, 5.1, 5.6). */
     static final String HITS = "hits";
 

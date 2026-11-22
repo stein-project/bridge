@@ -18,9 +18,13 @@
 //! The Bridge loads this through `stein-quic-ffi`; the Stein Sync tests
 //! and bench use it directly, so they measure the code the game runs.
 
+mod congestion;
 pub mod link;
 pub mod pin;
+mod repeat;
+mod tokens;
+mod udp;
 pub mod wire;
 
-pub use link::{ConnectError, Link, LinkConfig, LinkStats};
+pub use link::{ConnectError, ConnectOptions, Link, LinkConfig, LinkStats};
 pub use pin::{fingerprint, parse_fingerprint, Fingerprint};
