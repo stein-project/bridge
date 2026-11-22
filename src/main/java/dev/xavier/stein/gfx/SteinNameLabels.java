@@ -9,6 +9,7 @@
 package dev.xavier.stein.gfx;
 
 import dev.xavier.stein.bridge.engine.FontBatch;
+import dev.xavier.stein.bridge.engine.NameStyle;
 import dev.xavier.stein.bridge.engine.Visuals;
 import dev.xavier.stein.bridge.hooks.GameHooks;
 import dev.xavier.stein.gfx.SteinLabelSlots.Slot;
@@ -23,10 +24,8 @@ import net.minecraft.client.renderer.entity.RenderManager;
 import net.minecraft.client.renderer.texture.TextureManager;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.EntityLivingBase;
-import net.minecraft.entity.player.EntityPlayer;
-import net.minecraft.scoreboard.Score;
-import net.minecraft.scoreboard.ScoreObjective;
-import net.minecraft.scoreboard.Scoreboard;
+import net.minecraft.util.EnumChatFormatting;
+import net.minecraft.util.IChatComponent;
 
 /**
  * The whole label without the surrounding game code: in the name drain ({@link
@@ -61,10 +60,19 @@ import net.minecraft.scoreboard.Scoreboard;
  * font, non-resident background, WorldRenderer with an offset) goes through the game's path from
  * that point on, with the name already computed (the hooks do not run twice).
  *
+ * <p><b>A style</b> ({@link NameStyle}, set by a mod): the same direct label, with the style's
+ * background shape ({@link SteinLabelShape}), text color and shadow, size and height; the game path
+ * it learns from is {@link SteinLabelTail}'s styled copy of the game's calls. Where the direct
+ * label cannot be used (Stein's font, bidi, no resident text on this driver) and outside the
+ * deferred pass (the fixed-function pipeline), the styled game path draws the label ({@link
+ * #drawImmediate}), so the style looks the same everywhere. Only renderers that change the name
+ * themselves (kind 0) keep the game's label.
+ *
  * <p>{@code -Dsteinbridge.gfx.gpuLabel=false} turns it off (the whole name through the game, as
- * before). Check: {@code -Dsteinbridge.gfx.gpuLabelCheck=true} generates the direct label without
- * recording it and compares it with what the game path records (keys, runs, records byte by byte),
- * drawing through the game; the result is output every 5 s.
+ * before; a style still goes through the styled game path). Check: {@code
+ * -Dsteinbridge.gfx.gpuLabelCheck=true} generates the direct label without recording it and
+ * compares it with what the game path records (keys, runs, records byte by byte), drawing through
+ * the game; the result is output every 5 s.
  *
  * <p>Pipeline: Stein GFX only.
  */
@@ -97,9 +105,14 @@ public final class SteinNameLabels {
         float tx;
         float ty;
         float tz;
+
+        /** Null: no background (a style without one). */
         SteinTextGpu.Alloc background;
-        final Object[] entry = new Object[2];
-        long[][] keys = {new long[4], new long[4]};
+
+        /** [0] see-through, [1] normal, [2] the normal pass's shadow (null without one). */
+        final Object[] entry = new Object[3];
+
+        long[][] keys = {new long[4], new long[4], new long[4]};
     }
 
     static final Label[] labels = {new Label(), new Label()};
@@ -151,44 +164,41 @@ public final class SteinNameLabels {
      */
     static boolean draw(Object render, Object entity, double x, double y, double z)
             throws Throwable {
-        if (!SteinTextGpu.REQUESTED || !SteinTextGpu.active()) {
+        boolean styled = NameStyle.custom();
+        boolean gpu = REQUESTED && SteinTextGpu.REQUESTED && SteinTextGpu.active();
+        if (!gpu && !styled) {
             return false;
         }
         int kind = SteinLabelKinds.of(render.getClass());
         if (kind == 0) {
             return false;
         }
-        Render renderer = (Render) render;
-        Entity ent = (Entity) entity;
-        FontRenderer font = renderer.getFontRendererFromRenderManager();
-        if (SteinOwnText.active() || SteinTextCache.bidi(font)) {
+        FontRenderer font = ((Render) render).getFontRendererFromRenderManager();
+        boolean direct = gpu && !SteinOwnText.active() && !SteinTextCache.bidi(font);
+        if (!direct && !styled) {
             return false;
         }
-        // RendererLivingEntity.renderName, as in the game up to the name
-        if (!Visuals.canRenderName(render, entity)) {
+        if (!name(kind, render, entity, font, true, x, y, z)) {
             return true;
         }
-        RenderManager rm = renderer.renderManager;
-        double d = ent.getDistanceSqToEntity(rm.livingPlayer);
-        boolean sneak = ent.isSneaking();
-        float f = sneak ? 32.0F : 64.0F;
-        if (d >= (double) (f * f)) {
-            return true;
-        }
-        Object component = GameHooks.nametag(entity);
-        Slot slot = SteinLabelSlots.slot(entity);
-        String name = SteinLabelSlots.formatted(slot, component);
+        Slot slot = SteinLabelContext.slot;
         // From here on the name has already been computed (the mods' hooks ran): the game, if
         // needed, continues with it.
-        boolean unicode = SteinTextCache.unicode(font);
-        SteinLabelContext.set(kind, sneak, render, entity, rm, font, unicode, name, x, y, z, d);
+        boolean sneak = SteinLabelContext.sneak;
+        if (!direct) {
+            // a style the direct label cannot draw here: the styled game path
+            leave();
+            SteinLabelTail.tail();
+            SteinLabelStats.viaGame++;
+            return true;
+        }
         int n = prepare(slot);
         Template t = SteinLabelTemplates.templates[sneak ? SNEAK : LABEL];
         if (CHECK) {
             SteinLabelCheck.check(n, t);
             return true;
         }
-        if (n > 0 && t.valid) {
+        if (n > 0 && t.valid && t.style == NameStyle.version()) {
             for (int i = 0; i < n; i++) {
                 SteinLabelEmit.emit(labels[i], t, null);
             }
@@ -209,6 +219,74 @@ public final class SteinNameLabels {
             }
         }
         SteinLabelStats.viaGame++;
+        return true;
+    }
+
+    /**
+     * RendererLivingEntity.renderName, as in the game up to the name: whether it shows (the game's
+     * canRenderName, with the Loader's hooks and the style's own label), the distance (32 sneaking,
+     * 64 standing) and the name with the mods' hooks, without formatting codes when the style asks.
+     * True = there is a label, in {@link SteinLabelContext}; false = nothing to draw. Without
+     * {@code keep} (outside the drain) the name is not kept per entity.
+     */
+    private static boolean name(
+            int kind,
+            Object render,
+            Object entity,
+            FontRenderer font,
+            boolean keep,
+            double x,
+            double y,
+            double z)
+            throws Throwable {
+        if (!Visuals.canRenderName(render, entity)) {
+            return false;
+        }
+        Entity ent = (Entity) entity;
+        RenderManager rm = ((Render) render).renderManager;
+        double d = ent.getDistanceSqToEntity(rm.livingPlayer);
+        boolean sneak = ent.isSneaking();
+        float f = sneak ? 32.0F : 64.0F;
+        if (d >= (double) (f * f)) {
+            return false;
+        }
+        Object component = GameHooks.nametag(entity);
+        Slot slot = keep ? SteinLabelSlots.slot(entity) : null;
+        String name =
+                slot != null
+                        ? SteinLabelSlots.formatted(slot, component)
+                        : ((IChatComponent) component).getFormattedText();
+        if (NameStyle.custom() && NameStyle.plainText()) {
+            name =
+                    slot != null
+                            ? SteinLabelSlots.plainName(slot, name)
+                            : EnumChatFormatting.getTextWithoutFormattingCodes(name);
+        }
+        boolean unicode = SteinTextCache.unicode(font);
+        SteinLabelContext.set(kind, sneak, render, entity, rm, font, unicode, name, x, y, z, d);
+        SteinLabelContext.slot = slot;
+        return true;
+    }
+
+    /**
+     * Render.renderName outside the deferred pass (the fixed-function pipeline, or a name drawn
+     * outside the world's entities) with a style: the styled game path. False = the game's own
+     * renderName (no style, or a renderer that changes the name itself).
+     */
+    static boolean drawImmediate(Object render, Object entity, double x, double y, double z)
+            throws Throwable {
+        if (!NameStyle.custom()) {
+            return false;
+        }
+        int kind = SteinLabelKinds.of(render.getClass());
+        if (kind == 0) {
+            return false;
+        }
+        FontRenderer font = ((Render) render).getFontRendererFromRenderManager();
+        if (name(kind, render, entity, font, false, x, y, z)) {
+            SteinLabelTail.tail();
+        }
+        SteinLabelContext.clear();
         return true;
     }
 
@@ -237,48 +315,47 @@ public final class SteinNameLabels {
             return 0; // the background Tessellator would not give the usual quad
         }
         TextureManager tm = SteinTextCache.textureManager(font);
+        boolean bg = !NameStyle.custom() || NameStyle.background();
         if (sneak) {
             Text t = SteinLabelSlots.text(slot.name, name, font, unicode);
             Label l = labels[0];
             l.kind = SNEAK;
             l.tx = (float) x;
-            l.ty = (float) y + h + 0.5F - (child ? h / 2.0F : 0.0F);
+            l.ty = SteinLabelGeometry.sneakTop(y, h, child);
             l.tz = (float) z;
             int i = t.width / 2;
-            l.background = SteinTextBackgrounds.labelBackground(i, -1, 8);
+            l.background = bg ? SteinTextBackgrounds.labelBackground(i, -1, 8) : null;
             l.entry[0] = SteinLabelSlots.entry(t, 2, (float) (-t.width / 2), 0f);
             l.entry[1] = null;
-            return l.background != null && l.entry[0] != null && bind(tm, l, 0) ? 1 : 0;
+            l.entry[2] = null;
+            return (!bg || l.background != null) && l.entry[0] != null && bind(tm, l, 0) ? 1 : 0;
         }
         double yy = y - (child ? (double) (h / 2.0F) : 0.0);
         int n = 0;
-        if (kind == SteinLabelKinds.PLAYER && d < 100.0) {
+        if (kind == SteinLabelKinds.PLAYER) {
             // RenderPlayer.renderOffsetLivingLabel: the scoreboard line below the name, through the
             // game's scoreboard
-            Scoreboard board = ((EntityPlayer) entity).getWorldScoreboard();
-            ScoreObjective objective = board.getObjectiveInDisplaySlot(2);
-            if (objective != null) {
-                Score score = board.getValueFromObjective(entity.getName(), objective);
-                String s = score.getScorePoints() + " " + objective.getDisplayName();
+            String s = SteinLabelGeometry.scoreLine(entity, d, slot);
+            if (s != null) {
                 if (!label(
                         labels[n++],
                         SteinLabelSlots.text(slot.score, s, font, unicode),
                         tm,
-                        entity,
+                        bg,
                         h,
                         x,
                         yy,
                         z)) {
                     return 0;
                 }
-                yy += (double) ((float) font.FONT_HEIGHT * 1.15F * SNEAK_SCALE);
+                yy += SteinLabelGeometry.scoreStep(font);
             }
         }
         if (!label(
                 labels[n++],
                 SteinLabelSlots.text(slot.name, name, font, unicode),
                 tm,
-                entity,
+                bg,
                 h,
                 x,
                 yy,
@@ -293,28 +370,26 @@ public final class SteinNameLabels {
      * distance).
      */
     private static boolean label(
-            Label l,
-            Text t,
-            TextureManager tm,
-            Entity entity,
-            float h,
-            double x,
-            double y,
-            double z) {
+            Label l, Text t, TextureManager tm, boolean bg, float h, double x, double y, double z) {
         l.kind = LABEL;
         l.tx = (float) x + 0.0F;
-        l.ty = (float) y + h + 0.5F;
+        l.ty = SteinLabelGeometry.labelTop(y, h);
         l.tz = (float) z;
         int i = t.s.equals("deadmau5") ? -10 : 0;
         int j = t.width / 2;
-        l.background = SteinTextBackgrounds.labelBackground(j, -1 + i, 8 + i);
+        l.background = bg ? SteinTextBackgrounds.labelBackground(j, -1 + i, 8 + i) : null;
         float tx = (float) (-t.width / 2);
         l.entry[0] = SteinLabelSlots.entry(t, 0, tx, (float) i);
         l.entry[1] = SteinLabelSlots.entry(t, 1, tx, (float) i);
-        return l.background != null
+        // FontRenderer.drawString with the shadow: renderString at (x + 1, y + 1) first
+        boolean shadow = NameStyle.custom() && NameStyle.shadow();
+        l.entry[2] = shadow ? SteinLabelSlots.entry(t, 3, tx + 1.0F, (float) i + 1.0F) : null;
+        return (!bg || l.background != null)
                 && l.entry[0] != null
                 && l.entry[1] != null
+                && (!shadow || l.entry[2] != null)
                 && bind(tm, l, 0)
+                && (!shadow || bind(tm, l, 2))
                 && bind(tm, l, 1);
     }
 

@@ -16,8 +16,8 @@ package dev.xavier.stein.bridge.diag;
  * and its state: {@link DiagClickScenes} (clicks), {@link DiagInputScenes} (drags, typing, keys,
  * wheel), {@link DiagScreenScenes} (screens, menus, HUD), {@link DiagWorldScenes} (gear, terrain,
  * settings), {@link DiagSingleplayerScene} (integrated server), {@link DiagChatScenes} and {@link
- * DiagLocalCommands} (chat and local commands), {@link DiagCapture} (screenshots). {@link DiagGame}
- * holds the shared reflection helpers.
+ * DiagLocalCommands} (chat and local commands), {@link DiagCapture} (screenshots), {@link
+ * DiagFixChecks} (the vanilla fixes' checks). {@link DiagGame} holds the shared reflection helpers.
  *
  * <p>Called from Display.update, on the render thread, only when {@link #ENABLED}: a static final
  * flag, so in a normal game (no {@code steinbridge.diag.*} property) the JIT drops the call and the
@@ -56,6 +56,7 @@ public final class Scenes {
         DiagScreenScenes.soundOptionsFrame();
         DiagSingleplayerScene.frame();
         DiagWorldScenes.thirdPersonFrame();
+        DiagWorldScenes.hitboxesFrame();
         DiagWorldScenes.turnFrame();
         DiagClickScenes.pickTestFrame();
         DiagClickScenes.serverClicksFrame();
@@ -88,5 +89,6 @@ public final class Scenes {
         DiagScreenScenes.pauseFrame();
         DiagScreenScenes.inventoryFrame();
         DiagScreenScenes.creativeTabsFrame();
+        DiagFixChecks.frame();
     }
 }

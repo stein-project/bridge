@@ -666,7 +666,7 @@ final class VideoOptions {
     }
 
     private String zoomKeyName() {
-        return mod.zoomKey != null ? GameSettings.func_74298_c(mod.zoomKey.func_151463_i()) : "V";
+        return mod.zoom.keyName();
     }
 
     private static String onOff(boolean on) {

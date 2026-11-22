@@ -27,6 +27,7 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.invoke.VarHandle;
+import java.net.HttpURLConnection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -59,6 +60,15 @@ import javax.imageio.ImageIO;
  * </ul>
  *
  * <p>{@code -Dsteinbridge.opt.vanillaSkinLoad=true} does everything as the original, for A/B.
+ *
+ * <p>Two fixes of the skin texture live here too, under {@code
+ * -Dsteinbridge.opt.vanillaSkinDownload=true}: the download has a time limit ({@link #connect}),
+ * and the decoded image is let go once uploaded ({@link #checkUploaded}). In 1.8.9 the image (16 KB
+ * for a 64x64 skin) stayed in the texture for as long as the game ran, one per player ever seen: a
+ * day in a lobby kept tens of megabytes of skins the GPU already had. Nothing reads the image after
+ * the upload (the texture is never uploaded again), and a resource reload of an uploaded skin,
+ * which in 1.8.9 read the skin from the cache again only to keep it on the heap, now leaves the
+ * texture as it is.
  */
 public final class AsyncSkins {
 
@@ -66,6 +76,16 @@ public final class AsyncSkins {
 
     /** One texture per skin, as before sharing the default one; for the A/B measurement. */
     private static final boolean NO_SHARED = EngineOptions.NO_SHARED_SKIN;
+
+    /** 1.8.9's download with no time limit and the image kept after the upload. */
+    private static final boolean KEEP_IMAGE = NetFixOptions.VANILLA_SKIN_DOWNLOAD;
+
+    /**
+     * Connection and read limit of a skin or cape download. The skin server answers in well under a
+     * second; a connection that stalls (a proxy, a dropped packet) held its download thread forever
+     * and the player stayed with the default skin.
+     */
+    private static final int DOWNLOAD_TIMEOUT_MS = 10_000;
 
     /**
      * Validity of the decoded default skin. A burst lasts under a second; the short deadline limits
@@ -78,6 +98,10 @@ public final class AsyncSkins {
     // written as plain Java from outside the class, so it stays a MethodHandle (invokespecial; "a"
     // is the method's name in the real game).
     private static final MethodHandle SUPER_LOAD;
+
+    // The same for AbstractTexture.getGlTextureId: ThreadDownloadImageData overrides it to upload
+    // first, so the upload itself needs the parent's ("b" in the real game).
+    private static final MethodHandle SUPER_ID;
 
     // The sbSharedSkin field is created by the patcher: it does not exist in the readable-name jar
     // the Bridge compiles against, so it is reached by VarHandle.
@@ -95,6 +119,13 @@ public final class AsyncSkins {
                                     MethodType.methodType(void.class, IResourceManager.class),
                                     ThreadDownloadImageData.class)
                             .asType(MethodType.methodType(void.class, Object.class, Object.class));
+            SUPER_ID =
+                    t.findSpecial(
+                                    SimpleTexture.class,
+                                    "b",
+                                    MethodType.methodType(int.class),
+                                    ThreadDownloadImageData.class)
+                            .asType(MethodType.methodType(int.class, Object.class));
             SHARED = t.findVarHandle(ThreadDownloadImageData.class, "sbSharedSkin", int.class);
         } catch (ReflectiveOperationException e) {
             // Wrong names mean the wrong game version: failing loudly is better
@@ -146,6 +177,11 @@ public final class AsyncSkins {
     /** Replacement body of ThreadDownloadImageData.loadTexture(IResourceManager). */
     public static void loadTexture(Object self, Object resourceManager) throws Throwable {
         ThreadDownloadImageData skin = (ThreadDownloadImageData) self;
+        if (!KEEP_IMAGE && skin.textureUploaded) {
+            // A resource reload of a skin already on the GPU: 1.8.9 changed nothing in the
+            // texture either (it is never uploaded again), only read the cache back to the heap.
+            return;
+        }
         // Same condition as the original for loading the default skin while the real one has not
         // arrived.
         if (skin.bufferedImage == null && ((SimpleTexture) self).textureLocation != null) {
@@ -224,11 +260,45 @@ public final class AsyncSkins {
     public static int textureId(Object texture) {
         if (!VANILLA && !NO_SHARED && texture instanceof ThreadDownloadImageData) {
             int shared = (int) SHARED.get(texture);
-            if (shared != 0 && ((ThreadDownloadImageData) texture).bufferedImage == null) {
+            ThreadDownloadImageData skin = (ThreadDownloadImageData) texture;
+            if (shared != 0 && !skin.textureUploaded && skin.bufferedImage == null) {
                 return shared;
             }
         }
         return ((ITextureObject) texture).getGlTextureId();
+    }
+
+    /**
+     * The body of ThreadDownloadImageData.checkTextureUploaded: the same upload, then the image let
+     * go (see the class comment).
+     */
+    public static void checkUploaded(Object self) throws Throwable {
+        ThreadDownloadImageData skin = (ThreadDownloadImageData) self;
+        BufferedImage image = skin.bufferedImage;
+        if (skin.textureUploaded || image == null) {
+            return;
+        }
+        if (skin.textureLocation != null) {
+            skin.deleteGlTexture();
+        }
+        TextureUtil.uploadTextureImage((int) SUPER_ID.invokeExact(self), image);
+        skin.textureUploaded = true;
+        if (!KEEP_IMAGE) {
+            skin.bufferedImage = null;
+        }
+    }
+
+    /**
+     * HttpURLConnection.connect in the skin download thread (ThreadDownloadImageData$1.run): with
+     * the time limits set first.
+     */
+    public static void connect(Object connection) throws IOException {
+        HttpURLConnection c = (HttpURLConnection) connection;
+        if (!KEEP_IMAGE) {
+            c.setConnectTimeout(DOWNLOAD_TIMEOUT_MS);
+            c.setReadTimeout(DOWNLOAD_TIMEOUT_MS);
+        }
+        c.connect();
     }
 
     /**

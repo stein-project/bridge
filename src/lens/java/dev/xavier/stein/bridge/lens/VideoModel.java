@@ -555,17 +555,7 @@ final class VideoModel implements VideoSettings.Source {
                 () -> c.dynamicFov = !c.dynamicFov,
                 null);
         motionBlur();
-        toggleText(
-                "steinlens.zoom",
-                () -> c.zoom,
-                () -> c.zoom = !c.zoom,
-                () -> tr("steinlens.zoom.hint", zoomKeyName()),
-                null);
-        toggle(
-                "steinlens.zoomSmooth",
-                () -> c.zoomSmoothCamera,
-                () -> c.zoomSmoothCamera = !c.zoomSmoothCamera,
-                () -> c.zoom);
+        ZoomEntries.add(entries, mod);
         entries.add(
                 Entry.choice(
                         () -> tr("steinlens.armor"),
@@ -839,10 +829,6 @@ final class VideoModel implements VideoSettings.Source {
             }
         }
         return 0;
-    }
-
-    private String zoomKeyName() {
-        return mod.zoomKey != null ? GameSettings.func_74298_c(mod.zoomKey.func_151463_i()) : "V";
     }
 
     static String tr(String key, Object... args) {

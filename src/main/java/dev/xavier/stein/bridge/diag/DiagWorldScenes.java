@@ -296,6 +296,19 @@ final class DiagWorldScenes {
         }
     }
 
+    /** The hit boxes were turned on ({@link DiagOptions#HITBOXES_AT}). */
+    private static boolean hitboxesDone;
+
+    static void hitboxesFrame() {
+        if (DiagOptions.HITBOXES_AT >= 0
+                && !hitboxesDone
+                && Scenes.elapsed() >= DiagOptions.HITBOXES_AT * 1_000_000_000L) {
+            hitboxesDone = true;
+            Minecraft.getMinecraft().getRenderManager().setDebugBoundingBox(true);
+            Log.info("diag", "hit boxes (F3+B) on");
+        }
+    }
+
     static void thirdPersonFrame() {
         if (DiagOptions.THIRD_PERSON > 0) {
             keepThirdPerson();

@@ -45,6 +45,13 @@ bfk	a	(FZ)F	fov	dev/xavier/stein/bridge/hooks/GameHooks	static
 # EntityRenderer.updateFovModifierHand (bfk.l): the player's FOV factor (speed, bow)
 # goes through the mods before smoothing (Forge's FOVUpdateEvent).
 bet	o	()F	fovModifier	dev/xavier/stein/bridge/hooks/GameHooks	static	bfk.l()V
+# Camera for the Lens zoom (GameHooksCamera, HookSink.mouseWheel): the frame's mouse turn
+# (EntityPlayerSP.setAngles, both calls of EntityRenderer.updateCameraAndRender) scaled; the held item and arm in first
+# person (ItemRenderer.renderItemInFirstPerson inside EntityRenderer.renderHand; the overlays after it stay); and the
+# wheel of Minecraft.runTick's mouse loop (Mouse.getEventDWheel), which the zoom can take before the hotbar slot changes.
+bew	c	(FF)V	look	dev/xavier/stein/bridge/hooks/GameHooks	static	bfk.a(FJ)V
+bfn	a	(F)V	firstPersonHand	dev/xavier/stein/bridge/hooks/GameHooks	static	bfk.b(FI)V
+org/lwjgl/input/Mouse	getEventDWheel	()I	eventWheel	dev/xavier/stein/bridge/hooks/GameHooks	static	ave.s()V
 # TextureMap (bmh): before the atlas is built (loadTextureAtlas, in loadSprites), mods register
 # textures (Forge's TextureStitchEvent.Pre); when stitching, a texture with a path under mcpatcher/ or
 # optifine/ is read from assets/<domain>/<path>.png, the way resource packs lay out custom item textures (CIT).
@@ -186,8 +193,25 @@ avo	a	(Lavr;I)V	horseJumpBar	dev/xavier/stein/bridge/hooks/VanillaHud	static	avo
 avo	b	(Lavr;I)V	expBar	dev/xavier/stein/bridge/hooks/VanillaHud	static	avo.a(F)V
 avo	a	(Lavr;)V	selectedItem	dev/xavier/stein/bridge/hooks/VanillaHud	static	avo.a(F)V
 avt	a	(I)V	chat	dev/xavier/stein/bridge/hooks/VanillaHud	static	avo.a(F)V
+# The crosshair (Hud.replaceCrosshair): showCrosshair in GuiIngame.renderGameOverlay goes through the Bridge, which keeps
+# the game's answer for the mods and leaves the game's crosshair out while a mod draws its own.
+avo	b	()Z	crosshair	dev/xavier/stein/bridge/hooks/GameHooks	static	avo.a(F)V
 # Click and mouse hover on the moved chat (GuiChat).
 avt	a	(II)Leu;	chatComponent	dev/xavier/stein/bridge/hooks/VanillaHud	static
+# Chat view (engine/ChatView): the rows reach drawChat, getChatComponent and scroll through ChatView (a search filter
+# shows only some messages; with none, the game's own list), and each row's text is drawn by ChatView.drawRow (a
+# message's highlight behind it, then HookSink.chatRowDrawn in the chat's coordinates).
+java/util/List	size	()I	size	dev/xavier/stein/bridge/engine/ChatView	static	avt.a(I)V
+java/util/List	get	(I)Ljava/lang/Object;	getDrawn	dev/xavier/stein/bridge/engine/ChatView	static	avt.a(I)V
+avn	a	(Ljava/lang/String;FFI)I	drawRow	dev/xavier/stein/bridge/engine/ChatView	static	avt.a(I)V
+java/util/List	size	()I	size	dev/xavier/stein/bridge/engine/ChatView	static	avt.a(II)Leu;
+java/util/List	get	(I)Ljava/lang/Object;	get	dev/xavier/stein/bridge/engine/ChatView	static	avt.a(II)Leu;
+java/util/List	size	()I	size	dev/xavier/stein/bridge/engine/ChatView	static	avt.b(I)V
+# GuiScreen.handleKeyboardInput (axu.l): a key typed on an open screen goes through the mods first (HookSink.guiKey).
+axu	a	(CI)V	keyTyped	dev/xavier/stein/bridge/hooks/GameHooks	static	axu.l()V
+# GuiChat.mouseClicked (awv.a(III)V): a click on a chat text goes through the mods before its click event runs
+# (HookSink.chatClick).
+awv	a	(Leu;)Z	chatClick	dev/xavier/stein/bridge/hooks/GameHooks	static	awv.a(III)V
 # Freeze watchdog (engine/Watchdog): counts what arrives from the server (Packet.processPacket inside
 # NetworkManager.channelRead0), what goes out, and the game ticks. When the player is in a world and all of this stops, the
 # watchdog dumps the threads to the log — it is the only way to see a bottlenecked thread. What goes out passes through two
@@ -202,6 +226,9 @@ io/netty/channel/Channel	writeAndFlush	(Ljava/lang/Object;)Lio/netty/channel/Cha
 # drawn. Body, armor, name and shadow disappear together; it is not the game's invisibility.
 biu	a	(Lpk;F)Z	renderEntity	dev/xavier/stein/bridge/hooks/GameHooks	static	bfr.a(Lpk;Lbia;F)V
 biu	b	(Lpk;F)V	renderMultipass	dev/xavier/stein/bridge/hooks/GameHooks	static	bfr.a(Lpk;Lbia;F)V
+# RenderManager.doRenderEntity (biu.a(Lpk;DDDFFZ)Z): the F3+B box (renderDebugBoundingBox, biu.b(Lpk;DDDFF)V, only
+# called while F3+B is on) goes through the mods, which can leave it out when they draw hit boxes of their own (API 0.1.36).
+biu	b	(Lpk;DDDFF)V	gameHitbox	dev/xavier/stein/bridge/hooks/GameHooks	static	biu.a(Lpk;DDDFFZ)Z
 # Sprint that survives a hit (engine/Sprint, a mod option, off by default): the
 # EntityPlayer.attackTargetEntityWithCurrentItem drops sprinting right after the knockback
 # (setSprinting(false), the 1.8 "sprint reset"). Only this call, and only inside the hit:

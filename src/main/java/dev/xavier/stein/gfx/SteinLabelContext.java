@@ -37,6 +37,9 @@ final class SteinLabelContext {
     static double z;
     static double d;
 
+    /** The entity's slot (the name and its texts kept); null outside the drain. */
+    static SteinLabelSlots.Slot slot;
+
     private SteinLabelContext() {}
 
     static void set(
@@ -73,5 +76,6 @@ final class SteinLabelContext {
         manager = null;
         font = null;
         name = null;
+        slot = null;
     }
 }

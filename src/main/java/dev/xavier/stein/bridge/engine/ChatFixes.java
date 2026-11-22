@@ -9,7 +9,9 @@
 package dev.xavier.stein.bridge.engine;
 
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.entity.EntityPlayerSP;
 import net.minecraft.client.gui.ChatLine;
+import net.minecraft.client.gui.GuiChat;
 import net.minecraft.client.gui.GuiNewChat;
 import net.minecraft.client.gui.ScaledResolution;
 import net.minecraft.util.MathHelper;
@@ -30,6 +32,12 @@ import java.util.List;
  *   <li>deleteChatLine read the id of every line without a null check: a null line (put there by a
  *       mod or a broken message) made each later message with an id (the ones a server or a mod
  *       replaces in place) throw, and the game crashed. Here a null line is passed over.
+ *   <li>The server's close window packet (handleCloseWindow) closed whatever screen was open, the
+ *       chat too: a server closing a menu (many do it on a timer or on each world change) threw
+ *       away the message being typed. With the chat open, only what closing does to the player is
+ *       done (no item on the cursor, the open container back to the inventory); the chat stays.
+ *       Nothing different reaches the server. {@code -Dsteinbridge.opt.vanillaChatClose=true}
+ *       brings back 1.8.9's behaviour.
  * </ul>
  */
 public final class ChatFixes {
@@ -37,6 +45,8 @@ public final class ChatFixes {
     private ChatFixes() {}
 
     private static final boolean VANILLA_CLICK = GuiFixOptions.VANILLA_CHAT_CLICK;
+
+    private static final boolean VANILLA_CLOSE = GuiFixOptions.VANILLA_CHAT_CLOSE;
 
     /**
      * The game's getChatComponent, except above the lines on show. The rows are worked out exactly
@@ -48,12 +58,23 @@ public final class ChatFixes {
             Minecraft mc = Minecraft.getMinecraft();
             int scale = new ScaledResolution(mc).getScaleFactor();
             int row = MathHelper.floor_float((mouseY / scale - 27) / chat.getChatScale());
-            int lines = Math.min(chat.getLineCount(), chat.drawnChatLines.size());
+            int lines = Math.min(chat.getLineCount(), ChatView.size(chat.drawnChatLines));
             if (row >= 0 && row / mc.fontRendererObj.FONT_HEIGHT >= lines) {
                 return null;
             }
         }
         return chat.getChatComponent(mouseX, mouseY);
+    }
+
+    /** EntityPlayerSP.closeScreenAndDropStack() in NetHandlerPlayClient.handleCloseWindow. */
+    public static void serverClosedWindow(Object player) {
+        EntityPlayerSP p = (EntityPlayerSP) player;
+        if (!VANILLA_CLOSE && Minecraft.getMinecraft().currentScreen instanceof GuiChat) {
+            p.inventory.setItemStack(null);
+            p.openContainer = p.inventoryContainer;
+            return;
+        }
+        p.closeScreenAndDropStack();
     }
 
     /** The body of GuiNewChat.deleteChatLine, the same but past null lines. */
@@ -68,6 +89,7 @@ public final class ChatFixes {
                 break; // the game removes only the newest full message with that id
             }
         }
+        ChatLines.changed();
     }
 
     private static void removeAll(List<ChatLine> lines, int id) {

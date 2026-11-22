@@ -282,6 +282,41 @@ final class GameHooksHud {
     }
 
     /**
+     * A mod drew its own crosshair in the previous frame (Hud.replaceCrosshair): the game's stays
+     * out of this one. One frame and no more, so a mod that stops calling (turned off, suspended by
+     * the server, failed) gives the game's crosshair back by itself on the next frame.
+     */
+    private static boolean crosshairReplaced;
+
+    /** What the game's showCrosshair answered in this frame. */
+    private static boolean crosshairAllowed;
+
+    /** Leaves the game's crosshair out of the next frame. Game thread. */
+    static void replaceCrosshair() {
+        crosshairReplaced = true;
+    }
+
+    /**
+     * Whether the game draws its crosshair in this frame, mods aside: not with the F3 screen, and
+     * in spectator only over an entity or a container (GuiIngame.showCrosshair).
+     */
+    static boolean crosshairAllowed() {
+        return crosshairAllowed;
+    }
+
+    /**
+     * In place of showCrosshair() in GuiIngame.renderGameOverlay: the game's answer is kept for the
+     * mods, and the game's crosshair is left out when a mod drew its own in the previous frame.
+     */
+    static boolean crosshair(Object gui) {
+        boolean replaced = crosshairReplaced;
+        crosshairReplaced = false;
+        boolean shown = ((GuiIngame) gui).showCrosshair();
+        crosshairAllowed = shown;
+        return shown && !replaced;
+    }
+
+    /**
      * The number of the slot under the mouse on the open inventory screen, or -1 (no inventory
      * screen, outside the slots).
      */

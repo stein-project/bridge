@@ -34,8 +34,56 @@ final class LensConfig {
     boolean zoom = true;
     boolean zoomSmoothCamera = true;
 
-    /** Field-of-view divisor when zooming. */
+    /** Field-of-view divisor when zooming (the zoom level). */
     float zoomFactor = 4.0F;
+
+    /** Zoom levels the file and the options accept. */
+    static final float ZOOM_MIN = 1.1F;
+
+    static final float ZOOM_MAX = 50.0F;
+
+    /** The longest zoom transition, in milliseconds. */
+    static final int ZOOM_TIME_MAX = 3000;
+
+    /** The zoom key switches the zoom on and off instead of zooming while held. */
+    boolean zoomToggle = false;
+
+    /** Time to zoom all the way in, and back out, in milliseconds; 0 = at once (as before). */
+    int zoomInMs = 0;
+
+    int zoomOutMs = 0;
+
+    /** The transition's curve, one of ZoomState's. */
+    int zoomCurve = ZoomState.EASE_OUT;
+
+    /** The wheel changes the level while zoomed, and the hotbar slot stays. */
+    boolean zoomScroll = false;
+
+    /** Each wheel notch multiplies (or divides) the level by this. */
+    float zoomScrollStep = 1.25F;
+
+    /** The wheel stops at these levels. */
+    float zoomScrollMin = 1.5F;
+
+    float zoomScrollMax = 50.0F;
+
+    /** The level eases to the wheel's (otherwise it jumps). */
+    boolean zoomScrollSmooth = true;
+
+    /** The level the wheel chose stays for the next zoom (otherwise each starts at its own). */
+    boolean zoomScrollRemember = false;
+
+    /** The level appears above the hotbar when the wheel changes it. */
+    boolean zoomShowLevel = false;
+
+    /** The second zoom key's level (that key starts unbound). */
+    float zoomSecondaryFactor = 10.0F;
+
+    /** The mouse turns the view less the closer the zoom (the same feel as without it). */
+    boolean zoomScaleSensitivity = false;
+
+    /** The held item and the arm are not drawn while zoomed. */
+    boolean zoomHideHand = false;
 
     /** Per-enchantment item textures from resource packs. */
     boolean customItems = true;
@@ -180,9 +228,29 @@ final class LensConfig {
             dynamicFov = bool(o, "dynamicFov", dynamicFov);
             zoom = bool(o, "zoom", zoom);
             zoomSmoothCamera = bool(o, "zoomSmoothCamera", zoomSmoothCamera);
-            if (o.has("zoomFactor")) {
-                zoomFactor = Math.max(1.1F, Math.min(10.0F, o.get("zoomFactor").getAsFloat()));
+            zoomFactor = level(o, "zoomFactor", zoomFactor);
+            zoomToggle = bool(o, "zoomToggle", zoomToggle);
+            zoomInMs = integer(o, "zoomInMs", zoomInMs, 0, ZOOM_TIME_MAX);
+            zoomOutMs = integer(o, "zoomOutMs", zoomOutMs, 0, ZOOM_TIME_MAX);
+            zoomCurve = integer(o, "zoomCurve", zoomCurve, 0, ZoomState.CURVES - 1);
+            zoomScroll = bool(o, "zoomScroll", zoomScroll);
+            if (o.has("zoomScrollStep")) {
+                zoomScrollStep =
+                        Math.max(1.01F, Math.min(3.0F, o.get("zoomScrollStep").getAsFloat()));
             }
+            zoomScrollMin = level(o, "zoomScrollMin", zoomScrollMin);
+            zoomScrollMax = level(o, "zoomScrollMax", zoomScrollMax);
+            if (zoomScrollMax < zoomScrollMin) {
+                float t = zoomScrollMin;
+                zoomScrollMin = zoomScrollMax;
+                zoomScrollMax = t;
+            }
+            zoomScrollSmooth = bool(o, "zoomScrollSmooth", zoomScrollSmooth);
+            zoomScrollRemember = bool(o, "zoomScrollRemember", zoomScrollRemember);
+            zoomShowLevel = bool(o, "zoomShowLevel", zoomShowLevel);
+            zoomSecondaryFactor = level(o, "zoomSecondaryFactor", zoomSecondaryFactor);
+            zoomScaleSensitivity = bool(o, "zoomScaleSensitivity", zoomScaleSensitivity);
+            zoomHideHand = bool(o, "zoomHideHand", zoomHideHand);
             customItems = bool(o, "customItems", customItems);
             customSky = bool(o, "customSky", customSky);
             connectedTextures = bool(o, "connectedTextures", connectedTextures);
@@ -255,6 +323,20 @@ final class LensConfig {
         o.addProperty("zoom", zoom);
         o.addProperty("zoomSmoothCamera", zoomSmoothCamera);
         o.addProperty("zoomFactor", zoomFactor);
+        o.addProperty("zoomToggle", zoomToggle);
+        o.addProperty("zoomInMs", zoomInMs);
+        o.addProperty("zoomOutMs", zoomOutMs);
+        o.addProperty("zoomCurve", zoomCurve);
+        o.addProperty("zoomScroll", zoomScroll);
+        o.addProperty("zoomScrollStep", zoomScrollStep);
+        o.addProperty("zoomScrollMin", zoomScrollMin);
+        o.addProperty("zoomScrollMax", zoomScrollMax);
+        o.addProperty("zoomScrollSmooth", zoomScrollSmooth);
+        o.addProperty("zoomScrollRemember", zoomScrollRemember);
+        o.addProperty("zoomShowLevel", zoomShowLevel);
+        o.addProperty("zoomSecondaryFactor", zoomSecondaryFactor);
+        o.addProperty("zoomScaleSensitivity", zoomScaleSensitivity);
+        o.addProperty("zoomHideHand", zoomHideHand);
         o.addProperty("customItems", customItems);
         o.addProperty("customSky", customSky);
         o.addProperty("connectedTextures", connectedTextures);
@@ -306,6 +388,15 @@ final class LensConfig {
 
     private static boolean bool(JsonObject o, String key, boolean fallback) {
         return o.has(key) ? o.get(key).getAsBoolean() : fallback;
+    }
+
+    /** A zoom level, brought into range; NaN keeps the fallback. */
+    private static float level(JsonObject o, String key, float fallback) {
+        if (!o.has(key)) {
+            return fallback;
+        }
+        float v = o.get(key).getAsFloat();
+        return Float.isNaN(v) ? fallback : Math.max(ZOOM_MIN, Math.min(ZOOM_MAX, v));
     }
 
     private static int integer(JsonObject o, String key, int fallback, int min, int max) {

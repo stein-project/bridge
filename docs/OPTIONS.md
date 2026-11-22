@@ -14,6 +14,7 @@ listed at the end.
 - `-Dsteinlens.customItems=true|false`: overrides the file's custom items setting without saving (default: unset, the file decides).
 - `-Dsteinlens.connectedTextures=true|false`: overrides the file's connected textures setting without saving (default: unset, the file decides).
 - `-Dsteinlens.debug=true`: zoom state (every 2 s and on every change) and custom items lookups, recomputed choices and enchantment version steps (every 2 s) in the log (default: off).
+- `-Dsteinlens.debugEveryMs=N`: test, milliseconds between the zoom's debug lines (default 2000).
 
 ## BenchOptions
 
@@ -102,6 +103,7 @@ listed at the end.
 - `-Dsteinbridge.diag.stallServerMs=N`: milliseconds the server thread stays stopped (default 800).
 - `-Dsteinbridge.diag.nbtAtSec=N`: prints the NBT map of some players' armor N seconds after startup (default: off).
 - `-Dsteinbridge.diag.debugOff=true`: keeps the F3 screen closed during benchmark runs (default: off).
+- `-Dsteinbridge.diag.hitboxesAtSec=N`: turns the game's hit boxes (F3+B) on N seconds after startup, once — key presses of the scenes do not reach F3+B (default: off).
 - `-Dsteinbridge.diag.gearAtSec=N`: dresses the player in test gear N seconds after startup (default: off).
 - `-Dsteinbridge.diag.gearProtection=N`: Protection enchantment level on the test gear (default 4).
 - `-Dsteinbridge.diag.gearArmor=material`: material of the test armor (diamond, iron, gold, chainmail, leather; default diamond).
@@ -116,6 +118,8 @@ listed at the end.
 - `-Dsteinbridge.diag.turnAtSec=N`: turns the camera at a steady speed from N seconds after startup, as the mouse would (for the motion blur; default: off).
 - `-Dsteinbridge.diag.turnForSec=N`: how long the turn lasts (default 5).
 - `-Dsteinbridge.diag.turnDegrees=N`: degrees per second, + right (default 90).
+- `-Dsteinbridge.diag.fixChecksAtSec=N`: N seconds after startup, once a world is open, reproduces the bugs of the later vanilla fixes and logs one `[fixcheck]` line per fix (default: off).
+- `-Dsteinbridge.diag.fixTitleAtSec=N`: puts a long title on screen N seconds after startup, before the world opens, for the fix checks' join title check (default: off).
 
 ## EngineOptions
 
@@ -247,6 +251,28 @@ listed at the end.
 - `-Dsteinbridge.opt.vanillaCharKeys=true`: a character typed without a key (IME) also counts as the key with its number, so '&lt;' takes a screenshot (default: it does not, as from 1.13).
 - `-Dsteinbridge.opt.vanillaMipmapSlider=true`: the vanilla video screen's mipmap slider reloads every texture at each step of the drag (default: once, on release, as from 1.14).
 - `-Dsteinbridge.opt.vanillaSpectatorPumpkin=true`: a spectator wearing a pumpkin sees its overlay (default: not drawn in spectator mode).
+- `-Dsteinbridge.opt.vanillaTextStyles=true`: the bold, italic, underline, strikethrough and obfuscated styles a text's shadow ends with carry over to the start of the text itself (default: each pass starts plain).
+- `-Dsteinbridge.opt.vanillaGlyphStart=true`: unicode glyphs that start in the right half of their cell (some Korean letters, half blocks) are drawn from a wrong place and push the rest of the text off the screen (default: read as the unsigned number they are).
+- `-Dsteinbridge.opt.vanillaLanguageReload=true`: choosing a language reloads every resource (textures, models, sounds), several seconds (default: only the translations).
+- `-Dsteinbridge.opt.vanillaMouseKeys=true`: the perspective, smooth camera, fullscreen and screenshot keys, and the inventory, drop and pick block keys in inventories, do nothing when bound to a mouse button (default: they work as on the keyboard).
+- `-Dsteinbridge.opt.vanillaChatClose=true`: a server closing a window also closes the chat being typed, and the message is lost (default: the chat stays open).
+- `-Dsteinbridge.opt.vanillaSidebarText=true`: the sidebar's text is drawn with an alpha of 1/8, so it fades whenever blending was left on before it (default: opaque).
+- `-Dsteinbridge.opt.vanillaFullscreenSave=true`: switching to and from fullscreen with the key is not written to options.txt (default: saved, so the next start opens the same way).
+- `-Dsteinbridge.opt.vanillaBookHover=true`: a book's hover text is drawn before its buttons, which cover it (default: after them).
+
+## NetFixOptions
+
+`dev.xavier.stein.bridge.engine.NetFixOptions`
+
+- `-Dsteinbridge.opt.vanillaTeams=true`: a team packet for a team that already exists or that does not exist, or that removes a player from a team they are not on, throws and is lost whole (default: applied as later versions do).
+- `-Dsteinbridge.opt.vanillaWorldlessPackets=true`: play packets that need the world are handled even while there is none, and throw (default: left out, with a log line).
+- `-Dsteinbridge.opt.vanillaWorldGc=true`: every world change and every single player start asks for a full garbage collection on the game thread (default: left to the collector).
+- `-Dsteinbridge.opt.vanillaJoinTitles=true`: a title still on screen when joining a server (or the next server behind a proxy) stays on (default: cleared on each join).
+- `-Dsteinbridge.opt.vanillaSkinDownload=true`: a skin or cape download has no time limit and the decoded skin image stays on the heap after its upload (default: 10 s to connect and 10 s per read, the image let go once uploaded).
+- `-Dsteinbridge.opt.vanillaServerPackDir=true`: the first server resource pack fails when the server-resource-packs folder does not exist yet (default: the folder is created).
+- `-Dsteinbridge.opt.vanillaWorldLeaks=true`: in single player the region file stream of each loaded chunk is left open, and each mob's path finder keeps the last area it searched (default: closed, let go).
+- `-Dsteinbridge.opt.vanillaNbtNull=true`: a null value put in an NBT compound stays there until writing the compound throws, far from the code that put it (default: left out, with the stack trace of who put it in the log).
+- `-Dsteinbridge.opt.vanillaDigits=true`: on a system whose language writes numbers with other digits (Arabic, Persian...), String.format writes those digits into texture paths and the debug screen (default: Latin digits, the rest of the number format kept).
 
 ## RenderFixOptions
 
@@ -260,6 +286,10 @@ listed at the end.
 - `-Dsteinbridge.opt.vanillaSkullBlend=true`: heads are drawn without blending, so semi-transparent pixels of a skin's hat come out opaque (default: blended).
 - `-Dsteinbridge.opt.vanillaProjectileAlpha=true`: arrows, the fishing bobber and the fire on burning entities take whatever alpha test the previous draw left, and can come out with black or opaque backgrounds (default: alpha test on while they are drawn).
 - `-Dsteinbridge.opt.vanillaFogLight=true`: the fog colour takes the light of the block at the feet, so it darkens when that block is dark (default: the light at the eyes).
+- `-Dsteinbridge.opt.vanillaBuilderGrowth=true`: the vertex builder decides whether to grow from a position only quads move, so a batch built vertex by vertex past its size throws (default: from what is in use).
+- `-Dsteinbridge.opt.vanillaCloseProjectiles=true`: a thrown snowball, egg, ender pearl, potion or bottle o' enchanting is drawn from its first tick, covering the camera of whoever threw it (default: not drawn in its first two ticks while near the camera, as from 1.15).
+- `-Dsteinbridge.opt.vanillaBannerCache=true`: once 256 banner designs were drawn in the last minute, new designs are not drawn at all (default: the least recently drawn design not seen in the last second makes room).
+- `-Dsteinbridge.opt.vanillaUnreadableImages=true`: an image the game cannot decode in a resource pack (another format with a .png name, a broken file) crashes the game when it is loaded as a texture (default: the missing texture, with a log line).
 
 ## HookOptions
 

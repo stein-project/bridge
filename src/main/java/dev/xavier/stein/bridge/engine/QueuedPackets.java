@@ -8,18 +8,26 @@
 
 package dev.xavier.stein.bridge.engine;
 
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.network.NetHandlerPlayClient;
 import net.minecraft.network.INetHandler;
 import net.minecraft.network.NetworkManager;
 import net.minecraft.network.Packet;
 import net.minecraft.network.PacketBuffer;
+import net.minecraft.network.play.server.S01PacketJoinGame;
+import net.minecraft.network.play.server.S02PacketChat;
 import net.minecraft.network.play.server.S0CPacketSpawnPlayer;
+import net.minecraft.network.play.server.S38PacketPlayerListItem;
+import net.minecraft.network.play.server.S3APacketTabComplete;
 import net.minecraft.network.play.server.S3FPacketCustomPayload;
+import net.minecraft.network.play.server.S45PacketTitle;
+import net.minecraft.network.play.server.S47PacketPlayerListHeaderFooter;
+import net.minecraft.network.play.server.S48PacketResourcePackSend;
 
 /**
  * Fixes on the game-thread pass of a received packet (the task PacketThreadUtil queues): packets of
- * a closed connection, a player spawned before their tab list entry, and the buffer of a plugin
- * message.
+ * a closed connection, packets that need a world while there is none, a player spawned before their
+ * tab list entry, and the buffer of a plugin message.
  *
  * <p>The network thread hands each play packet to the game thread through
  * PacketThreadUtil.checkThreadAndEnqueue, and the queued task ({@code PacketThreadUtil$1.run})
@@ -33,6 +41,15 @@ import net.minecraft.network.play.server.S3FPacketCustomPayload;
  *       packet due to disconnection"). A handler with no channel at all (a replay's handler) is
  *       never skipped. The disconnect packet itself is not queued (handleDisconnect runs on the
  *       network thread), so the kick message still arrives.
+ *   <li>Packets with no world: until the join packet (S01PacketJoinGame) creates the client's world
+ *       and player, and after the world is gone, almost every play packet (an entity, a block, a
+ *       tile entity, the player's health or position, the difficulty) dereferenced the missing
+ *       world or player and threw a NullPointerException, one per packet. A proxy or a plugin that
+ *       sends world packets around the join did that in bursts. Those packets are left out with one
+ *       log line, as later versions drop them; the ones that do not need a world (the join itself,
+ *       chat, titles, the tab list and its header, tab completion, plugin messages and the resource
+ *       pack offer) are handled as always. {@code -Dsteinbridge.opt.vanillaWorldlessPackets=true}
+ *       brings back 1.8.9's behaviour.
  *   <li>A player spawned before their tab list entry (S0CPacketSpawnPlayer): handleSpawnPlayer
  *       reads {@code getPlayerInfo(uuid).getGameProfile()} and threw a NullPointerException for a
  *       uuid the list does not have (NPC plugins do this all the time), after having changed
@@ -54,6 +71,9 @@ public final class QueuedPackets {
 
     private static final RepeatLog CLOSED = new RepeatLog("net", 10);
     private static final RepeatLog SPAWN = new RepeatLog("net", 10);
+    private static final RepeatLog WORLDLESS = new RepeatLog("net", 10);
+
+    private static final boolean VANILLA_WORLDLESS = NetFixOptions.VANILLA_WORLDLESS_PACKETS;
 
     private QueuedPackets() {}
 
@@ -87,6 +107,13 @@ public final class QueuedPackets {
                             + ": it arrived before the disconnect");
             return true;
         }
+        if (!VANILLA_WORLDLESS && noWorld(client) && !worldFree(p)) {
+            WORLDLESS.note(
+                    "ignoring "
+                            + p.getClass().getSimpleName()
+                            + ": it needs a world and there is none");
+            return true;
+        }
         if (p instanceof S0CPacketSpawnPlayer) {
             S0CPacketSpawnPlayer spawn = (S0CPacketSpawnPlayer) p;
             if (client.getPlayerInfo(spawn.getPlayer()) == null) {
@@ -98,6 +125,24 @@ public final class QueuedPackets {
             }
         }
         return false;
+    }
+
+    /** The client has no world or no player for the packet to act on. */
+    private static boolean noWorld(NetHandlerPlayClient client) {
+        Minecraft mc = Minecraft.getMinecraft();
+        return client.clientWorldController == null || mc.theWorld == null || mc.thePlayer == null;
+    }
+
+    /** Packets whose handler does not touch the world or the player. */
+    private static boolean worldFree(Packet<?> p) {
+        return p instanceof S01PacketJoinGame
+                || p instanceof S02PacketChat
+                || p instanceof S38PacketPlayerListItem
+                || p instanceof S3FPacketCustomPayload
+                || p instanceof S45PacketTitle
+                || p instanceof S47PacketPlayerListHeaderFooter
+                || p instanceof S48PacketResourcePackSend
+                || p instanceof S3APacketTabComplete;
     }
 
     /** Releases the payload's buffer, unless the handler already did (MC|TrList). */

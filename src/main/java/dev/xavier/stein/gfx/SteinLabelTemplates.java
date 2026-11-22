@@ -8,6 +8,8 @@
 
 package dev.xavier.stein.gfx;
 
+import dev.xavier.stein.bridge.engine.NameStyle;
+
 import org.lwjgl.system.MemoryUtil;
 
 /**
@@ -20,6 +22,10 @@ final class SteinLabelTemplates {
 
     static final class Template {
         boolean valid;
+
+        /** The {@link NameStyle} version it was learned with (the passes depend on the style). */
+        int style;
+
         long bgKey;
 
         /**
@@ -44,12 +50,15 @@ final class SteinLabelTemplates {
     /**
      * The template of kind {@code kind} from the {@code n} commitTexts recorded for a name drawn by
      * the game: standing, background plus two passes per label (one or two labels, with the
-     * scoreboard line); sneaking, background and one pass. Otherwise (something of the name through
-     * another path, another format), nothing changes.
+     * scoreboard line); sneaking, background and one pass. A style without a background has only
+     * the passes, and a new label starts where the see-through pass comes back; a style's shadow is
+     * part of the normal pass (same state). Otherwise (something of the name through another path,
+     * another format), nothing changes.
      */
     static void learn(int kind, int n) {
         int passes = kind == SteinNameLabels.SNEAK ? 1 : 2;
-        if (n < 1 + passes) {
+        boolean bare = NameStyle.custom() && !NameStyle.background();
+        if (n < (bare ? 0 : 1) + passes) {
             return;
         }
         long bg = -1L;
@@ -63,6 +72,9 @@ final class SteinLabelTemplates {
                 return;
             }
             if (SteinEntityDeferred.probeBackground(i)) {
+                if (bare) {
+                    return;
+                }
                 if (phase >= 0 && phase != passes) {
                     return; // previous label incomplete
                 }
@@ -74,10 +86,16 @@ final class SteinLabelTemplates {
                 continue;
             }
             if (phase < 0) {
-                return; // text before the background
+                if (!bare) {
+                    return; // text before the background
+                }
+                phase = 0;
             }
             long b = SteinEntityDeferred.textKeyBase(key);
             if (phase == 0 || b != prevBase) {
+                if (bare && phase == passes) {
+                    phase = 0; // the next label (the name after the scoreboard line)
+                }
                 phase++;
                 if (phase > passes) {
                     return;
@@ -94,6 +112,7 @@ final class SteinLabelTemplates {
             return;
         }
         Template t = templates[kind];
+        t.style = NameStyle.version();
         t.bgKey = bg;
         t.textBase[0] = base[0];
         t.textBase[1] = base[1];

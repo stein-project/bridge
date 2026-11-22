@@ -308,6 +308,12 @@ final class DiagOptions {
     static final boolean DEBUG_OFF = Opt.flag("steinbridge.diag.debugOff");
 
     /**
+     * {@code -Dsteinbridge.diag.hitboxesAtSec=N}: turns the game's hit boxes (F3+B) on N seconds
+     * after startup, once — key presses of the scenes do not reach F3+B (default: off).
+     */
+    static final long HITBOXES_AT = Opt.number("steinbridge.diag.hitboxesAtSec", -1L);
+
+    /**
      * {@code -Dsteinbridge.diag.gearAtSec=N}: dresses the player in test gear N seconds after
      * startup (default: off).
      */
@@ -385,6 +391,21 @@ final class DiagOptions {
 
     /** {@code -Dsteinbridge.diag.turnDegrees=N}: degrees per second, + right (default 90). */
     static final int TURN_DEGREES = Opt.integer("steinbridge.diag.turnDegrees", 90);
+
+    // ---- DiagFixChecks ----
+
+    /**
+     * {@code -Dsteinbridge.diag.fixChecksAtSec=N}: N seconds after startup, once a world is open,
+     * reproduces the bugs of the later vanilla fixes and logs one {@code [fixcheck]} line per fix
+     * (default: off).
+     */
+    static final long FIX_CHECKS_AT = Opt.number("steinbridge.diag.fixChecksAtSec", -1L);
+
+    /**
+     * {@code -Dsteinbridge.diag.fixTitleAtSec=N}: puts a long title on screen N seconds after
+     * startup, before the world opens, for the fix checks' join title check (default: off).
+     */
+    static final long FIX_TITLE_AT = Opt.number("steinbridge.diag.fixTitleAtSec", -1L);
 
     /**
      * A list option: empty when the property is unset or empty, otherwise the value split at {@code

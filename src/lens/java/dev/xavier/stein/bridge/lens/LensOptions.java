@@ -45,4 +45,10 @@ final class LensOptions {
      * off).
      */
     static final boolean DEBUG = Opt.flag("steinlens.debug");
+
+    /**
+     * {@code -Dsteinlens.debugEveryMs=N}: test, milliseconds between the zoom's debug lines
+     * (default 2000).
+     */
+    static final long DEBUG_EVERY_MS = Opt.number("steinlens.debugEveryMs", 2000L);
 }

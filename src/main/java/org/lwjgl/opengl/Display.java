@@ -58,6 +58,7 @@ import static org.lwjgl.system.MemoryUtil.NULL;
 
 import dev.xavier.stein.bridge.bench.Bench;
 import dev.xavier.stein.bridge.bench.BenchZones;
+import dev.xavier.stein.bridge.bench.LiveZones;
 import dev.xavier.stein.bridge.core.CoreOptions;
 import dev.xavier.stein.bridge.core.Input;
 import dev.xavier.stein.bridge.core.Log;
@@ -72,6 +73,7 @@ import dev.xavier.stein.bridge.engine.ItemModelCache;
 import dev.xavier.stein.bridge.engine.ModelBatch;
 import dev.xavier.stein.bridge.engine.ServerWatch;
 import dev.xavier.stein.bridge.engine.Watchdog;
+import dev.xavier.stein.bridge.hooks.GameHooks;
 import dev.xavier.stein.gfx.SteinBackend;
 import dev.xavier.stein.gfx.SteinDevice;
 import dev.xavier.stein.gfx.SteinGfxOptions;
@@ -348,8 +350,12 @@ public final class Display {
         BenchZones.begin(BenchZones.IDLE);
         IdleLimit.frame();
         BenchZones.end(BenchZones.IDLE);
-        // The benchmark's row for this frame (only with -Dsteinbridge.bench).
+        // The profiler's window of zones (only while a profiler asked for them), then the
+        // benchmark's row for this frame (only with -Dsteinbridge.bench).
+        LiveZones.frameEnd();
         Bench.frameEnd();
+        // And the frame boundary for the listeners (the Loader's per-mod profiler).
+        GameHooks.frameEnd();
     }
 
     /** Everything the engine does after the game has drawn and before the buffer swap. */

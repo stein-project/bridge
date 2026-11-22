@@ -244,7 +244,7 @@ public final class SteinTessCapture {
                 && SteinTextGpu.wantsBackground(mode, count, f.bits)) {
             // A name's background (SteinTextGpu): a resident run and the record that the name's
             // text reuses.
-            long tmp = SteinTextGpu.quadScratch();
+            long tmp = SteinTextGpu.quadScratch(out);
             SteinVertexConverter.convert(
                     MemoryUtil.memAddress(wr.getByteBuffer(), 0),
                     f,

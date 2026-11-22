@@ -9,6 +9,7 @@
 package dev.xavier.stein.gfx;
 
 import dev.xavier.stein.bridge.core.Log;
+import dev.xavier.stein.bridge.engine.NameStyle;
 
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.system.MemoryUtil;
@@ -188,6 +189,10 @@ public final class SteinTextGpu {
         int firstVertex() {
             return (int) (start / VERTEX_BYTES);
         }
+
+        int vertices() {
+            return (int) (bytes / VERTEX_BYTES);
+        }
     }
 
     /** From oldest to newest; the addresses grow until the wrap. */
@@ -306,8 +311,9 @@ public final class SteinTextGpu {
         return scratch;
     }
 
-    private static ByteBuffer quad =
-            ByteBuffer.allocateDirect(6 * SteinTessCapture.VERTEX_BYTES)
+    private static final ByteBuffer quad =
+            ByteBuffer.allocateDirect(
+                            SteinTextBackgrounds.MAX_VERTS * SteinTessCapture.VERTEX_BYTES)
                     .order(ByteOrder.nativeOrder());
 
     /**
@@ -316,8 +322,16 @@ public final class SteinTextGpu {
      * #scratch}, which the upload uses.
      */
     static long quadScratch() {
+        return quadScratch(6);
+    }
+
+    /**
+     * The same for a background of {@code verts} vertices (a styled label's shape, at most {@link
+     * SteinTextBackgrounds#MAX_VERTS}): only those are zeroed.
+     */
+    static long quadScratch(int verts) {
         long a = MemoryUtil.memAddress(quad);
-        MemoryUtil.memSet(a, 0, quad.capacity());
+        MemoryUtil.memSet(a, 0, (long) verts * SteinTessCapture.VERTEX_BYTES);
         return a;
     }
 
@@ -342,7 +356,10 @@ public final class SteinTextGpu {
      */
     static boolean wantsBackground(int mode, int count, int bits) {
         return mode == GL11.GL_QUADS
-                && count == 4
+                && (count == 4
+                        || NameStyle.custom()
+                                && count % 4 == 0
+                                && count <= SteinLabelShape.MAX_QUADS * 4)
                 && bits == SteinTessCapture.HAS_COLOR
                 && SteinEntityDeferred.drainingNames()
                 && !SteinGameState.texture2D(0)

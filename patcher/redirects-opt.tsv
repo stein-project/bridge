@@ -147,8 +147,8 @@ avn	a	(CZ)F	renderChar	dev/xavier/stein/bridge/engine/TextHook	static	avn.a(Ljav
 avn	a	(C)I	charWidth	dev/xavier/stein/bridge/engine/TextHook	static
 # The chat on the grid is drawn in the HUD font: the splitting of each message into lines (GuiUtilRenderComponents.splitText,
 # called by GuiNewChat.setChatLine) measures with the same font.
-avu	a	(Leu;ILavn;ZZ)Ljava/util/List;	chatSplitBegin	dev/xavier/stein/bridge/hooks/VanillaHud	before	avt.a(Leu;IIZ)V
-avu	a	(Leu;ILavn;ZZ)Ljava/util/List;	chatSplitEnd	dev/xavier/stein/bridge/hooks/VanillaHud	after	avt.a(Leu;IIZ)V
+# setChatLine's body is engine/ChatLines.setChatLine (redirects-mc.tsv), which calls VanillaHud.chatSplitBegin/End
+# around its splitText.
 
 # RenderItem.renderModel(model, color, stack): the vertices depend only on model and
 # color (apart from the item's tint); each pair becomes a display list recorded once.

@@ -99,6 +99,12 @@ avn	a	(Ljava/lang/String;FFI)I	drawString	dev/xavier/stein/bridge/engine/PotionL
 di	a	(Ljava/lang/String;)Ljava/lang/String;	translate	dev/xavier/stein/bridge/engine/PotionLevels	static	aai.a(Lzx;Lwn;Ljava/util/List;Z)V
 # Chat (engine/ChatFixes): GuiNewChat.deleteChatLine past null lines (the click above the lines goes through VanillaHud).
 avt	c	(I)V	deleteChatLine	dev/xavier/stein/bridge/engine/ChatFixes	body
+# Chat store (engine/ChatLines): the bodies of GuiNewChat.setChatLine (each message remembers when it arrived and each row
+# the message it came from; the 100-message cap can be raised by a mod), refreshChat (rewraps only: the game's went
+# through setChatLine, which deleted the messages a server replaces in place) and getChatOpen (the chat peek).
+avt	a	(Leu;IIZ)V	setChatLine	dev/xavier/stein/bridge/engine/ChatLines	body
+avt	b	()V	refreshChat	dev/xavier/stein/bridge/engine/ChatLines	body
+avt	e	()Z	chatOpen	dev/xavier/stein/bridge/engine/ChatLines	body
 # Screen input (engine/ScreenInput, as from 1.13): GuiScreen.handleInput stops reading keys once a click replaced the screen,
 # and dispatchKeypresses no longer takes a character without a key (IME) as a key code.
 org/lwjgl/input/Mouse	isCreated	()Z	inputBegin	dev/xavier/stein/bridge/engine/ScreenInput	before	axu.p()V
@@ -188,3 +194,61 @@ avh$a	c	(F)F	normalize	dev/xavier/stein/bridge/engine/FramerateScale	body
 avh$a	d	(F)F	denormalize	dev/xavier/stein/bridge/engine/FramerateScale	body
 avh$a	f	(F)F	snap	dev/xavier/stein/bridge/engine/FramerateScale	body
 avh	a	()V	loadOptions	dev/xavier/stein/bridge/engine/FramerateScale	static	avh.<init>(Lave;Ljava/io/File;)V
+# Team packets (engine/TeamPackets): in NetHandlerPlayClient.handleTeams, creating a team that exists updates it, a
+# packet for a team that does not exist changes nothing, and removing a player from a team they are not on passes
+# over that player; 1.8.9 threw and lost the whole packet.
+auo	e	(Ljava/lang/String;)Laul;	create	dev/xavier/stein/bridge/engine/TeamPackets	static	bcy.a(Lhr;)V
+auo	d	(Ljava/lang/String;)Laul;	team	dev/xavier/stein/bridge/engine/TeamPackets	static	bcy.a(Lhr;)V
+auo	a	(Ljava/lang/String;Laul;)V	removeMember	dev/xavier/stein/bridge/engine/TeamPackets	static	bcy.a(Lhr;)V
+# No full garbage collection on the game thread at each world change (engine/WorldSwitch): the System.gc of
+# Minecraft.loadWorld and of launchIntegratedServer; and the title of the previous server cleared on each join
+# (before handleJoinGame's loadWorld).
+java/lang/System	gc	()V	gc	dev/xavier/stein/bridge/engine/WorldSwitch		ave.a(Lbdb;Ljava/lang/String;)V
+java/lang/System	gc	()V	gc	dev/xavier/stein/bridge/engine/WorldSwitch		ave.a(Ljava/lang/String;Ljava/lang/String;Ladp;)V
+ave	a	(Lbdb;)V	joining	dev/xavier/stein/bridge/engine/WorldSwitch	before	bcy.a(Lgt;)V
+# Skin textures (engine/AsyncSkins): the download thread's connection with a time limit, and the decoded image let go
+# once ThreadDownloadImageData.checkTextureUploaded has uploaded it.
+java/net/HttpURLConnection	connect	()V	connect	dev/xavier/stein/bridge/engine/AsyncSkins	static	bma$1.run()V
+bma	g	()V	checkUploaded	dev/xavier/stein/bridge/engine/AsyncSkins	body
+# The vertex builder grows from what is in use (engine/BuilderGrowth): WorldRenderer.growBuffer in endVertex and
+# addVertexData compared the room with a position only quads move, and a batch built vertex by vertex overflowed.
+bfd	b	(I)V	grow	dev/xavier/stein/bridge/engine/BuilderGrowth	static	bfd.d()V
+bfd	b	(I)V	grow	dev/xavier/stein/bridge/engine/BuilderGrowth	static	bfd.a([I)V
+# FontRenderer (engine/FontFixes): each of drawString's two passes (shadow, text) starts with plain styles, and
+# renderChar's unicode glyphs that start past column 7 drawn with the start read unsigned.
+avn	b	(Ljava/lang/String;FFIZ)I	renderString	dev/xavier/stein/bridge/engine/FontFixes	static	avn.a(Ljava/lang/String;FFIZ)I
+avn	b	(CZ)F	unicodeChar	dev/xavier/stein/bridge/engine/FontFixes	static	avn.a(CZ)F
+# Choosing a language reloads only the translations (engine/LanguageReload): the refreshResources of
+# GuiLanguage.List.elementClicked.
+ave	e	()V	languageChosen	dev/xavier/stein/bridge/engine/LanguageReload	static	axl$a.a(IZII)V
+# An image the game cannot decode is a read error, not a crash (engine/UnreadableImages): the body of
+# TextureUtil.readBufferedImage.
+bml	a	(Ljava/io/InputStream;)Ljava/awt/image/BufferedImage;	read	dev/xavier/stein/bridge/engine/UnreadableImages	body
+# The banner texture cache makes room for new designs (engine/BannerCache): the two size checks of the design cache in
+# TileEntityBannerRenderer's texture lookup.
+java/util/Map	size	()I	size	dev/xavier/stein/bridge/engine/BannerCache	static	bha.a(Laku;)Ljy;
+# The sidebar's text drawn opaque (engine/SidebarText): the drawString calls of GuiIngame.renderScoreboard.
+avn	a	(Ljava/lang/String;III)I	drawString	dev/xavier/stein/bridge/engine/SidebarText	static	avo.a(Lauk;Lavr;)V
+# Perspective, smooth camera, fullscreen and screenshot keys on mouse buttons (engine/MouseKeys): each
+# KeyBinding.onTick of Minecraft.runTick.
+avb	a	(I)V	onTick	dev/xavier/stein/bridge/engine/MouseKeys		ave.s()V
+# A server closing a window leaves the chat open (engine/ChatFixes): handleCloseWindow's closeScreenAndDropStack.
+bew	q	()V	serverClosedWindow	dev/xavier/stein/bridge/engine/ChatFixes	static	bcy.a(Lgb;)V
+# Fullscreen saved to options.txt when switched (engine/FullscreenSave): after Minecraft.toggleFullscreen's
+# Display.setFullscreen.
+org/lwjgl/opengl/Display	setFullscreen	(Z)V	switched	dev/xavier/stein/bridge/engine/FullscreenSave	after	ave.q()V
+# The server-resource-packs folder created before deleteOldServerResourcesPacks lists it (engine/ServerPackDir).
+org/apache/commons/io/FileUtils	listFiles	(Ljava/io/File;Lorg/apache/commons/io/filefilter/IOFileFilter;Lorg/apache/commons/io/filefilter/IOFileFilter;)Ljava/util/Collection;	listFiles	dev/xavier/stein/bridge/engine/ServerPackDir	static	bnm.i()V
+# Single player leaks (engine/WorldLeaks): the chunk stream of AnvilChunkLoader.loadChunk closed after reading, and the
+# path finder's area let go after PathFinder's postProcess.
+dx	a	(Ljava/io/DataInputStream;)Ldn;	readChunk	dev/xavier/stein/bridge/engine/WorldLeaks	static	anj.a(Ladm;II)Lamy;
+asw	a	()V	searchDone	dev/xavier/stein/bridge/engine/WorldLeaks	static	asy.a(Ladq;Lpk;DDDF)Lasx;
+# A null NBT value is left out and logged with its caller (engine/NbtNull): the body of NBTTagCompound.setTag.
+dn	a	(Ljava/lang/String;Leb;)V	setTag	dev/xavier/stein/bridge/engine/NbtNull	body
+# Latin digits in String.format on systems whose language uses other digits (engine/LatinDigits): before the first
+# System.setProperty of Main.main.
+java/lang/System	setProperty	(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;	startup	dev/xavier/stein/bridge/engine/LatinDigits	before	net/minecraft/client/main/Main.main
+# A book's hover text drawn after its buttons (engine/BookHover): GuiScreenBook.drawScreen's handleComponentHover held
+# until after its call of GuiScreen.drawScreen.
+ayo	a	(Leu;II)V	hover	dev/xavier/stein/bridge/engine/BookHover	static	ayo.a(IIF)V
+axu	a	(IIF)V	afterButtons	dev/xavier/stein/bridge/engine/BookHover	after	ayo.a(IIF)V

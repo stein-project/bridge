@@ -76,6 +76,17 @@ final class Sinks implements HookSink {
     }
 
     @Override
+    public void frameEnd() {
+        for (int i = 0; i < sinks.length; i++) {
+            try {
+                sinks[i].frameEnd();
+            } catch (Throwable e) {
+                fail(i, "frameEnd", e);
+            }
+        }
+    }
+
+    @Override
     public void keyInput() {
         for (int i = 0; i < sinks.length; i++) {
             try {
@@ -157,6 +168,57 @@ final class Sinks implements HookSink {
     }
 
     @Override
+    public Object chatLine(Object message, int id) {
+        for (int i = 0; i < sinks.length && message != null; i++) {
+            try {
+                message = sinks[i].chatLine(message, id);
+            } catch (Throwable e) {
+                fail(i, "chatLine", e);
+            }
+        }
+        return message;
+    }
+
+    @Override
+    public void chatRowDrawn(Object message, int x, int y, int width, int alpha) {
+        for (int i = 0; i < sinks.length; i++) {
+            try {
+                sinks[i].chatRowDrawn(message, x, y, width, alpha);
+            } catch (Throwable e) {
+                fail(i, "chatRowDrawn", e);
+            }
+        }
+    }
+
+    @Override
+    public boolean guiKey(Object screen, char c, int key) {
+        for (int i = 0; i < sinks.length; i++) {
+            try {
+                if (sinks[i].guiKey(screen, c, key)) {
+                    return true;
+                }
+            } catch (Throwable e) {
+                fail(i, "guiKey", e);
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean chatClick(Object screen, Object component) {
+        for (int i = 0; i < sinks.length; i++) {
+            try {
+                if (sinks[i].chatClick(screen, component)) {
+                    return true;
+                }
+            } catch (Throwable e) {
+                fail(i, "chatClick", e);
+            }
+        }
+        return false;
+    }
+
+    @Override
     public void joinGame() {
         for (int i = 0; i < sinks.length; i++) {
             try {
@@ -224,6 +286,20 @@ final class Sinks implements HookSink {
             }
         }
         return fov;
+    }
+
+    @Override
+    public boolean mouseWheel(int wheel) {
+        for (int i = 0; i < sinks.length; i++) {
+            try {
+                if (sinks[i].mouseWheel(wheel)) {
+                    return true;
+                }
+            } catch (Throwable e) {
+                fail(i, "mouseWheel", e);
+            }
+        }
+        return false;
     }
 
     @Override
@@ -413,6 +489,20 @@ final class Sinks implements HookSink {
                 }
             } catch (Throwable e) {
                 fail(i, "hideEntity", e);
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public boolean hideGameHitbox(Object entity) {
+        for (int i = 0; i < sinks.length; i++) {
+            try {
+                if (sinks[i].hideGameHitbox(entity)) {
+                    return true;
+                }
+            } catch (Throwable e) {
+                fail(i, "hideGameHitbox", e);
             }
         }
         return false;

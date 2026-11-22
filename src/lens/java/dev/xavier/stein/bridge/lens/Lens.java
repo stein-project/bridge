@@ -13,11 +13,9 @@ import dev.xavier.stein.bridge.engine.AngleTable;
 import dev.xavier.stein.bridge.engine.ChunkKeep;
 import dev.xavier.stein.bridge.engine.ChunkPace;
 import dev.xavier.stein.bridge.engine.DirectRender;
-import dev.xavier.stein.bridge.engine.KeyBindings;
 import dev.xavier.stein.bridge.engine.OldAnimations;
 import dev.xavier.stein.bridge.engine.Rain;
 import dev.xavier.stein.bridge.engine.Visuals;
-import dev.xavier.stein.bridge.hooks.GameHooks;
 import dev.xavier.stein.bridge.hooks.HookSink;
 import dev.xavier.stein.bridge.showcase.Showcase;
 import dev.xavier.stein.bridge.showcase.VideoSettings;
@@ -44,7 +42,6 @@ import net.minecraft.client.resources.FolderResourcePack;
 import net.minecraft.client.resources.IResourcePack;
 import net.minecraft.client.resources.model.IBakedModel;
 import net.minecraft.client.settings.GameSettings;
-import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.BlockPos;
 import net.minecraft.util.ResourceLocation;
@@ -72,10 +69,8 @@ import java.util.Map;
  *       Speed effect) and with a drawn bow. Off, the player's factor stays at 1 — the field of view
  *       is the option's —, and the game eases it there, as it does with any change of that factor;
  *   <li><b>Zoom</b> (V, held): field of view divided by 4 and a smooth camera while the key is
- *       held, with no screen open. On release, the smooth camera goes back to what it was and its
- *       filters are zeroed. On both switches the terrain redoes the visible-chunk search: standing
- *       still, the zoom narrows the view without moving the camera, and on leaving it the screen
- *       edges would lack the chunks outside the narrow cone;
+ *       held, with no screen open; optionally switched by the key, eased in and out, the level on
+ *       the wheel, a second key, a slower mouse and no hand ({@link LensZoom});
  *   <li><b>Per-enchantment textures</b> from resource packs: {@link CustomItems};
  *   <li><b>Connected blocks</b> from resource packs: {@link ConnectedTextures};
  *   <li>the engine options ({@code dev.xavier.stein.bridge.engine}): brightness, armor, nametags,
@@ -91,21 +86,11 @@ import java.util.Map;
  */
 public final class Lens implements HookSink {
 
-    /** V, as an LWJGL 2 key code (unused in 1.8.9). */
-    private static final int KEY_V = 47;
-
     final LensConfig config = new LensConfig();
     final CustomItems customItems = new CustomItems();
     final ConnectedTextures connected = new ConnectedTextures();
-    KeyBinding zoomKey;
+    final LensZoom zoom = new LensZoom(config);
     private File configFile;
-
-    private boolean zooming;
-
-    /** Smooth camera before the zoom, and whether the zoom turned it on. */
-    private boolean smoothBefore;
-
-    private boolean smoothChanged;
 
     /**
      * Before startGame: the configuration is already valid on the first resource load, which
@@ -136,8 +121,7 @@ public final class Lens implements HookSink {
             connected.setEnabled(config.connectedTextures, false);
         }
         noAnaglyph();
-        zoomKey = new KeyBinding("key.steinlens.zoom", KEY_V, "key.categories.steinlens");
-        KeyBindings.register(zoomKey);
+        zoom.register();
         Log.info("lens", "visual options (" + configFile + ")");
     }
 
@@ -278,9 +262,16 @@ public final class Lens implements HookSink {
     @Override
     public float fov(float fov, float partialTicks, boolean useFovSetting) {
         diagPreset();
-        updateZoom();
         // Applies to the world and to the hand.
-        return zooming ? fov / config.zoomFactor : fov;
+        return zoom.fov(fov, useFovSetting);
+    }
+
+    /**
+     * While zoomed, the wheel can change the level instead of the hotbar slot ({@link LensZoom}).
+     */
+    @Override
+    public boolean mouseWheel(int wheel) {
+        return zoom.wheel(wheel);
     }
 
     /**
@@ -309,67 +300,6 @@ public final class Lens implements HookSink {
         // Like the slider on release: the preset is applied (slider position: 0 Fast, 1 Fancy).
         Presets.apply(this, Presets.at(Integer.parseInt(p[1].trim())));
         Log.info("lens", "diag: preset " + p[1]);
-    }
-
-    /** {@code -Dsteinlens.debug=true}: zoom state in the log (every 2 s and on every change). */
-    private static final boolean DEBUG = LensOptions.DEBUG;
-
-    private long debugCalls;
-    private long debugLast;
-
-    /** Turns the zoom on or off when the key changes — checked on every requested field of view. */
-    private void updateZoom() {
-        Minecraft mc = Minecraft.func_71410_x();
-        boolean held =
-                config.zoom
-                        && zoomKey != null
-                        && mc.field_71462_r == null
-                        && zoomKey.func_151470_d();
-        if (DEBUG) {
-            debugZoom(mc);
-        }
-        if (held == zooming) {
-            return;
-        }
-        if (DEBUG) {
-            Log.info("lens", "zoom " + (held ? "on" : "off"));
-        }
-        zooming = held;
-        GameSettings settings = mc.field_71474_y;
-        if (held) {
-            smoothBefore = settings.field_74326_T;
-            smoothChanged = config.zoomSmoothCamera && !smoothBefore;
-            if (smoothChanged) {
-                settings.field_74326_T = true;
-            }
-        } else if (smoothChanged) {
-            settings.field_74326_T = smoothBefore;
-            smoothChanged = false;
-            GameHooks.resetCameraSmoothing();
-        }
-        if (mc.field_71438_f != null) {
-            mc.field_71438_f.func_174979_m();
-        }
-    }
-
-    private void debugZoom(Minecraft mc) {
-        debugCalls++;
-        long now = System.nanoTime();
-        if (now - debugLast > 2_000_000_000L) {
-            debugLast = now;
-            Log.info(
-                    "lens",
-                    "fov x"
-                            + debugCalls
-                            + " | key "
-                            + (zoomKey == null
-                                    ? "-"
-                                    : zoomKey.func_151463_i() + " down=" + zoomKey.func_151470_d())
-                            + " | screen "
-                            + mc.field_71462_r
-                            + " | zoom "
-                            + zooming);
-        }
     }
 
     // ---- options in the game's Video Settings ----

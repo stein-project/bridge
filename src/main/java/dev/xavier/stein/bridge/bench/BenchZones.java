@@ -14,8 +14,9 @@ package dev.xavier.stein.bridge.bench;
  * time between its begin and its end within the frame, so a zone entered four times (the terrain
  * layers) reports the four together; a zone includes the zones under it ({@link #PARENT}).
  *
- * <p>Without {@code -Dsteinbridge.bench} every hook returns on a static final flag, which the JIT
- * removes; with it, a zone costs two {@code System.nanoTime}. On the render thread.
+ * <p>Without {@code -Dsteinbridge.bench} every hook returns on a static final flag and one plain
+ * static field ({@link #live}, false unless a profiler asked for the zones through {@link
+ * LiveZones}); with either, a zone costs two {@code System.nanoTime}. On the render thread.
  */
 public final class BenchZones {
 
@@ -118,6 +119,13 @@ public final class BenchZones {
 
     private static final boolean ON = BenchOptions.ON;
 
+    /**
+     * The zones are timed for {@link LiveZones} (the Loader's profiler) without the benchmark. Not
+     * final on purpose: it is switched while the game runs, and off it costs one field read per
+     * hook.
+     */
+    static boolean live;
+
     private static final long[] START = new long[COUNT];
 
     /** Time spent in each zone in the current frame (ns). */
@@ -127,13 +135,13 @@ public final class BenchZones {
     static final int[] CALLS = new int[COUNT];
 
     public static void begin(int zone) {
-        if (ON) {
+        if (ON || live) {
             START[zone] = System.nanoTime();
         }
     }
 
     public static void end(int zone) {
-        if (ON) {
+        if (ON || live) {
             long s = START[zone];
             if (s != 0L) {
                 SPENT[zone] += System.nanoTime() - s;
@@ -153,6 +161,13 @@ public final class BenchZones {
                         - SPENT[TICK_WORLD]
                         - SPENT[TICK_PARTICLES];
         SPENT[TICK_OTHER] = Math.max(0L, rest);
+    }
+
+    /** Forgets the zones left open, so none spans the time the timing was off. */
+    static void forgetOpen() {
+        for (int i = 0; i < COUNT; i++) {
+            START[i] = 0L;
+        }
     }
 
     /** At the end of the frame, after the frame's row has been taken. */

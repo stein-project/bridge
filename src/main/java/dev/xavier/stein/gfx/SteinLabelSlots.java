@@ -8,6 +8,8 @@
 
 package dev.xavier.stein.gfx;
 
+import dev.xavier.stein.bridge.engine.NameStyle;
+
 import net.minecraft.util.ChatComponentText;
 import net.minecraft.util.EnumChatFormatting;
 import net.minecraft.util.IChatComponent;
@@ -33,24 +35,30 @@ final class SteinLabelSlots {
         Object font;
         boolean unicode;
         int gen = -1;
+
+        /** The {@link NameStyle} version of the assemblies (their color and shadow). */
+        int style;
+
         int width;
         boolean never;
 
         /**
          * The assemblies: [0] see-through, [1] normal, [2] the sneaking one (another position with
-         * deadmau5).
+         * deadmau5), [3] the normal one's shadow (a styled label).
          */
-        final Object[] entry = new Object[3];
+        final Object[] entry = new Object[4];
 
-        /** Font, flag or generation changed: width asked again, assemblies forgotten. */
+        /** Font, flag, generation or style changed: width asked again, assemblies forgotten. */
         void reset(Object font, boolean unicode, int gen, String s) {
             this.font = font;
             this.unicode = unicode;
             this.gen = gen;
+            style = NameStyle.version();
             width = SteinTextCache.stringWidth(font, s);
             entry[0] = null;
             entry[1] = null;
             entry[2] = null;
+            entry[3] = null;
         }
     }
 
@@ -65,6 +73,16 @@ final class SteinLabelSlots {
 
         String nameCode;
         String nameFormatted;
+
+        /**
+         * A styled label without formatting codes ({@link NameStyle#plainText}): the last text and
+         * the same without its codes, for the name and the scoreboard line.
+         */
+        String plainFrom;
+
+        String plain;
+        String scorePlainFrom;
+        String scorePlain;
     }
 
     private static final boolean NAME_CACHE = SteinGfxOptions.NAME_TEXT_CACHE;
@@ -185,9 +203,11 @@ final class SteinLabelSlots {
      */
     static Text text(Text t, String s, Object font, boolean unicode) {
         int gen = SteinTextCache.generation();
+        int style = NameStyle.version();
         if (t.s != s) {
             if (t.s == null
                     || t.gen != gen
+                    || t.style != style
                     || t.font != font
                     || t.unicode != unicode
                     || !t.s.equals(s)) {
@@ -195,17 +215,39 @@ final class SteinLabelSlots {
                 t.never = !SteinTextCache.cacheable(s);
             }
             t.s = s;
-        } else if (t.gen != gen || t.font != font || t.unicode != unicode) {
+        } else if (t.gen != gen || t.style != style || t.font != font || t.unicode != unicode) {
             t.reset(font, unicode, gen, s);
         }
         return t;
     }
 
     /**
-     * The assembly stored at {@code which} (0 see-through, 1 normal, 2 sneaking) at (x, y), with
-     * the pass's input color (white; alpha 0x20 for see-through and sneaking), resident; null if
-     * not. For each {@code which} the position depends only on the text (width, deadmau5): the
-     * stored one is valid as long as the text is the same.
+     * The name without its formatting codes, kept per entity: the codes are stripped again only
+     * when the text changes (an equal String compares without allocating).
+     */
+    static String plainName(Slot slot, String s) {
+        if (s != slot.plainFrom && !s.equals(slot.plainFrom)) {
+            slot.plain = EnumChatFormatting.getTextWithoutFormattingCodes(s);
+            slot.plainFrom = s;
+        }
+        return slot.plain;
+    }
+
+    /** The same for the scoreboard line below a player's name. */
+    static String plainScore(Slot slot, String s) {
+        if (s != slot.scorePlainFrom && !s.equals(slot.scorePlainFrom)) {
+            slot.scorePlain = EnumChatFormatting.getTextWithoutFormattingCodes(s);
+            slot.scorePlainFrom = s;
+        }
+        return slot.scorePlain;
+    }
+
+    /**
+     * The assembly stored at {@code which} (0 see-through, 1 normal, 2 sneaking, 3 the shadow) at
+     * (x, y), with the pass's input color (white, or the style's text color; alpha 0x20 for
+     * see-through and sneaking; the shadow's darkened color), resident; null if not. For each
+     * {@code which} the position depends only on the text (width, deadmau5) and the color only on
+     * the style: the stored one is valid as long as the text and the style are the same.
      */
     static Object entry(Text t, int which, float x, float y) {
         if (t.never) {
@@ -213,17 +255,31 @@ final class SteinLabelSlots {
         }
         Object e = t.entry[which];
         if (e == null || !SteinTextCache.resident(e)) {
+            boolean shadow = which == 3;
+            float r = 1f;
+            float g = 1f;
+            float b = 1f;
+            if (shadow) {
+                r = NameStyle.shadowR();
+                g = NameStyle.shadowG();
+                b = NameStyle.shadowB();
+            } else if (NameStyle.custom()) {
+                r = NameStyle.textR();
+                g = NameStyle.textG();
+                b = NameStyle.textB();
+            }
             e =
                     SteinTextCache.residentEntry(
                             t.font,
                             t.s,
                             t.unicode,
+                            shadow,
                             x,
                             y,
-                            1f,
-                            1f,
-                            1f,
-                            which == 1 ? 1f : SteinNameLabels.ALPHA_THROUGH);
+                            r,
+                            g,
+                            b,
+                            which == 1 || shadow ? 1f : SteinNameLabels.ALPHA_THROUGH);
             t.entry[which] = e;
         }
         return e;

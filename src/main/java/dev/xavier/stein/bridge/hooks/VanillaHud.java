@@ -214,28 +214,50 @@ public final class VanillaHud {
      */
     public static Object chatComponent(Object chatGui, int mouseX, int mouseY) throws Throwable {
         if (chatTakenOver) {
-            float[] m = chatMouse;
-            if (m == null) {
+            long at = chatMouseAt(mouseX, mouseY);
+            if (at == NO_CHAT) {
                 return null;
             }
-            float sf = m[5];
-            float sh = m[6];
-            float gx = mouseX / sf;
-            float gy = sh - mouseY / sf;
-            float ox = m[2] + (gx - m[0]) / m[4];
-            float oy = m[3] + (gy - m[1]) / m[4];
             // The words are found by width: the same font the grid's chat was drawn in.
             int depth = chatGameFont ? 0 : 1;
             TextHook.hudDepth += depth;
             try {
                 return dev.xavier.stein.bridge.engine.ChatFixes.component(
-                        chatGui, Math.round(ox * sf), Math.round((sh - oy) * sf));
+                        chatGui, (int) (at >> 32), (int) at);
             } finally {
                 TextHook.hudDepth -= depth;
             }
         }
         // ChatFixes: the game's lookup, but nothing above the lines on show.
         return dev.xavier.stein.bridge.engine.ChatFixes.component(chatGui, mouseX, mouseY);
+    }
+
+    /** {@link #chatMouseAt} when the chat is turned off: there is nothing under the mouse. */
+    public static final long NO_CHAT = Long.MIN_VALUE;
+
+    /**
+     * The mouse, in window pixels as Mouse.getX/getY give it, taken to where it would be over the
+     * game's own chat box: the same point unless the Loader moved the chat on the grid. Packed as x
+     * in the high half and y in the low half (no allocation per frame); {@link #NO_CHAT} with the
+     * chat turned off.
+     */
+    public static long chatMouseAt(int mouseX, int mouseY) {
+        if (!chatTakenOver) {
+            return ((long) mouseX << 32) | (mouseY & 0xFFFFFFFFL);
+        }
+        float[] m = chatMouse;
+        if (m == null) {
+            return NO_CHAT;
+        }
+        float sf = m[5];
+        float sh = m[6];
+        float gx = mouseX / sf;
+        float gy = sh - mouseY / sf;
+        float ox = m[2] + (gx - m[0]) / m[4];
+        float oy = m[3] + (gy - m[1]) / m[4];
+        long x = Math.round(ox * sf);
+        long y = Math.round((sh - oy) * sf);
+        return (x << 32) | (y & 0xFFFFFFFFL);
     }
 
     // ---- drawing of the game's parts by the Loader (with the grid position already applied) ----

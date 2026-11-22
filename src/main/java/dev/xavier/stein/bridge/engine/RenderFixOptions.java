@@ -69,4 +69,34 @@ public final class RenderFixOptions {
      * at the feet, so it darkens when that block is dark (default: the light at the eyes).
      */
     static final boolean VANILLA_FOG_LIGHT = Opt.flag("steinbridge.opt.vanillaFogLight");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaBuilderGrowth=true}: the vertex builder decides whether to
+     * grow from a position only quads move, so a batch built vertex by vertex past its size throws
+     * (default: from what is in use).
+     */
+    static final boolean VANILLA_BUILDER_GROWTH = Opt.flag("steinbridge.opt.vanillaBuilderGrowth");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaCloseProjectiles=true}: a thrown snowball, egg, ender pearl,
+     * potion or bottle o' enchanting is drawn from its first tick, covering the camera of whoever
+     * threw it (default: not drawn in its first two ticks while near the camera, as from 1.15).
+     */
+    static final boolean VANILLA_CLOSE_PROJECTILES =
+            Opt.flag("steinbridge.opt.vanillaCloseProjectiles");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaBannerCache=true}: once 256 banner designs were drawn in the
+     * last minute, new designs are not drawn at all (default: the least recently drawn design not
+     * seen in the last second makes room).
+     */
+    static final boolean VANILLA_BANNER_CACHE = Opt.flag("steinbridge.opt.vanillaBannerCache");
+
+    /**
+     * {@code -Dsteinbridge.opt.vanillaUnreadableImages=true}: an image the game cannot decode in a
+     * resource pack (another format with a .png name, a broken file) crashes the game when it is
+     * loaded as a texture (default: the missing texture, with a log line).
+     */
+    static final boolean VANILLA_UNREADABLE_IMAGES =
+            Opt.flag("steinbridge.opt.vanillaUnreadableImages");
 }

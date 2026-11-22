@@ -10,6 +10,8 @@ package dev.xavier.stein.gfx;
 
 import static dev.xavier.stein.gfx.SteinEntityDeferred.*;
 
+import dev.xavier.stein.bridge.engine.NameStyle;
+
 import net.minecraft.client.renderer.GlStateManager;
 import net.minecraft.client.renderer.OpenGlHelper;
 import net.minecraft.client.renderer.entity.Render;
@@ -37,6 +39,16 @@ final class SteinDeferredNames {
     public static void renderName(Object render, Object entity, double x, double y, double z) {
         // With the colour mask off nothing shows: immediate, like the game.
         if (!capturing || draining || !SteinGameState.colorMaskAll()) {
+            // outside the pass (the fixed-function pipeline too), a style still draws its label
+            if (!capturing && NameStyle.custom()) {
+                try {
+                    if (SteinNameLabels.drawImmediate(render, entity, x, y, z)) {
+                        return;
+                    }
+                } catch (Throwable e) {
+                    throw new IllegalStateException(e);
+                }
+            }
             ((Render) render).renderName((Entity) entity, x, y, z);
             return;
         }
@@ -73,7 +85,7 @@ final class SteinDeferredNames {
             }
             // Direct label (SteinNameLabels): the common case goes out as a record and commands;
             // the rest through the game.
-            boolean labels = SteinNameLabels.REQUESTED;
+            boolean labels = SteinNameLabels.REQUESTED || NameStyle.custom();
             if (labels) {
                 SteinNameLabels.begin();
             }

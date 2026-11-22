@@ -617,15 +617,16 @@ public final class SteinTextCache {
     }
 
     /**
-     * The assembly of {@code s} that renderString would give (no shadow, at position {@code x, y},
-     * with input color {@code r, g, b, a} as renderString puts it in the GlStateManager), if it is
-     * in the cache and resident on the GPU; otherwise null (the label goes through the game's path,
-     * which assembles and uploads).
+     * The assembly of {@code s} that renderString would give (with or without the shadow, at
+     * position {@code x, y}, with input color {@code r, g, b, a} as renderString puts it in the
+     * GlStateManager), if it is in the cache and resident on the GPU; otherwise null (the label
+     * goes through the game's path, which assembles and uploads).
      */
     static Object residentEntry(
             Object font,
             String s,
             boolean unicode,
+            boolean shadow,
             float x,
             float y,
             float r,
@@ -638,7 +639,7 @@ public final class SteinTextCache {
         }
         Entry e =
                 n.find(
-                        false,
+                        shadow,
                         Float.floatToRawIntBits(x),
                         Float.floatToRawIntBits(y),
                         Float.floatToRawIntBits(r),

@@ -210,6 +210,7 @@ public final class Visuals {
 
     /**
      * RenderManager.doRenderEntity -> Render.doRender: stores the entity's distance to the camera.
+     * A thrown item in its first ticks near the camera is not drawn ({@link CloseProjectiles}).
      */
     @SuppressWarnings("unchecked")
     public static void doRender(
@@ -220,6 +221,9 @@ public final class Visuals {
             double z,
             float yaw,
             float partialTicks) {
+        if (CloseProjectiles.hidden(render, entity)) {
+            return;
+        }
         double outer = entityDistSquared;
         entityDistSquared = x * x + y * y + z * z;
         try {
@@ -278,8 +282,10 @@ public final class Visuals {
         if (!GameHooks.nameShown(entity)) {
             return false;
         }
+        // the own label (NameStyle, a mod's option): only where the game said no
         return ((RendererLivingEntity<EntityLivingBase>) renderer)
-                .canRenderName((EntityLivingBase) entity);
+                        .canRenderName((EntityLivingBase) entity)
+                || NameStyle.ownShown((Entity) entity);
     }
 
     /** LayerArmorBase.renderLayer, one worn piece: hidden, no piece at all (nor its glint). */

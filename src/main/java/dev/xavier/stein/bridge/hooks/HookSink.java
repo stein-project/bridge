@@ -34,6 +34,12 @@ public interface HookSink {
     /** End of each client tick. */
     default void tickEnd() {}
 
+    /**
+     * After every frame (the end of Display.update, after the buffer swap), in menus and loading
+     * screens too: the boundary a per-frame measurement needs.
+     */
+    default void frameEnd() {}
+
     /** After each keyboard event handled by the game. */
     default void keyInput() {}
 
@@ -67,6 +73,44 @@ public interface HookSink {
         return message;
     }
 
+    /**
+     * Any message about to enter the chat (from the server, the game or a mod), after {@link
+     * #chat}; id is the game's line id (0, or the one a message replaced in place carries).
+     *
+     * @return the message (the same or another IChatComponent), or null to keep it out
+     */
+    default Object chatLine(Object message, int id) {
+        return message;
+    }
+
+    /**
+     * A chat row was just drawn, in the chat's own coordinates (already moved and scaled): the
+     * row's text starts at x, y; width is its dark box's width; alpha how visible it is (0 to 255).
+     * Every row on screen, every frame: answer quickly, without allocating.
+     *
+     * @param message the message the row belongs to (IChatComponent)
+     */
+    default void chatRowDrawn(Object message, int x, int y, int width, int alpha) {}
+
+    /**
+     * A key typed on an open screen, before the screen gets it.
+     *
+     * @return true so the screen does not receive it
+     */
+    default boolean guiKey(Object screen, char c, int key) {
+        return false;
+    }
+
+    /**
+     * A click on a chat text (the part under the mouse, IChatComponent) in the chat screen, before
+     * the game runs its click event.
+     *
+     * @return true so the game does not run it
+     */
+    default boolean chatClick(Object screen, Object component) {
+        return false;
+    }
+
     /** Joining a server or world completed. */
     default void joinGame() {}
 
@@ -95,6 +139,18 @@ public interface HookSink {
      */
     default float fov(float fov, float partialTicks, boolean useFovSetting) {
         return fov;
+    }
+
+    /**
+     * A mouse wheel turn in the game's input loop, before the game uses it for the hotbar slot or
+     * the spectator's flying speed (the game does so with a screen open too; the screen gets the
+     * wheel on its own path either way).
+     *
+     * @param wheel the event's wheel: positive up, negative down
+     * @return true to take it: the game sees no wheel
+     */
+    default boolean mouseWheel(int wheel) {
+        return false;
     }
 
     /**
@@ -216,6 +272,14 @@ public interface HookSink {
      * (its own clan, for example).
      */
     default boolean hideEntity(Object entity) {
+        return false;
+    }
+
+    /**
+     * Should the game's own F3+B box of this entity be left out? Asked for every entity drawn while
+     * F3+B is on: true when the listener draws hit boxes of its own.
+     */
+    default boolean hideGameHitbox(Object entity) {
         return false;
     }
 

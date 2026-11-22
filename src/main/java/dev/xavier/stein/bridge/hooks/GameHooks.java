@@ -38,8 +38,9 @@ import java.util.ServiceLoader;
  * <p>This class is the stable face the patcher and the Loader call: the method names and
  * descriptors are frozen. The lifecycle and input hooks are implemented here; the rest delegate to
  * {@link GameHooksHud} (screens and HUD), {@link GameHooksRender} (camera, atlas, models), {@link
- * GameHooksNet} (player actions, packets) and {@link GameHooksEntity} (hidden and ghost entities,
- * health), each holding the obfuscated handles of its area.
+ * GameHooksNet} (player actions, packets), {@link GameHooksEntity} (hidden and ghost entities,
+ * health) and {@link GameHooksChat} (chat messages and rows, screen keys), each holding the
+ * obfuscated handles of its area.
  */
 public final class GameHooks {
 
@@ -136,6 +137,17 @@ public final class GameHooks {
         Bench.tick();
     }
 
+    /** At the end of Display.update, every frame (org.lwjgl.opengl.Display). */
+    public static void frameEnd() {
+        if (SINK != null) {
+            try {
+                SINK.frameEnd();
+            } catch (Throwable e) {
+                fail("frameEnd", e);
+            }
+        }
+    }
+
     /**
      * In place of Keyboard.next() in runTick's keyboard loop. The loop calls next() at the end of
      * each handled event: that is where Forge fires KeyInputEvent, so the previous event is
@@ -216,6 +228,26 @@ public final class GameHooks {
     /** See {@link GameHooksHud#printChat}. */
     public static void printChat(Object chatGui, Object message) throws Throwable {
         GameHooksHud.printChat(chatGui, message);
+    }
+
+    /** See {@link GameHooksChat#chatLine}. */
+    public static Object chatLine(Object message, int id) {
+        return GameHooksChat.chatLine(message, id);
+    }
+
+    /** See {@link GameHooksChat#chatRowDrawn}. */
+    public static void chatRowDrawn(Object message, int x, int y, int width, int alpha) {
+        GameHooksChat.chatRowDrawn(message, x, y, width, alpha);
+    }
+
+    /** See {@link GameHooksChat#keyTyped}. */
+    public static void keyTyped(Object screen, char c, int key) {
+        GameHooksChat.keyTyped(screen, c, key);
+    }
+
+    /** See {@link GameHooksChat#chatClick}. */
+    public static boolean chatClick(Object screen, Object component) {
+        return GameHooksChat.chatClick(screen, component);
     }
 
     /** After handleJoinGame (S01PacketJoinGame.processPacket), on the game thread. */
@@ -371,9 +403,57 @@ public final class GameHooks {
         GameHooksRender.resetCameraSmoothing();
     }
 
+    /** See {@link GameHooksCamera#look}. */
+    public static void look(Object player, float yaw, float pitch) {
+        GameHooksCamera.look(player, yaw, pitch);
+    }
+
+    /** See {@link GameHooksCamera#firstPersonHand}. */
+    public static void firstPersonHand(Object itemRenderer, float partialTicks) {
+        GameHooksCamera.firstPersonHand(itemRenderer, partialTicks);
+    }
+
+    /** See {@link GameHooksCamera#eventWheel}. */
+    public static int eventWheel() {
+        return GameHooksCamera.eventWheel();
+    }
+
+    /**
+     * Multiplies the mouse turn of every frame (1 = the player's sensitivity; a zoom of 4x turns
+     * about a quarter). Only the view: it is what a lower sensitivity option would do.
+     */
+    public static void setLookScale(float scale) {
+        GameHooksCamera.setLookScale(scale);
+    }
+
+    /** The held item and the arm in first person are not drawn (the overlays stay). */
+    public static void setHandHidden(boolean hidden) {
+        GameHooksCamera.setHandHidden(hidden);
+    }
+
+    /** See {@link GameHooksCamera#setSmoothCamera}. */
+    public static void setSmoothCamera(boolean on) {
+        GameHooksCamera.setSmoothCamera(on);
+    }
+
     /** See {@link GameHooksHud#setInventoryEffectsHidden}. */
     public static void setInventoryEffectsHidden(boolean hide) {
         GameHooksHud.setInventoryEffectsHidden(hide);
+    }
+
+    /** See {@link GameHooksHud#replaceCrosshair}. */
+    public static void replaceCrosshair() {
+        GameHooksHud.replaceCrosshair();
+    }
+
+    /** See {@link GameHooksHud#crosshairAllowed}. */
+    public static boolean crosshairAllowed() {
+        return GameHooksHud.crosshairAllowed();
+    }
+
+    /** See {@link GameHooksHud#crosshair}. */
+    public static boolean crosshair(Object gui) throws Throwable {
+        return GameHooksHud.crosshair(gui);
     }
 
     /** See {@link GameHooksHud#inventoryEffects}. */
@@ -480,6 +560,34 @@ public final class GameHooks {
     public static boolean renderEntity(Object manager, Object entity, float partialTicks)
             throws Throwable {
         return GameHooksEntity.renderEntity(manager, entity, partialTicks);
+    }
+
+    /** See {@link GameHooksEntity#gameHitbox}. */
+    public static void gameHitbox(
+            Object manager,
+            Object entity,
+            double x,
+            double y,
+            double z,
+            float yaw,
+            float partialTicks)
+            throws Throwable {
+        GameHooksEntity.gameHitbox(manager, entity, x, y, z, yaw, partialTicks);
+    }
+
+    /** See {@link GameHooksEntity#drawnCount}. */
+    public static int drawnEntityCount() {
+        return GameHooksEntity.drawnCount();
+    }
+
+    /** See {@link GameHooksEntity#drawnEntity}. */
+    public static Object drawnEntity(int i) {
+        return GameHooksEntity.drawnEntity(i);
+    }
+
+    /** See {@link GameHooksRender#worldFov}. */
+    public static float worldFov() {
+        return GameHooksRender.worldFov();
     }
 
     /** See {@link GameHooksEntity#renderMultipass}. */

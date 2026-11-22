@@ -77,12 +77,29 @@ final class GameHooksRender {
         // the video settings' showcase is not the player's view: no zoom
         if (GameHooks.SINK != null && !Showcase.active()) {
             try {
-                return GameHooks.SINK.fov(f, partialTicks, useFovSetting);
+                f = GameHooks.SINK.fov(f, partialTicks, useFovSetting);
             } catch (Throwable e) {
                 GameHooks.fail("fov", e);
             }
+            if (useFovSetting) {
+                GameHooksCamera.worldFov(f);
+            }
+        }
+        if (useFovSetting) {
+            worldFov = f;
         }
         return f;
+    }
+
+    /**
+     * The vertical field of view of the last world projection, in degrees (the one with the
+     * player's FOV setting, after the mods' zoom): what turns a size in pixels into blocks.
+     */
+    private static float worldFov = 70;
+
+    /** See {@link #worldFov}. */
+    static float worldFov() {
+        return worldFov;
     }
 
     /**
@@ -175,6 +192,7 @@ final class GameHooksRender {
             }
             BenchZones.end(BenchZones.MODS_WORLD);
         }
+        GameHooksEntity.endDrawnEntities();
     }
 
     /** The field the patcher adds to Block, resolved on first use. */

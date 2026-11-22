@@ -8,6 +8,8 @@
 
 package dev.xavier.stein.gfx;
 
+import dev.xavier.stein.bridge.engine.NameStyle;
+
 import org.lwjgl.system.MemoryUtil;
 
 import java.nio.ByteBuffer;
@@ -15,9 +17,10 @@ import java.nio.ByteOrder;
 import java.util.Arrays;
 
 /**
- * The table of resident name backgrounds of {@link SteinTextGpu}: the 6 converted vertices (192
- * bytes) of the quad as the key, the resident run as the value. A background is uploaded on its
- * second use.
+ * The table of resident name backgrounds of {@link SteinTextGpu}: the converted vertices of the
+ * background as the key (the game's quad: 6 vertices, 192 bytes; a styled one, {@link
+ * SteinLabelShape}, up to {@value #MAX_VERTS}), the resident run as the value. A background is
+ * uploaded on its second use.
  *
  * <p>Pipeline: Stein GFX only.
  */
@@ -26,12 +29,15 @@ final class SteinTextBackgrounds {
     /** Stored name backgrounds (one per name width, in practice). */
     private static final int MAX_BACKGROUNDS = 1024;
 
-    private static final int INTS = 6 * 8;
+    /** The largest background: a styled label's shape. */
+    static final int MAX_VERTS = SteinLabelShape.MAX_QUADS * 6;
+
+    private static final int MAX_INTS = MAX_VERTS * 8;
     private static int[][] keys = new int[MAX_BACKGROUNDS * 2][];
     private static SteinTextGpu.Alloc[] runs = new SteinTextGpu.Alloc[MAX_BACKGROUNDS * 2];
     private static byte[] uses = new byte[MAX_BACKGROUNDS * 2];
     private static int count;
-    private static final int[] probe = new int[INTS];
+    private static final int[] probe = new int[MAX_INTS];
 
     /**
      * color(0, 0, 0, 0.25F) in the WorldRenderer: (int) (0.25F * 255F) = 63 in alpha, bytes r, g,
@@ -62,6 +68,12 @@ final class SteinTextBackgrounds {
     private static final int[] sizeEpoch = new int[SIZE_SLOTS];
     private static final SteinTextGpu.Alloc[] sizeRun = new SteinTextGpu.Alloc[SIZE_SLOTS];
 
+    /**
+     * The {@link NameStyle} version the sizes were remembered for: a new style changes the shape
+     * and color behind the same size, so it starts a new epoch.
+     */
+    private static int styleVersion = NameStyle.version();
+
     private SteinTextBackgrounds() {}
 
     /** Whether {@code -Dsteinbridge.gfx.labelBackgroundCheck=true} is on (for the report). */
@@ -77,6 +89,10 @@ final class SteinTextBackgrounds {
      * game path, which uploads it).
      */
     static SteinTextGpu.Alloc labelBackground(int j, int top, int bottom) {
+        if (styleVersion != NameStyle.version()) {
+            styleVersion = NameStyle.version();
+            epoch++;
+        }
         if (!BY_SIZE) {
             return quadBackground(j, top, bottom);
         }
@@ -110,6 +126,13 @@ final class SteinTextBackgrounds {
 
     /** The background through the quad itself: the key built and looked up in the table. */
     private static SteinTextGpu.Alloc quadBackground(int j, int top, int bottom) {
+        if (NameStyle.custom()) {
+            // the styled shape (padding, corners, color): what the game path draws, see
+            // SteinLabelShape
+            int quads = SteinLabelShape.build(j, top, bottom);
+            long tmp = SteinTextGpu.quadScratch(quads * 6);
+            return lookup(tmp, SteinLabelShape.writeTriangles(tmp, quads));
+        }
         long tmp = SteinTextGpu.quadScratch();
         float x0 = (float) (-j - 1);
         float x1 = (float) (j + 1);
@@ -128,11 +151,12 @@ final class SteinTextBackgrounds {
     }
 
     static SteinTextGpu.Alloc lookup(long tmp, int verts) {
-        if (verts * 8 != INTS) {
+        if (verts < 3 || verts > MAX_VERTS) {
             return null;
         }
+        int len = verts * 8;
         int h = 0x2F0B3A49;
-        for (int i = 0; i < INTS; i++) {
+        for (int i = 0; i < len; i++) {
             int v = MemoryUtil.memGetInt(tmp + i * 4L);
             probe[i] = v;
             h = (h ^ v) * 0x01000193;
@@ -142,7 +166,7 @@ final class SteinTextBackgrounds {
         int i = h & mask;
         int[] k;
         while ((k = keys[i]) != null) {
-            if (Arrays.equals(k, probe)) {
+            if (k.length == len && Arrays.equals(k, 0, len, probe, 0, len)) {
                 SteinTextGpu.Alloc a = runs[i];
                 if (a != null && a.valid) {
                     return a;
@@ -163,7 +187,7 @@ final class SteinTextBackgrounds {
             clear();
             return null;
         }
-        keys[i] = probe.clone();
+        keys[i] = Arrays.copyOf(probe, len);
         uses[i] = 0;
         runs[i] = null;
         count++;
@@ -176,9 +200,10 @@ final class SteinTextBackgrounds {
      */
     private static SteinTextGpu.Alloc upload(int i) {
         int[] k = keys[i];
-        ByteBuffer b = SteinTextGpu.scratch(6 * SteinTextGpu.VERTEX_BYTES);
+        int verts = k.length / 8;
+        ByteBuffer b = SteinTextGpu.scratch(verts * SteinTextGpu.VERTEX_BYTES);
         long d = MemoryUtil.memAddress(b);
-        for (int v = 0; v < 6; v++, d += SteinTextGpu.VERTEX_BYTES) {
+        for (int v = 0; v < verts; v++, d += SteinTextGpu.VERTEX_BYTES) {
             int o = v * 8;
             MemoryUtil.memPutInt(d, k[o]);
             MemoryUtil.memPutInt(d + 4, k[o + 1]);

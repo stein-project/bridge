@@ -20,6 +20,7 @@ import net.minecraft.entity.EntityLivingBase;
 import net.minecraft.entity.player.EntityPlayer;
 import net.minecraft.util.IChatComponent;
 
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -135,7 +136,73 @@ final class GameHooksEntity {
         if (hidden(entity)) {
             return false;
         }
-        return ((RenderManager) manager).renderEntitySimple((Entity) entity, partialTicks);
+        boolean drawn = ((RenderManager) manager).renderEntitySimple((Entity) entity, partialTicks);
+        if (drawn && drawnCount < MAX_DRAWN) {
+            if (drawnCount == drawnEntities.length) {
+                drawnEntities = Arrays.copyOf(drawnEntities, drawnCount * 2);
+            }
+            drawnEntities[drawnCount++] = entity;
+        }
+        return drawn;
+    }
+
+    /**
+     * More than any world has on screen: if a frame never reaches its end (the mods' world drawing,
+     * which empties the list), the list stops growing here.
+     */
+    private static final int MAX_DRAWN = 16384;
+
+    /**
+     * The entities RenderGlobal.renderEntities drew in this frame, in its order: the ones the game
+     * itself chose to show (in the frustum, within the entity distance, not hidden by a mod). The
+     * array is reused from frame to frame and only grows.
+     */
+    private static Object[] drawnEntities = new Object[256];
+
+    private static int drawnCount;
+
+    /** How many entities the game drew in this frame so far. */
+    static int drawnCount() {
+        return drawnCount;
+    }
+
+    /** The i-th of them, or null past the end. */
+    static Object drawnEntity(int i) {
+        return i >= 0 && i < drawnCount ? drawnEntities[i] : null;
+    }
+
+    /**
+     * The frame is over (after the mods' world drawing): the next one starts a new list. The old
+     * references are cleared so a removed entity is not kept alive by it.
+     */
+    static void endDrawnEntities() {
+        Arrays.fill(drawnEntities, 0, drawnCount, null);
+        drawnCount = 0;
+    }
+
+    /**
+     * In place of renderDebugBoundingBox inside RenderManager.doRenderEntity (the F3+B box, asked
+     * only while it is on): a mod that draws hit boxes of its own can leave the game's out.
+     */
+    static void gameHitbox(
+            Object manager,
+            Object entity,
+            double x,
+            double y,
+            double z,
+            float yaw,
+            float partialTicks) {
+        if (GameHooks.SINK != null) {
+            try {
+                if (GameHooks.SINK.hideGameHitbox(entity)) {
+                    return;
+                }
+            } catch (Throwable e) {
+                GameHooks.fail("hideGameHitbox", e);
+            }
+        }
+        ((RenderManager) manager)
+                .renderDebugBoundingBox((Entity) entity, x, y, z, yaw, partialTicks);
     }
 
     /** The same in the second pass (renderMultipass), for the entities drawn in two. */
