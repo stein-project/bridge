@@ -91,6 +91,17 @@ public final class Icons {
                 "link",
                 "M10.2 13.8a4 4 0 0 0 5.66 0l2.6-2.6a4 4 0 0 0-5.66-5.66l-1.2 1.2",
                 "M13.8 10.2a4 4 0 0 0-5.66 0l-2.6 2.6a4 4 0 0 0 5.66 5.66l1.2-1.2");
+        // Sprint: a runner in mid-stride, with two speed lines behind.
+        put(
+                "run",
+                "o 15.5 4.5 2",
+                "M14 8L11 13.5",
+                "M14 8.5l3 3 3-.5",
+                "M13.5 8.5L9.5 9l-2 2.5",
+                "M11 13.5l3.5 2.5-1.5 4.5",
+                "M11 13.5L8 17H4",
+                "M2.5 8h3",
+                "M1.5 12h3");
         // Edit: the tilted pencil.
         put("pencil", "M4.5 19.5l1-4.2L16.2 4.6l3.2 3.2L8.7 18.5z", "M13.6 7.2l3.2 3.2");
         // Restore: the arrow that goes back.
