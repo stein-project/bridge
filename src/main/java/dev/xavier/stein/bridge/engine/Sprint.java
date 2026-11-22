@@ -43,6 +43,9 @@ public final class Sprint {
     /** With {@link #onHit}: the hit does not brake either (the 0.6 of the speed). */
     private static volatile boolean noSlow;
 
+    /** Double-tapping forward starts a sprint (the game's behavior; on by default). */
+    private static volatile boolean doubleTap = true;
+
     private Sprint() {}
 
     /**
@@ -98,6 +101,20 @@ public final class Sprint {
         ((EntityPlayer) player).setSprinting(value);
     }
 
+    /**
+     * Sprinting from double-tapping forward (through the Loader API {@code
+     * Gameplay.setDoubleTapSprint}). Input only: off, the client sends what a player who never
+     * double-taps sends.
+     *
+     * <p>How: in onLivingUpdate the first tap arms {@code sprintToggleTimer} (7 ticks) and a second
+     * tap while it is still running starts the sprint. This runs after that check (before
+     * super.onLivingUpdate), so zeroing the timer here means the next tap only arms it again —
+     * never a second tap inside the window.
+     */
+    public static void setDoubleTap(boolean on) {
+        doubleTap = on;
+    }
+
     /** Turns it on or off (through the Loader API {@code Gameplay}). */
     public static void setAllDirections(boolean on) {
         allDirections = on;
@@ -122,6 +139,12 @@ public final class Sprint {
     public static void beforeLivingUpdate() {
         if (allDirections && !broken) {
             sprintAll();
+        }
+        if (!doubleTap) {
+            EntityPlayerSP p = Minecraft.getMinecraft().thePlayer;
+            if (p != null) {
+                p.sprintToggleTimer = 0;
+            }
         }
         if (LOG) {
             log(); // after the decision: the state with which the player will move this tick
