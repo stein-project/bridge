@@ -375,6 +375,18 @@ final class DiagOptions {
     static final int THIRD_PERSON = Opt.integer("steinbridge.diag.thirdPerson", 0);
 
     /**
+     * {@code -Dsteinbridge.diag.turnAtSec=N}: turns the camera at a steady speed from N seconds
+     * after startup, as the mouse would (for the motion blur; default: off).
+     */
+    static final long TURN_AT = Opt.number("steinbridge.diag.turnAtSec", -1L);
+
+    /** {@code -Dsteinbridge.diag.turnForSec=N}: how long the turn lasts (default 5). */
+    static final long TURN_FOR = Opt.number("steinbridge.diag.turnForSec", 5L);
+
+    /** {@code -Dsteinbridge.diag.turnDegrees=N}: degrees per second, + right (default 90). */
+    static final int TURN_DEGREES = Opt.integer("steinbridge.diag.turnDegrees", 90);
+
+    /**
      * A list option: empty when the property is unset or empty, otherwise the value split at {@code
      * regex}.
      */

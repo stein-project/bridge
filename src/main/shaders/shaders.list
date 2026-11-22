@@ -38,6 +38,9 @@ post_composite_hdr.frag frag   post_composite.frag   HDR
 post_composite_hdr_layer.frag frag post_composite.frag HDR HDR_LAYER
 post_luma.frag        frag     post_luma.frag
 post_adapt.frag       frag     post_adapt.frag
+# the motion blur (SteinMotionBlur): the camera's motion, and the trail
+post_motion.frag      frag     post_motion.frag
+post_trail.frag       frag     post_trail.frag
 hdr_encode.frag       frag     hdr_encode.frag
 scale.frag            frag     scale.frag
 loading.frag          frag     loading.frag
