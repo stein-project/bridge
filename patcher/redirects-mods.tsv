@@ -104,6 +104,9 @@ bda	g	()Z	armMissPenalty	dev/xavier/stein/bridge/hooks/GameHooks	static	ave.aw()
 awh	a	(Lbdc;)Ljava/lang/String;	playerListName	dev/xavier/stein/bridge/hooks/GameHooks	static	awh.a(ILauo;Lauk;)V
 pr	f_	()Leu;	nametag	dev/xavier/stein/bridge/hooks/GameHooks	static	bjl.b(Lpr;DDD)V
 bet	m	()V	beforeLivingUpdate	dev/xavier/stein/bridge/engine/Sprint	before	bew.m()V
+# RendererLivingEntity.setBrightness (bjl.a(Lpr;FZ)Z): the tint from getColorMultiplier (creeper flash) goes through the
+# mods, who can tint an entity where the game has none (API 0.1.35, onEntityColor). The damage red stays the game's.
+bjl	a	(Lpr;FF)I	entityColor	dev/xavier/stein/bridge/hooks/GameHooks	static	bjl.a(Lpr;FZ)Z
 # RendererLivingEntity.renderName (bjl.b): nametag up to the chosen distance. Only this call site: the
 # other is RenderLiving's super.canRenderName (bjo, invokespecial), and if it were redirected the virtual dispatch
 # would come back to bjo in recursion.

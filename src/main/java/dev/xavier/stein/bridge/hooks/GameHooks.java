@@ -558,6 +558,17 @@ public final class GameHooks {
         return GameHooksHud.playerListName(overlay, info);
     }
 
+    /** See {@link GameHooksEntity#entityColor}. */
+    public static int entityColor(
+            Object renderer, Object entity, float brightness, float partialTicks) throws Throwable {
+        return GameHooksEntity.entityColor(renderer, entity, brightness, partialTicks);
+    }
+
+    /** See {@link GameHooksEntity#tint}. */
+    public static int entityTint(Object entity) {
+        return GameHooksEntity.tint(entity);
+    }
+
     /** See {@link GameHooksEntity#nametag}. */
     /** See {@link GameHooksEntity#nameShown}. */
     public static boolean nameShown(Object entity) {

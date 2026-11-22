@@ -106,7 +106,17 @@ final class SteinPlayerPoseCollect {
     private static int heldRight;
     private static boolean sneak;
     private static boolean bow;
+
+    /**
+     * The model's overlay is on (the damage red, or a mod's tint through the Loader's
+     * onEntityColor), and its color: what the game's setBrightness would put on unit 2.
+     */
     private static boolean hurtNow;
+
+    private static float ovR;
+    private static float ovG;
+    private static float ovB;
+    private static float ovA;
 
     /** The armor, its overlay and glint take the damage color (1.7 red armor, see readModel). */
     private static boolean armorHurt;
@@ -366,12 +376,29 @@ final class SteinPlayerPoseCollect {
         // LayerHeldItem), which the pose here does not redo: a player blocking goes through there
         // for as long as it lasts. The red armor on damage is done here (armorHurt).
         hurtNow = ((EntityLivingBase) e).hurtTime > 0 || deathTime > 0;
+        // The game's setBrightness: the damage red first; otherwise the color multiplier, which
+        // for a player is only ever a mod's tint (the game gives players none).
+        int tint = hurtNow ? 0 : GameHooks.entityTint(e);
+        boolean tinted = tint >>> 24 != 0;
+        if (hurtNow) {
+            ovR = 1f;
+            ovG = 0f;
+            ovB = 0f;
+            ovA = 0.3f;
+        } else if (tinted) {
+            ovR = (tint >> 16 & 255) / 255f;
+            ovG = (tint >> 8 & 255) / 255f;
+            ovB = (tint & 255) / 255f;
+            ovA = (tint >>> 24) / 255f; // the strength (the shader blends this much of it)
+            hurtNow = true;
+        }
         if (OldAnimations.gamePose(heldRight == 3)) {
             return reject(R_OLD_ANIMATIONS);
         }
         // the armor layer between the game's setBrightness and unsetBrightness, combining the
         // damage color (OldAnimations.combineTextures): base, leather overlay and glint flush
-        armorHurt = hurtNow && OldAnimations.redArmor();
+        // A tint goes on the armor too, as the game's setBrightness does with any color.
+        armorHurt = hurtNow && (tinted || OldAnimations.redArmor());
         return true;
     }
 
@@ -875,10 +902,10 @@ final class SteinPlayerPoseCollect {
         s[o + 15] = 0f;
         // The damage red (setDoRenderBrightness): on the body; on the armor only with the 1.7 red
         // armor (the other layers of a player do not combine it).
-        s[o + 16] = hurt ? 1f : 0f;
-        s[o + 17] = 0f;
-        s[o + 18] = 0f;
-        s[o + 19] = hurt ? 0.3f : 0f;
+        s[o + 16] = hurt ? ovR : 0f;
+        s[o + 17] = hurt ? ovG : 0f;
+        s[o + 18] = hurt ? ovB : 0f;
+        s[o + 19] = hurt ? ovA : 0f;
     }
 
     /** The state key of an opaque, depth-tested draw of the texture layer in {@code packed}. */

@@ -242,6 +242,18 @@ public interface HookSink {
     }
 
     /**
+     * The color a living entity is tinted with this frame (ARGB; the alpha is how strong), the one
+     * the game uses for the damage red and the creeper's flash. Asked for every living entity every
+     * frame: answer quickly, without allocating.
+     *
+     * @param color the game's own (0: none)
+     * @return the color to use (0: none)
+     */
+    default int entityColor(Object entity, int color) {
+        return color;
+    }
+
+    /**
      * Name above the head of a living entity (IChatComponent).
      *
      * @return the name to show
